@@ -67,7 +67,7 @@ async function handleFiles(files: File[]) {
 }
 
 const statusLabel: Record<string, string> = {
-  uploading: 'Đang upload...',
+  uploading: 'Đang upload',
   processing: 'Đang xử lý...',
   ready: 'Hoàn tất',
   failed: 'Lỗi',
@@ -78,6 +78,19 @@ const statusColor: Record<string, string> = {
   processing: 'bg-yellow-500',
   ready: 'bg-green-500',
   failed: 'bg-red-500',
+}
+
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`
+  if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(0)} KB/s`
+  return `${(bytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+}
+
+function uploadInfo(f: { progress: number; speed?: number; status: string }): string {
+  if (f.status !== 'uploading') return statusLabel[f.status] ?? f.status
+  const pct = `${f.progress}%`
+  if (!f.speed || f.speed < 1024) return pct
+  return `${pct} · ${formatSpeed(f.speed)}`
 }
 </script>
 
@@ -126,7 +139,7 @@ const statusColor: Record<string, string> = {
                 :style="{ width: `${f.status === 'ready' || f.status === 'failed' ? 100 : f.progress}%` }"
               />
             </div>
-            <span class="text-xs text-gray-500 whitespace-nowrap">{{ statusLabel[f.status] }}</span>
+            <span class="text-xs text-gray-500 whitespace-nowrap">{{ uploadInfo(f) }}</span>
           </div>
         </div>
         <button

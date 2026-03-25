@@ -9,9 +9,12 @@ export const useUploadStore = defineStore('upload', () => {
     files.value.push(file)
   }
 
-  function setProgress(id: string, progress: number) {
+  function setProgress(id: string, progress: number, speed?: number) {
     const f = files.value.find((f) => f.id === id)
-    if (f) f.progress = Math.min(100, Math.round(progress))
+    if (f) {
+      f.progress = Math.min(100, Math.round(progress))
+      if (speed !== undefined) f.speed = speed
+    }
   }
 
   function setStatus(id: string, status: UploadFileStatus, imageId?: string) {

@@ -8,7 +8,7 @@ import { logger } from '../../utils/logger.js'
 const router = Router()
 
 // POST /upload-chunk — receive a chunk for multipart upload (both R2 and local)
-router.post('/upload-chunk', requireAuth, express.raw({ limit: '11mb', type: '*/*' }), async (req, res) => {
+router.post('/upload-chunk', requireAuth, express.raw({ limit: '6mb', type: '*/*' }), async (req, res) => {
   const { key, uploadId, partNumber } = req.query
   if (!key || !uploadId || !partNumber) {
     return res.status(400).json({ message: 'Thieu key, uploadId hoac partNumber' })

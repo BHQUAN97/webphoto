@@ -175,6 +175,7 @@ export interface UploadFile {
   progress: number
   status: UploadFileStatus
   imageId?: string
+  speed?: number // bytes per second
 }
 
 // ─── Admin ───────────────────────────────────────────────────────────────

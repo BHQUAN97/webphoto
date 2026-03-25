@@ -196,7 +196,7 @@ router.post('/upload-url', rateLimit('upload', 60, 60), async (req, res) => {
   const stor = storage()
   const uploadId = await stor.createMultipartUpload(key, mimeType)
 
-  const CHUNK = 10 * 1024 * 1024 // 10MB
+  const CHUNK = 5 * 1024 * 1024 // 5MB — smaller for smoother progress
   const totalParts = Math.ceil(size / CHUNK)
 
   // Create image record with sanitized filename
