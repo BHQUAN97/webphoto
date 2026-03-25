@@ -39,8 +39,9 @@ cd "$ROOT_DIR/photo-storage" && npm run build
 cd "$ROOT_DIR"
 log "Build OK"
 
-# 2. Upload
+# 2. Upload (clean old dist first to avoid stale cached assets)
 step "2/5 — Upload to VPS"
+ssh "${VPS_HOST}" "rm -rf ${APP_DIR}/photo-storage/dist ${APP_DIR}/photo-storage/server/dist"
 scp -r "$ROOT_DIR/photo-storage/dist" "${VPS_HOST}:${APP_DIR}/photo-storage/"
 scp -r "$ROOT_DIR/photo-storage/server/dist" "${VPS_HOST}:${APP_DIR}/photo-storage/server/"
 scp "$ROOT_DIR/photo-storage/server/package.json" "${VPS_HOST}:${APP_DIR}/photo-storage/server/"
