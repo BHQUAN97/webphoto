@@ -70,16 +70,15 @@ function fileStatusText(f: { progress: number; speed?: number; status: string })
       const pct = `${f.progress}%`
       return f.speed && f.speed > 1024 ? `${pct} · ${formatSpeed(f.speed)}` : pct
     }
-    case 'processing': return 'Đang xử lý ảnh...'
+    case 'processing': return 'Đang xử lý...'
     case 'ready': return 'Hoàn tất'
     case 'failed': return 'Lỗi'
     default: return f.status
   }
 }
 
-// Batch summary
 const { summary } = store
-const hasBatch = computed(() => store.files.length > 1)
+const showSummary = computed(() => store.files.length > 1)
 </script>
 
 <template>
@@ -108,39 +107,30 @@ const hasBatch = computed(() => store.files.length > 1)
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
       <p class="text-sm text-gray-600 dark:text-gray-300">Kéo thả ảnh hoặc <span class="text-orange-500 font-medium">chọn file</span></p>
-      <p class="text-xs text-gray-400 mt-1">CR2, ARW, NEF, DNG, JPEG, PNG, TIFF — tối đa 200MB/file · Upload 5 ảnh cùng lúc</p>
+      <p class="text-xs text-gray-400 mt-1">CR2, ARW, NEF, DNG, JPEG, PNG, TIFF — tối đa 200MB/file</p>
     </div>
 
-    <!-- Batch summary bar (when > 1 file) -->
-    <div v-if="hasBatch && summary.total > 0" class="mt-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
+    <!-- Batch summary bar -->
+    <div v-if="showSummary && summary.total > 0" class="mt-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-          Tiến trình: {{ summary.done }}/{{ summary.total }} ảnh
+          {{ summary.done }}/{{ summary.total }} ảnh
         </span>
         <div class="flex items-center gap-3 text-xs">
-          <span v-if="summary.active > 0" class="text-orange-600">{{ summary.uploading }} đang upload</span>
+          <span v-if="summary.uploading > 0" class="text-orange-600">{{ summary.uploading }} đang upload</span>
           <span v-if="summary.processing > 0" class="text-blue-600">{{ summary.processing }} đang xử lý</span>
           <span v-if="summary.ready > 0" class="text-green-600">{{ summary.ready }} thành công</span>
           <span v-if="summary.failed > 0" class="text-red-600">{{ summary.failed }} lỗi</span>
         </div>
       </div>
       <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex">
-        <div
-          class="h-full bg-green-500 transition-all duration-300"
-          :style="{ width: `${(summary.ready / summary.total) * 100}%` }"
-        />
-        <div
-          class="h-full bg-red-500 transition-all duration-300"
-          :style="{ width: `${(summary.failed / summary.total) * 100}%` }"
-        />
-        <div
-          class="h-full bg-orange-500 transition-all duration-300"
-          :style="{ width: `${(summary.active / summary.total) * 100}%` }"
-        />
+        <div class="h-full bg-green-500 transition-all duration-300" :style="{ width: `${(summary.ready / summary.total) * 100}%` }" />
+        <div class="h-full bg-red-500 transition-all duration-300" :style="{ width: `${(summary.failed / summary.total) * 100}%` }" />
+        <div class="h-full bg-orange-500 transition-all duration-300" :style="{ width: `${(summary.active / summary.total) * 100}%` }" />
       </div>
     </div>
 
-    <!-- Individual file progress list (max 5 visible) -->
+    <!-- File progress list (max 5 visible) -->
     <div v-if="store.visibleFiles.length > 0" class="mt-3 space-y-1.5">
       <div
         v-for="f in store.visibleFiles"
@@ -171,11 +161,16 @@ const hasBatch = computed(() => store.files.length > 1)
           </svg>
         </button>
       </div>
+
+      <!-- Hidden files indicator -->
+      <p v-if="store.hiddenCount > 0" class="text-xs text-gray-400 text-center py-1">
+        và {{ store.hiddenCount }} ảnh khác...
+      </p>
     </div>
 
     <!-- Clear button -->
-    <div v-if="summary.done > 0" class="flex justify-end mt-2">
-      <BaseButton variant="ghost" size="sm" @click="store.clear()">Xóa đã hoàn tất</BaseButton>
+    <div v-if="summary.done > 0 && summary.active === 0" class="flex justify-end mt-2">
+      <BaseButton variant="ghost" size="sm" @click="store.clear()">Xóa danh sách</BaseButton>
     </div>
   </div>
 </template>
