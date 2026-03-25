@@ -5,7 +5,7 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 export type MailTemplate =
   | 'order_new' | 'order_customer_confirm' | 'order_paid'
   | 'order_failed' | 'order_reminder' | 'register_welcome'
-  | 'reset_password' | 'storage_warning'
+  | 'reset_password' | 'storage_warning' | 'system_restart'
 
 export interface MailPayload {
   to:       string | string[]
@@ -144,6 +144,21 @@ const templates: Record<MailTemplate, (d: Record<string, unknown>) => { subject:
         style="background:#f97316;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;font-size:14px">
         Nâng cấp dung lượng
       </a>`,
+  }),
+
+  system_restart: (d) => ({
+    subject: `[Hệ thống] Server đã khởi động lại — ${d.timestamp}`,
+    html: `<h2>Hệ thống đã khởi động lại</h2>
+      <p>Server API đã khởi động thành công.</p>
+      <table style="border-collapse:collapse;width:100%;font-size:14px">
+        <tr><td style="padding:6px 12px 6px 0"><b>Thời gian</b></td><td>${d.timestamp}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0"><b>Node version</b></td><td>${d.nodeVersion}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0"><b>Port</b></td><td>${d.port}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0"><b>Storage backend</b></td><td>${d.storageBackend}</td></tr>
+      </table>
+      <p style="color:#6b7280;font-size:13px;margin-top:24px">
+        Đây là email tự động thông báo server đã khởi động lại thành công.
+      </p>`,
   }),
 }
 

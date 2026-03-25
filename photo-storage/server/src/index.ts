@@ -10,6 +10,7 @@ import { initSocketEmitter } from './utils/socket-emit.js'
 import { initStorage, getStorageBackend } from './utils/storage/index.js'
 import { logger } from './utils/logger.js'
 import { getSetting } from './utils/settings-cache.js'
+import { mailService } from './utils/mailService.js'
 
 // Auth routes
 import registerRoute from './routes/auth/register.js'
@@ -216,8 +217,29 @@ async function start() {
   }
 
   // Start API server
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     logger.info(`API server running on port ${PORT}`)
+
+    // Send restart notification email to admin
+    try {
+      const adminEmail = await getSetting('admin_email')
+      if (adminEmail) {
+        const storageBackend = await getSetting('storage_backend', 'r2')
+        await mailService.send({
+          to: adminEmail,
+          template: 'system_restart',
+          data: {
+            timestamp: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+            nodeVersion: process.version,
+            port: String(PORT),
+            storageBackend,
+          },
+        })
+        logger.info('Restart notification email sent to admin')
+      }
+    } catch (err) {
+      logger.warn('Failed to send restart notification email', { error: (err as Error).message })
+    }
   })
 
   // Start Socket.io server on separate port

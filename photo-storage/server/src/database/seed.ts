@@ -78,6 +78,13 @@ async function seed() {
     { key: 'local_storage_dir', value: './data/storage' },
     { key: 'debug_mode', value: 'false' },
     { key: 'log_retention_days', value: '30' },
+    // QTHT — Admin contact settings
+    { key: 'admin_email', value: 'buihongquan28041997@gmail.com' },
+    { key: 'admin_name', value: 'BHQuan' },
+    { key: 'app_developer', value: 'BHQuan' },
+    { key: 'app_address', value: 'Vietnam' },
+    { key: 'contact_zalo', value: '' },
+    { key: 'contact_messenger', value: '' },
   ])
 
   console.log('Seeding admin user...')
