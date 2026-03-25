@@ -78,20 +78,25 @@ router.patch('/:id', async (req, res) => {
   res.json({ ok: true })
 })
 
-// POST /upload-qr — get presigned URL for QR image upload
+// POST /upload-qr — upload QR image (multipart form or base64)
 router.post('/upload-qr', async (req, res) => {
   requireAdmin(req)
-  const { mimeType } = req.body
+  const { mimeType, data: base64Data } = req.body
 
   if (!mimeType || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
     return res.status(400).json({ message: 'Chỉ hỗ trợ JPEG, PNG, WebP' })
   }
 
+  if (!base64Data) {
+    return res.status(400).json({ message: 'Thiếu dữ liệu ảnh' })
+  }
+
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
   const key = `payment-qr/${ulid()}.${ext}`
+  const buffer = Buffer.from(base64Data, 'base64')
 
-  const url = await storage().presignUpload(key, mimeType)
-  res.json({ url, key })
+  await storage().uploadBuffer(key, buffer, mimeType)
+  res.json({ key, url: storage().publicUrl(key) })
 })
 
 // DELETE /:id — delete payment method

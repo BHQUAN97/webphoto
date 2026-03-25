@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import type { ImageItem } from '@/types'
-import { cdnUrl, formatBytes, formatDate } from '@/utils/format'
+import { formatBytes, formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/utils/api'
 import CommentList from './CommentList.vue'
@@ -55,7 +55,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
     >
       <div
         v-if="show && image"
-        class="fixed inset-0 z-50 flex bg-black/90"
+        class="fixed inset-0 z-50 flex flex-col md:flex-row bg-black/90"
         @click.self="emit('close')"
       >
         <!-- Close button -->
@@ -66,10 +66,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         </button>
 
         <!-- Image -->
-        <div class="flex-1 flex items-center justify-center p-8">
+        <div class="flex-1 flex items-center justify-center p-4 md:p-8 min-h-0">
           <img
-            v-if="image.previewKey"
-            :src="cdnUrl(image.previewKey)"
+            v-if="image.previewUrl || image.previewKey"
+            :src="image.previewUrl || image.previewKey || ''"
             class="max-w-full max-h-full object-contain"
             :alt="image.originalName"
           />
@@ -79,10 +79,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         </div>
 
         <!-- Sidebar info -->
-        <div class="w-80 bg-white dark:bg-gray-800 h-full overflow-y-auto flex flex-col">
-          <div class="p-4 border-b border-gray-100">
+        <div class="w-full md:w-80 max-h-[40vh] md:max-h-full bg-white dark:bg-gray-800 md:h-full overflow-y-auto flex flex-col shrink-0">
+          <div class="p-4 border-b border-gray-100 dark:border-gray-700">
             <h3 class="font-semibold text-gray-900 dark:text-white truncate">{{ image.originalName }}</h3>
-            <div class="text-xs text-gray-500 mt-2 space-y-1">
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
               <p>Dung lượng: {{ formatBytes(image.originalSize) }}</p>
               <p v-if="image.width && image.height">Kích thước: {{ image.width }} x {{ image.height }}</p>
               <p>Ngày tải: {{ formatDate(image.createdAt) }}</p>
@@ -90,10 +90,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           </div>
 
           <!-- Actions -->
-          <div class="p-4 border-b border-gray-100 flex gap-2">
+          <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-2">
             <button
               class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors"
-              :class="image.liked ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'"
+              :class="image.liked ? 'bg-red-50 dark:bg-red-900/30 text-red-500' : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'"
               @click="emit('like', image)"
             >
               <svg class="w-4 h-4" :fill="image.liked ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,7 +103,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             </button>
             <button
               v-if="auth.canDownload"
-              class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-gray-50 text-gray-600 hover:bg-gray-100"
+              class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
               :disabled="downloading"
               @click="handleDownload"
             >

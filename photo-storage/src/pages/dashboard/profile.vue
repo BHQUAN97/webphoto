@@ -38,8 +38,12 @@ async function uploadAvatar(event: Event) {
   }
   uploadingAvatar.value = true
   try {
-    const { data } = await api.post('/users/me/avatar', { mimeType: file.type })
-    await fetch(data.url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+    const base64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string).split(',')[1])
+      reader.readAsDataURL(file)
+    })
+    const { data } = await api.post('/users/me/avatar', { mimeType: file.type, data: base64 })
     await auth.updateProfile({ avatarKey: data.key } as any)
     await auth.fetchMe()
     toast.success('Cập nhật avatar thành công')

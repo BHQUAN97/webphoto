@@ -38,7 +38,7 @@ function parseLevel(envVal: string | undefined, fallback: LogLevel): LogLevel {
 }
 
 const minFileLevel = parseLevel(process.env.LOG_FILE_LEVEL, LogLevel.DEBUG)
-const minDbLevel   = parseLevel(process.env.LOG_DB_LEVEL, LogLevel.WARN)
+const minDbLevel   = parseLevel(process.env.LOG_DB_LEVEL, LogLevel.INFO)
 const isDev        = process.env.NODE_ENV !== 'production'
 
 // ─── File Setup ───────────────────────────────────────────────────────────

@@ -25,10 +25,16 @@ export async function setupSocketServer(httpServer: Server) {
     await subscriber.connect()
     await subscriber.subscribe('socket:notify', (message) => {
       const data = JSON.parse(message)
+      // Wrap event as 'notification' payload — client listens on 'notification'
+      const payload = {
+        type: data.event.type,
+        message: data.event.reason || data.event.message || `${data.event.type}`,
+        data: data.event,
+      }
       if (data.room === 'admin') {
-        io.to('admin').emit(data.event.type, data.event)
+        io.to('admin').emit('notification', payload)
       } else if (data.userId) {
-        io.to(`user:${data.userId}`).emit(data.event.type, data.event)
+        io.to(`user:${data.userId}`).emit('notification', payload)
       }
     })
   }

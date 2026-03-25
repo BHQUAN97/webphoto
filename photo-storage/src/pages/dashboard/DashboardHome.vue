@@ -34,40 +34,40 @@ onMounted(async () => {
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Xin chào, {{ auth.user?.displayName }}!</h1>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Xin chào, {{ auth.user?.displayName }}!</h1>
 
     <!-- Stat Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Tổng ảnh</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalImages }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Tổng ảnh</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.totalImages }}</p>
         <div class="flex gap-3 mt-2 text-xs">
           <span v-if="stats.processingImages > 0" class="text-yellow-600">{{ stats.processingImages }} đang xử lý</span>
-          <span v-if="stats.failedImages > 0" class="text-red-600">{{ stats.failedImages }} lỗi</span>
+          <span v-if="stats.failedImages > 0" class="text-red-600 dark:text-red-400">{{ stats.failedImages }} lỗi</span>
         </div>
       </div>
 
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Dung lượng</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ formatBytes(storage.usedBytes) }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Dung lượng</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ formatBytes(storage.usedBytes) }}</p>
         <StorageBar :used-bytes="storage.usedBytes" :limit-bytes="storage.limitBytes" class="mt-2" />
       </div>
 
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Album</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ albums.length }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Album</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ albums.length }}</p>
       </div>
 
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Tương tác</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalLikes }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Tương tác</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.totalLikes }}</p>
         <p class="text-xs text-gray-400 mt-1">{{ stats.totalComments }} bình luận</p>
       </div>
     </div>
 
     <!-- Recent Albums -->
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold text-gray-900">Album của tôi</h2>
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Album của tôi</h2>
       <router-link to="/dashboard/albums" class="text-sm text-orange-500 hover:text-orange-600">Xem tất cả &rarr;</router-link>
     </div>
     <AlbumGrid :albums="albums" :loading="loading" />

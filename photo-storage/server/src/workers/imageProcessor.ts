@@ -30,6 +30,7 @@ async function decodeToTiff(inputStream: NodeJS.ReadableStream): Promise<Buffer>
 export function createImageWorker() {
   return new Worker('image-process', async (job) => {
     const { imageId, userId, originalKey, mimeType } = job.data
+    logger.info(`[Worker] Processing image ${imageId}`, { source: 'worker:image-process', userId, imageId, mimeType, originalKey })
     try {
       const rawStream = await storage().getStream(originalKey)
 
@@ -65,11 +66,13 @@ export function createImageWorker() {
         width: meta.width, height: meta.height, status: 'ready',
       }).where(eq(images.id, imageId))
 
+      logger.info(`[Worker] Image ready ${imageId} (${meta.width}x${meta.height})`, { source: 'worker:image-process', userId, imageId })
       await emitToUser(userId, {
         type: 'image:ready', imageId,
         thumbUrl: storage().publicUrl(`${base}/thumb.webp`),
       })
     } catch (err) {
+      logger.error(`[Worker] Image failed ${imageId}: ${err}`, { source: 'worker:image-process', userId, imageId, stack: (err as Error).stack })
       await db.update(images).set({ status: 'failed' }).where(eq(images.id, imageId))
       await emitToUser(userId, { type: 'image:failed', imageId, reason: String(err) })
       throw err

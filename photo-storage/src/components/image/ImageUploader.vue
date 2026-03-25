@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useUploadStore } from '@/stores/upload'
+import { useToast } from '@/composables/useToast'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
 const props = defineProps<{ albumId: string }>()
 const emit = defineEmits<{ uploaded: [] }>()
 
 const store = useUploadStore()
+const toast = useToast()
 const fileInput = ref<HTMLInputElement>()
 const dragging = ref(false)
 
@@ -33,20 +35,25 @@ function onDrop(e: DragEvent) {
 const ALLOWED_EXTENSIONS = new Set(['.cr2', '.arw', '.nef', '.dng', '.jpg', '.jpeg', '.png', '.tiff', '.tif'])
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
 async function handleFiles(files: File[]) {
   // Client-side validation before uploading
   const validFiles = files.filter(f => {
     const ext = f.name.lastIndexOf('.') >= 0 ? f.name.slice(f.name.lastIndexOf('.')).toLowerCase() : ''
     if (!ALLOWED_EXTENSIONS.has(ext)) {
-      alert(`File "${f.name}" có định dạng không hợp lệ`)
+      toast.error(`"${f.name}" — định dạng không được hỗ trợ`)
       return false
     }
     if (f.size > MAX_FILE_SIZE) {
-      alert(`File "${f.name}" vượt quá giới hạn 200MB`)
+      toast.error(`"${f.name}" (${formatSize(f.size)}) vượt quá giới hạn 200MB`)
       return false
     }
     if (f.size === 0) {
-      alert(`File "${f.name}" rỗng`)
+      toast.error(`"${f.name}" — file rỗng`)
       return false
     }
     return true
@@ -88,8 +95,8 @@ const statusColor: Record<string, string> = {
     <!-- Drop zone -->
     <div
       :class="[
-        'border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer',
-        dragging ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-orange-400',
+        'border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-colors cursor-pointer',
+        dragging ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-orange-400',
       ]"
       @click="openPicker"
       @dragover.prevent="dragging = true"
@@ -99,8 +106,8 @@ const statusColor: Record<string, string> = {
       <svg class="w-10 h-10 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
-      <p class="text-sm text-gray-600">Kéo thả ảnh hoặc <span class="text-orange-500 font-medium">chọn file</span></p>
-      <p class="text-xs text-gray-400 mt-1">CR2, ARW, NEF, DNG, JPEG, PNG, TIFF</p>
+      <p class="text-sm text-gray-600 dark:text-gray-300">Kéo thả ảnh hoặc <span class="text-orange-500 font-medium">chọn file</span></p>
+      <p class="text-xs text-gray-400 mt-1">CR2, ARW, NEF, DNG, JPEG, PNG, TIFF — tối đa 200MB/file</p>
     </div>
 
     <!-- Upload progress list -->
@@ -108,10 +115,10 @@ const statusColor: Record<string, string> = {
       <div
         v-for="f in store.files"
         :key="f.id"
-        class="flex items-center gap-3 bg-white rounded-lg border border-gray-200 px-4 py-3"
+        class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3"
       >
         <div class="flex-1 min-w-0">
-          <p class="text-sm text-gray-700 truncate">{{ f.name }}</p>
+          <p class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ f.name }}</p>
           <div class="flex items-center gap-2 mt-1">
             <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div

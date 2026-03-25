@@ -13,7 +13,7 @@ const loading = ref(true)
 onMounted(async () => {
   try {
     const res = await api.get('/albums', { params: { limit: 12 } })
-    albums.value = res.data.data
+    albums.value = res.data.data ?? res.data.items ?? []
   } catch {
     // Public albums may fail if backend is not ready
   } finally {

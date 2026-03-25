@@ -65,8 +65,18 @@ async function save() {
     if (form.value.qrFile) {
       uploadingQr.value = true
       try {
-        const { data } = await api.post('/admin/payment-methods/upload-qr', { mimeType: form.value.qrFile.type })
-        await fetch(data.url, { method: 'PUT', body: form.value.qrFile, headers: { 'Content-Type': form.value.qrFile.type } })
+        const reader = new FileReader()
+        const base64 = await new Promise<string>((resolve) => {
+          reader.onload = () => {
+            const result = reader.result as string
+            resolve(result.split(',')[1]) // strip data:mime;base64, prefix
+          }
+          reader.readAsDataURL(form.value.qrFile!)
+        })
+        const { data } = await api.post('/admin/payment-methods/upload-qr', {
+          mimeType: form.value.qrFile.type,
+          data: base64,
+        })
         parsedConfig.qrImageKey = data.key
       } finally {
         uploadingQr.value = false

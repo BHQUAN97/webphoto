@@ -20,8 +20,10 @@ router.get('/charts', async (_req, res) => {
   if (cached) return res.json(cached)
 
   const data = await adminStats.getChartData()
-  await feedCache.set('admin:charts', data, 300)
-  res.json(data)
+  // Convert BigInt values to strings for JSON serialization
+  const safe = JSON.parse(JSON.stringify(data, (_k, v) => typeof v === 'bigint' ? Number(v) : v))
+  await feedCache.set('admin:charts', safe, 300)
+  res.json(safe)
 })
 
 // GET /alerts

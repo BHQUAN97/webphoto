@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 
+const emit = defineEmits<{ navigate: [] }>()
 const route = useRoute()
 const auth = useAuthStore()
 
@@ -27,11 +28,11 @@ function isActive(item: typeof menu[number]) {
 </script>
 
 <template>
-  <aside class="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-4rem)] p-4 dark:bg-gray-800 dark:border-gray-700">
+  <aside class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-[calc(100vh-4rem)] overflow-y-auto p-4">
     <!-- Plan badge -->
-    <div class="mb-6 px-3 py-3 bg-gray-50 rounded-lg">
+    <div class="mb-6 px-3 py-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
       <div class="flex items-center gap-2">
-        <span class="text-sm text-gray-600">Gói hiện tại:</span>
+        <span class="text-sm text-gray-600 dark:text-gray-300">Gói hiện tại:</span>
         <BaseBadge :variant="planBadge[auth.planCode]?.variant ?? 'default'">
           {{ planBadge[auth.planCode]?.label ?? 'Free' }}
         </BaseBadge>
@@ -39,6 +40,7 @@ function isActive(item: typeof menu[number]) {
       <router-link
         to="/upgrade"
         class="mt-2 block text-xs text-orange-500 hover:text-orange-600"
+        @click="emit('navigate')"
       >
         Nâng cấp &rarr;
       </router-link>
@@ -51,7 +53,10 @@ function isActive(item: typeof menu[number]) {
         :key="item.to"
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
-        :class="isActive(item) ? 'bg-orange-50 text-orange-600 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+        :class="isActive(item)
+          ? 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-medium'
+          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'"
+        @click="emit('navigate')"
       >
         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 
+const emit = defineEmits<{ navigate: [] }>()
 const route = useRoute()
 
 const menu = [
@@ -11,6 +12,7 @@ const menu = [
   { to: '/admin/plans', label: 'Gói dịch vụ', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
   { to: '/admin/payment-methods', label: 'Phương thức TT', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
   { to: '/admin/settings', label: 'Cài đặt', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
+  { to: '/admin/logs', label: 'Nhật ký', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
 ]
 
 function isActive(item: typeof menu[number]) {
@@ -20,7 +22,7 @@ function isActive(item: typeof menu[number]) {
 </script>
 
 <template>
-  <aside class="w-64 bg-gray-900 min-h-[calc(100vh-4rem)] p-4">
+  <aside class="w-64 bg-gray-900 h-[calc(100vh-4rem)] overflow-y-auto p-4">
     <div class="mb-6 px-3">
       <h2 class="text-lg font-bold text-white">Admin Panel</h2>
       <p class="text-xs text-gray-400 mt-1">Quản lý hệ thống</p>
@@ -33,6 +35,7 @@ function isActive(item: typeof menu[number]) {
         :to="item.to"
         class="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors"
         :class="isActive(item) ? 'bg-orange-600 text-white font-medium' : 'text-gray-300 hover:bg-gray-800 hover:text-white'"
+        @click="emit('navigate')"
       >
         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.icon" />
@@ -46,6 +49,7 @@ function isActive(item: typeof menu[number]) {
       <router-link
         to="/dashboard"
         class="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white"
+        @click="emit('navigate')"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />

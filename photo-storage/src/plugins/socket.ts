@@ -10,7 +10,14 @@ export function getSocket(): Socket | null {
 export function connectSocket(token: string) {
   if (socket?.connected) return
 
-  socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:4001', {
+  // In production, connect via same origin (Nginx proxies /socket.io → :4001)
+  // In dev, connect to localhost:4001
+  const url = import.meta.env.VITE_SOCKET_URL || (
+    import.meta.env.PROD ? window.location.origin : 'http://localhost:4001'
+  )
+  console.log('[Socket] Connecting to', url)
+
+  socket = io(url, {
     path: '/socket.io',
     auth: { token },
     transports: ['websocket'],
@@ -20,11 +27,15 @@ export function connectSocket(token: string) {
   })
 
   socket.on('connect', () => {
-    if (import.meta.env.DEV) console.log('[Socket] Connected')
+    console.log('[Socket] Connected, id:', socket?.id)
   })
 
   socket.on('disconnect', (reason) => {
-    if (import.meta.env.DEV) console.log('[Socket] Disconnected:', reason)
+    console.log('[Socket] Disconnected:', reason)
+  })
+
+  socket.on('connect_error', (err) => {
+    console.error('[Socket] Connection error:', err.message)
   })
 }
 

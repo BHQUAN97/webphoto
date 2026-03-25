@@ -16,7 +16,10 @@ export interface StorageProvider {
   deletePublic(keys: string[]): Promise<void>
   publicUrl(key: string): string
 
-  // ── Local-only: receive chunk from frontend ──
+  // ── Server-side chunk upload (local & R2) ──
+  uploadPart(key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string>
+
+  // ── Local-only: legacy ──
   writeChunk?(key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string>
   assembleChunks?(key: string, uploadId: string, totalParts: number): Promise<void>
 

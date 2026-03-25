@@ -45,6 +45,15 @@ export class R2StorageProvider implements StorageProvider {
     }), { expiresIn })
   }
 
+  async uploadPart(key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string> {
+    const res = await this.r2Private.send(new UploadPartCommand({
+      Bucket: this.privateBucket, Key: key,
+      UploadId: uploadId, PartNumber: partNumber,
+      Body: data,
+    }))
+    return res.ETag ?? ''
+  }
+
   async completeMultipart(key: string, uploadId: string, parts: { ETag: string; PartNumber: number }[]): Promise<void> {
     await this.r2Private.send(new CompleteMultipartUploadCommand({
       Bucket: this.privateBucket, Key: key, UploadId: uploadId,

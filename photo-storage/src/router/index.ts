@@ -116,6 +116,11 @@ const router = createRouter({
           name: 'admin-settings',
           component: () => import('@/pages/admin/settings/index.vue'),
         },
+        {
+          path: 'logs',
+          name: 'admin-logs',
+          component: () => import('@/pages/admin/logs/index.vue'),
+        },
       ],
     },
     {

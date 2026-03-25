@@ -6,7 +6,7 @@ import { images, albums, likes, comments, users } from '../../database/schema.js
 import { eq, and, desc, asc, sql, lt, gt, gte, lte, like as sqlLike, inArray } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { rateLimit } from '../../middleware/rateLimit.js'
-import { storage, getStorageBackend } from '../../utils/storage/index.js'
+import { storage } from '../../utils/storage/index.js'
 import { quotaUtils } from '../../utils/quota.js'
 import { feedCache } from '../../utils/redis.js'
 import { emitToUser } from '../../utils/socket-emit.js'
@@ -17,6 +17,7 @@ import {
   isValidImageStatus, isValidSortBy, isValidDateString, isValidFileSize,
   isValidUlid, clampInt,
 } from '../../utils/validate.js'
+import { logger } from '../../utils/logger.js'
 
 const router = Router()
 
@@ -206,17 +207,10 @@ router.post('/upload-url', rateLimit('upload', 60, 60), async (req, res) => {
     expiresAt: new Date(Date.now() + 365 * 86400_000),
   })
 
-  const backend = await getStorageBackend()
-  if (backend === 'r2') {
-    const partUrls = await Promise.all(
-      Array.from({ length: totalParts }, (_, i) =>
-        stor.presignPart(key, uploadId, i + 1)
-      )
-    )
-    res.json({ imageId, uploadId, key, mode: 'presigned', partUrls })
-  } else {
-    res.json({ imageId, uploadId, key, mode: 'direct', totalParts, chunkSize: CHUNK })
-  }
+  logger.info(`[Upload] Created upload session`, { userId: user.sub, imageId, albumId, filename: safeFilename, size, totalParts, mimeType })
+
+  // Always use server-side upload (avoids R2 CORS issues)
+  res.json({ imageId, uploadId, key, mode: 'direct', totalParts, chunkSize: CHUNK })
 })
 
 // POST /complete — complete multipart upload
@@ -228,6 +222,7 @@ router.post('/complete', async (req, res) => {
     .where(and(eq(images.id, imageId), eq(images.userId, user.sub))).limit(1)
   if (!image) return res.status(404).json({ message: 'Image not found' })
 
+  logger.info(`[Upload] Completing multipart`, { userId: user.sub, imageId, partsCount: parts?.length })
   await storage().completeMultipart(key, uploadId, parts)
   await db.update(images).set({ status: 'processing' }).where(eq(images.id, imageId))
   await quotaUtils.addUsed(user.sub, image.originalSize)
@@ -244,6 +239,7 @@ router.post('/complete', async (req, res) => {
 
   // Enqueue BullMQ image processing job
   await imageQueue.add('process', { imageId, userId: user.sub, originalKey: key, mimeType: image.mimeType })
+  logger.info(`[Upload] Queued processing job`, { userId: user.sub, imageId, mimeType: image.mimeType })
 
   res.json({ ok: true })
 })

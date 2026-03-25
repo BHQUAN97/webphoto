@@ -39,6 +39,10 @@ export class LocalStorageProvider implements StorageProvider {
     throw new Error('presignPart not supported for local storage')
   }
 
+  async uploadPart(_key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string> {
+    return this.writeChunk(_key, uploadId, partNumber, data)
+  }
+
   async writeChunk(_key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string> {
     const chunkPath = path.join(this.tmpDir, uploadId, `part-${partNumber}`)
     await fs.writeFile(chunkPath, data)

@@ -64,7 +64,7 @@ app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('X-XSS-Protection', '0') // rely on CSP instead
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: ws:")
+  // CSP handled by Nginx on frontend, not needed on API responses
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   res.removeHeader('X-Powered-By')
   next()

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ImageItem } from '@/types'
-import { cdnUrl } from '@/utils/format'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 
 const props = defineProps<{
@@ -27,8 +26,8 @@ const statusBadge: Record<string, { label: string; variant: 'success' | 'warning
   <div class="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
     <div class="aspect-square bg-gray-100 relative" @click="emit('click', image)">
       <img
-        v-if="image.thumbKey"
-        :src="cdnUrl(image.thumbKey)"
+        v-if="image.thumbUrl || image.thumbKey"
+        :src="image.thumbUrl || image.thumbKey || ''"
         class="w-full h-full object-cover"
         :alt="image.originalName"
         loading="lazy"

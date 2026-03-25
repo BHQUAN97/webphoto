@@ -80,21 +80,32 @@ router.patch('/me', async (req, res) => {
   res.json({ ok: true })
 })
 
-// POST /api/users/me/avatar — upload avatar via presigned URL
+// POST /api/users/me/avatar — upload avatar via server (base64)
 router.post('/me/avatar', async (req, res) => {
   const user = requireAuth(req)
-  const { mimeType } = req.body
+  const { mimeType, data: base64Data } = req.body
 
   if (!mimeType || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
     return res.status(400).json({ message: 'Chỉ hỗ trợ JPEG, PNG, WebP' })
   }
 
+  if (!base64Data) {
+    return res.status(400).json({ message: 'Thiếu dữ liệu ảnh' })
+  }
+
+  const buffer = Buffer.from(base64Data, 'base64')
+
+  // Validate size server-side (5MB max for avatar)
+  if (buffer.length > 5 * 1024 * 1024) {
+    return res.status(400).json({ message: 'Ảnh tối đa 5MB' })
+  }
+
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
   const key = `avatars/${user.sub}/${ulid()}.${ext}`
 
-  const url = await storage().presignUpload(key, mimeType)
+  await storage().uploadBuffer(key, buffer, mimeType)
 
-  res.json({ url, key })
+  res.json({ key })
 })
 
 // GET /api/users/me/storage

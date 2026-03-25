@@ -61,6 +61,8 @@ export interface ImageItem {
   originalKey: string
   thumbKey: string | null
   previewKey: string | null
+  thumbUrl: string | null
+  previewUrl: string | null
   originalName: string
   mimeType: string
   originalSize: string
