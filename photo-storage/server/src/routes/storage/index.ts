@@ -16,7 +16,11 @@ router.post('/upload-chunk', express.raw({ limit: '6mb', type: '*/*' }), async (
   }
 
   const bodySize = Buffer.isBuffer(req.body) ? req.body.length : 0
-  logger.debug(`[Chunk] Receiving part ${partNumber} (${(bodySize / 1024 / 1024).toFixed(1)}MB)`, { key, uploadId: uploadId as string, partNumber: Number(partNumber), bytes: bodySize, userId: user.sub })
+  if (bodySize === 0) {
+    logger.error(`[Chunk] Empty body for part ${partNumber}`, { key, partNumber: Number(partNumber), userId: user.sub, bodyType: typeof req.body, isBuffer: Buffer.isBuffer(req.body) })
+    return res.status(400).json({ message: 'Empty chunk body' })
+  }
+  logger.info(`[Chunk] Uploading part ${partNumber} (${(bodySize / 1024 / 1024).toFixed(1)}MB)`, { key, partNumber: Number(partNumber), bytes: bodySize, userId: user.sub })
 
   const stor = storage()
   const etag = await stor.uploadPart(key as string, uploadId as string, Number(partNumber), req.body as Buffer)

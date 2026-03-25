@@ -77,10 +77,18 @@ app.use(cors({
     .map(s => s.trim()),
   credentials: true,
 }))
-app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 app.use(requestLogger)
 app.use(authMiddleware)
+
+// Storage routes — MUST be before express.json() because upload-chunk
+// sends binary body (application/octet-stream). express.json() consumes
+// the body stream even for non-JSON content types, leaving req.body empty
+// for the route-level express.raw() parser.
+app.use('/api/storage', storageRoutes)
+
+// JSON body parser — after binary upload routes
+app.use(express.json({ limit: '10mb' }))
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -122,9 +130,6 @@ app.use('/api/admin/logs', adminGuard, adminLogRoutes)
 
 // Share routes (public album sharing, no auth)
 app.use('/api/share', shareRoutes)
-
-// Storage routes (binary upload/download — requireAuth called inside handler, not as middleware)
-app.use('/api/storage', storageRoutes)
 
 // Cron routes
 app.use('/api/cron', cronRoutes)
