@@ -4,8 +4,8 @@ import { spawn } from 'child_process'
 import { db } from '../utils/db.js'
 import { storage } from '../utils/storage/index.js'
 import { emitToUser } from '../utils/socket-emit.js'
-import { images } from '../database/schema.js'
-import { eq } from 'drizzle-orm'
+import { images, albums } from '../database/schema.js'
+import { eq, and, isNull } from 'drizzle-orm'
 import { logger } from '../utils/logger.js'
 
 const RAW_MIME_TYPES = new Set([
@@ -67,6 +67,14 @@ export function createImageWorker() {
       }).where(eq(images.id, imageId))
 
       logger.info(`[Worker] Image ready ${imageId} (${meta.width}x${meta.height})`, { source: 'worker:image-process', userId, imageId })
+
+      // Auto-set album cover if album has no cover yet
+      const [img] = await db.select({ albumId: images.albumId }).from(images).where(eq(images.id, imageId)).limit(1)
+      if (img?.albumId) {
+        await db.update(albums).set({ coverKey: `${base}/thumb.webp` })
+          .where(and(eq(albums.id, img.albumId), isNull(albums.coverKey)))
+      }
+
       await emitToUser(userId, {
         type: 'image:ready', imageId,
         thumbUrl: storage().publicUrl(`${base}/thumb.webp`),

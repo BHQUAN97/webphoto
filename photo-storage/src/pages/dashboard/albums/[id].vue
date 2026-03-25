@@ -157,6 +157,20 @@ async function handleDeleteImage() {
   }
 }
 
+async function setAsCover(image: ImageItem) {
+  if (!image.thumbUrl) return
+  try {
+    // Extract key from thumbUrl (remove CDN prefix)
+    const cdnPrefix = import.meta.env.VITE_CDN_URL || ''
+    const thumbKey = cdnPrefix ? image.thumbUrl.replace(cdnPrefix + '/', '') : image.thumbUrl
+    await api.patch(`/albums/${albumId.value}`, { coverKey: thumbKey })
+    if (album.value) album.value.coverKey = thumbKey
+    toast.success('Đã đặt ảnh bìa')
+  } catch {
+    toast.error('Không thể đặt ảnh bìa')
+  }
+}
+
 async function handleLike(image: ImageItem) {
   try {
     if (image.liked) {
@@ -266,9 +280,11 @@ onUnmounted(stopPolling)
         :image="img"
         :show-like="auth.isAuthenticated"
         :show-delete="album?.userId === auth.user?.id"
+        :show-set-cover="album?.userId === auth.user?.id"
         @click="lightboxImage = img"
         @like="handleLike"
         @delete="confirmDeleteImage"
+        @set-cover="setAsCover"
       />
     </div>
     <div v-else class="text-center py-12 text-gray-400">

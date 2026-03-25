@@ -140,10 +140,10 @@ const hasBatch = computed(() => store.files.length > 1)
       </div>
     </div>
 
-    <!-- Individual file progress list -->
-    <div v-if="store.files.length > 0" class="mt-3 space-y-1.5 max-h-64 overflow-y-auto">
+    <!-- Individual file progress list (max 5 visible) -->
+    <div v-if="store.visibleFiles.length > 0" class="mt-3 space-y-1.5">
       <div
-        v-for="f in store.files"
+        v-for="f in store.visibleFiles"
         :key="f.id"
         class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
       >
