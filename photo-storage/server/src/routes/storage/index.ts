@@ -8,14 +8,15 @@ import { logger } from '../../utils/logger.js'
 const router = Router()
 
 // POST /upload-chunk — receive a chunk for multipart upload (both R2 and local)
-router.post('/upload-chunk', requireAuth, express.raw({ limit: '6mb', type: '*/*' }), async (req, res) => {
+router.post('/upload-chunk', express.raw({ limit: '6mb', type: '*/*' }), async (req, res) => {
+  const user = requireAuth(req)
   const { key, uploadId, partNumber } = req.query
   if (!key || !uploadId || !partNumber) {
     return res.status(400).json({ message: 'Thieu key, uploadId hoac partNumber' })
   }
 
   const bodySize = Buffer.isBuffer(req.body) ? req.body.length : 0
-  logger.debug(`[Chunk] Receiving part ${partNumber} (${(bodySize / 1024 / 1024).toFixed(1)}MB)`, { key, uploadId: uploadId as string, partNumber: Number(partNumber), bytes: bodySize })
+  logger.debug(`[Chunk] Receiving part ${partNumber} (${(bodySize / 1024 / 1024).toFixed(1)}MB)`, { key, uploadId: uploadId as string, partNumber: Number(partNumber), bytes: bodySize, userId: user.sub })
 
   const stor = storage()
   const etag = await stor.uploadPart(key as string, uploadId as string, Number(partNumber), req.body as Buffer)
@@ -24,7 +25,8 @@ router.post('/upload-chunk', requireAuth, express.raw({ limit: '6mb', type: '*/*
 })
 
 // PUT /upload-public — receive a public file (avatar, QR) for local storage
-router.put('/upload-public', requireAuth, express.raw({ limit: '5mb', type: '*/*' }), async (req, res) => {
+router.put('/upload-public', express.raw({ limit: '5mb', type: '*/*' }), async (req, res) => {
+  requireAuth(req)
   const backend = await getStorageBackend()
   if (backend !== 'local') return res.status(400).json({ message: 'Chi dung cho local storage' })
 
