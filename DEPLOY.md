@@ -1,11 +1,13 @@
 # PHOTO STORAGE — DEPLOYMENT GUIDE
 
-> Domain: bhquan.site | Cập nhật: 2026-03-25
+> Domain: bhquan.site | VPS: 213.163.199.176 | Cập nhật: 2026-03-25
 
-## Tổng quan kiến trúc Production (VPS Direct)
+---
+
+## Tổng quan kiến trúc Production
 
 ```
-  User Browser
+  Browser (https://bhquan.site)
        │
        ▼
   Cloudflare DNS (DNS only / grey cloud)
@@ -13,19 +15,22 @@
        ▼
   VPS Ubuntu (213.163.199.176)
   ┌──────────────────────────────────────────────┐
-  │  Nginx (host)                                │
+  │  Nginx (BT Panel — host)                    │
   │  ├─ :80  → redirect HTTPS                   │
   │  ├─ :443 → SSL (Let's Encrypt)              │
-  │  │   ├─ /          → Frontend static files   │
-  │  │   ├─ /api/*     → proxy :4000 (API)       │
-  │  │   └─ /socket.io → proxy :4001 (WS)        │
+  │  │   ├─ /              → SPA static files    │
+  │  │   ├─ /api/*         → proxy :4000 (API)   │
+  │  │   ├─ /socket.io/*   → proxy :4001 (WS)    │
+  │  │   └─ /storage/public → proxy :4000        │
+  │  │                                           │
+  │  │  client_max_body_size 500m                │
   │  │                                           │
   │  └─ Frontend dist: /opt/webphoto/photo-      │
   │     storage/dist/                            │
   │                                              │
   │  Docker Containers                           │
   │  ┌─────────────────────────────────────┐     │
-  │  │ photo-api    :4000 (Express.js)     │     │
+  │  │ photo-api    :4000 (Express.js 5)   │     │
   │  │ photo-worker       (BullMQ jobs)    │     │
   │  │ photo-mysql  :3306 (MySQL 8)        │     │
   │  │ photo-redis  :6379 (Redis 7)        │     │
@@ -35,72 +40,99 @@
        ▼
   Cloudflare R2 (Object Storage)
   ├─ webphoto        (private: originals/RAW)
-  └─ webphoto-public (public: thumbnails/previews)
-      CDN: https://pub-xxx.r2.dev
+  └─ webphoto-public (public: thumbnails/previews/avatars)
+      CDN: https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev
 ```
 
-**Điểm khác so với docker-compose.prod.yml gốc:**
-- Nginx chạy trên **host** (không Docker) → tương thích BT Panel / aaPanel
-- Frontend serve bằng Nginx static, không qua Docker
-- API + Worker expose port ra host (4000, 4001)
-- SSL bằng certbot trên host, không dùng certbot container
+### Đặc điểm kiến trúc
+
+- **Nginx chạy trên host** (BT Panel) — không Docker, tương thích aaPanel
+- **Frontend** serve bằng Nginx static (`/opt/webphoto/photo-storage/dist/`)
+- **API + Worker** chạy trong Docker, expose port `4000`, `4001` ra host
+- **SSL** bằng certbot trên host (auto-renew via systemd timer)
+- **Upload bảo mật**: Tất cả upload (ảnh, avatar, QR) đều qua server → R2. Client không bao giờ gọi trực tiếp R2 (không dùng presigned URL)
+
+### Upload Flow
+
+```
+Browser ──POST /api/storage/upload-chunk──→ API Server ──→ R2 Private Bucket
+Browser ──POST /api/users/me/avatar (base64)──→ API Server ──→ R2 Public Bucket
+Browser ──POST /api/admin/.../upload-qr (base64)──→ API Server ──→ R2 Public Bucket
+```
 
 ---
 
 ## Deploy nhanh 1 lệnh (VPS mới)
 
-### Yêu cầu VPS
-- Ubuntu 22.04 / 24.04
+### Yêu cầu
+
+- VPS: Ubuntu 22.04 / 24.04
 - Docker + Docker Compose đã cài
-- Nginx đã cài (hoặc BT Panel)
+- Nginx đã cài (hoặc BT Panel / aaPanel)
 - SSH key đã cấu hình từ máy local
 
 ### Bước 1: Cấu hình `.env`
+
 ```bash
 cp .env.example .env
 # Sửa các giá trị:
 #   MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD
-#   JWT_SECRET (openssl rand -hex 32)
+#   JWT_SECRET          (openssl rand -hex 32)
 #   R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY
 #   RESEND_API_KEY
-#   CRON_SECRET (openssl rand -hex 16)
+#   CRON_SECRET         (openssl rand -hex 16)
 ```
 
 ### Bước 2: Trỏ DNS
-Vào Cloudflare Dashboard → DNS:
-| Type  | Name | Value              | Proxy     |
-|-------|------|--------------------|-----------|
-| A     | @    | `<VPS_IP>`         | DNS only  |
-| A     | www  | `<VPS_IP>`         | DNS only  |
 
-### Bước 3: Deploy
+Vào Cloudflare Dashboard → DNS:
+
+| Type | Name | Value        | Proxy    |
+|------|------|--------------|----------|
+| A    | @    | `<VPS_IP>`   | DNS only |
+| A    | www  | `<VPS_IP>`   | DNS only |
+
+### Bước 3: Deploy lần đầu
+
 ```bash
-# Deploy lần đầu (từ máy local Windows/Mac/Linux):
 bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
 
 # Ví dụ:
 bash scripts/quick-deploy.sh 213.163.199.176 bhquan.site
-bash scripts/quick-deploy.sh 45.67.89.10 photos.example.com
 ```
 
-Script tự động thực hiện:
-1. Build frontend + backend trên máy local
-2. Upload files lên VPS via SCP
-3. Tạo docker-compose.yml tối ưu cho VPS
-4. Build Docker images (API + Worker)
-5. Start MySQL, Redis, API, Worker
-6. Push DB schema + seed data
-7. Cấu hình Nginx + SSL (Let's Encrypt)
-8. Setup cron jobs + health check
+Script tự động thực hiện 8 bước:
 
-### Bước 4: Cập nhật code
+| Step | Mô tả |
+|------|--------|
+| 0/8  | Kiểm tra SSH, .env, Docker trên VPS |
+| 1/8  | Build frontend (Vite) + backend (tsc) trên máy local |
+| 2/8  | Chuẩn bị VPS (thư mục, firewall, certbot) |
+| 3/8  | Upload files lên VPS via SCP |
+| 4/8  | Tạo docker-compose.yml tối ưu cho VPS |
+| 5/8  | Build Docker images + Start MySQL, Redis, API, Worker |
+| 6/8  | Push DB schema (drizzle-kit) + seed data (plans, admin user) |
+| 7/8  | Cấu hình Nginx (auto-detect BT Panel/system) + SSL (Let's Encrypt) |
+| 8/8  | Setup cron jobs + health check |
+
+### Bước 4: Cập nhật code (các lần sau)
+
 ```bash
-# Khi code thay đổi, chỉ cần:
 bash scripts/update-deploy.sh <VPS_IP>
 
 # Ví dụ:
 bash scripts/update-deploy.sh 213.163.199.176
 ```
+
+Script thực hiện 5 bước:
+
+| Step | Mô tả |
+|------|--------|
+| 1/5  | Build frontend + backend trên máy local |
+| 2/5  | Upload dist files lên VPS via SCP |
+| 3/5  | Update Nginx config (BT Panel path) + reload |
+| 4/5  | Rebuild Docker images + restart API, Worker |
+| 5/5  | Health check (API + container status) |
 
 ---
 
@@ -109,10 +141,11 @@ bash scripts/update-deploy.sh 213.163.199.176
 ### 1. Setup dịch vụ bên ngoài
 
 #### Cloudflare R2 (free: 10GB storage, 1M requests/tháng)
+
 ```
 1. https://dash.cloudflare.com → R2
-2. Create bucket: "webphoto" (private - originals/RAW)
-3. Create bucket: "webphoto-public" (public - thumbnails)
+2. Create bucket: "webphoto" (private — originals/RAW)
+3. Create bucket: "webphoto-public" (public — thumbnails/previews/avatars)
    → Settings → Public Access → Enable
 4. R2 → Manage R2 API Tokens → Create API Token
    → Permissions: Object Read & Write → cả 2 buckets
@@ -120,6 +153,7 @@ bash scripts/update-deploy.sh 213.163.199.176
 ```
 
 #### Resend (free: 100 emails/ngày)
+
 ```
 1. https://resend.com → Sign up
 2. Domains → Add domain → Verify DNS records
@@ -169,13 +203,7 @@ docker compose up -d
 # Đợi MySQL ready
 docker exec photo-mysql mysqladmin ping -h localhost --silent
 
-# Push schema + seed (chạy trong container)
-docker exec -w /app photo-api npm install --include=dev
-docker cp /opt/webphoto/photo-storage/server/src photo-api:/app/src
-docker cp /opt/webphoto/photo-storage/server/drizzle.config.ts photo-api:/app/drizzle.config.ts
-docker cp /opt/webphoto/photo-storage/server/tsconfig.json photo-api:/app/tsconfig.json
-
-# Fix MySQL auth (nếu cần)
+# Fix MySQL auth (nếu cần — caching_sha2_password → mysql_native_password)
 docker exec photo-api node -e "
   import mysql from 'mysql2/promise';
   const conn = await mysql.createConnection({host:'mysql',port:3306,user:'root',password:'<MYSQL_ROOT_PASS>'});
@@ -186,29 +214,31 @@ docker exec photo-api node -e "
 
 # Write .env for drizzle (tránh lỗi shell escaping ký tự !)
 docker exec -w /app photo-api sh -c 'echo "DATABASE_URL=mysql://root:<MYSQL_ROOT_PASS>@mysql:3306/photo_storage" > .env'
+
+# Push schema + seed
+docker exec -w /app photo-api npm install --include=dev
+docker cp /opt/webphoto/photo-storage/server/src photo-api:/app/src
+docker cp /opt/webphoto/photo-storage/server/drizzle.config.ts photo-api:/app/drizzle.config.ts
+docker cp /opt/webphoto/photo-storage/server/tsconfig.json photo-api:/app/tsconfig.json
 docker exec -w /app photo-api npx drizzle-kit push --force
 docker exec -w /app photo-api npx tsx src/database/seed.ts
 
-# Restart để apply
+# Restart
 docker compose restart api worker
 ```
 
 ### 5. Nginx + SSL
 
-#### BT Panel (aaPanel)
-```bash
-# Config path: /www/server/panel/vhost/nginx/<domain>.conf
-# Nginx binary: /www/server/nginx/sbin/nginx
-# Reload: /www/server/nginx/sbin/nginx -s reload
-```
+#### Đường dẫn config theo loại Nginx
 
-#### System Nginx
-```bash
-# Config path: /etc/nginx/sites-enabled/<domain>.conf
-# Reload: nginx -s reload
-```
+| Loại | Config path | Reload command |
+|------|-------------|----------------|
+| **BT Panel / aaPanel** | `/www/server/panel/vhost/nginx/<domain>.conf` | `nginx -s reload` |
+| **System Nginx** | `/etc/nginx/sites-enabled/<domain>.conf` | `nginx -s reload` |
+| **conf.d** | `/etc/nginx/conf.d/<domain>.conf` | `nginx -s reload` |
 
 #### Nội dung Nginx config
+
 ```nginx
 # HTTP → HTTPS redirect
 server {
@@ -232,11 +262,12 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/<DOMAIN>/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
     root /opt/webphoto/photo-storage/dist;
     index index.html;
 
-    # API proxy
+    # API proxy — tất cả upload đều qua đây
     location /api/ {
         proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;
@@ -245,7 +276,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
-        client_max_body_size 500m;
+        client_max_body_size 500m;  # Quan trọng: cho phép upload chunk lớn
     }
 
     # Socket.io proxy (WebSocket)
@@ -261,12 +292,19 @@ server {
         proxy_read_timeout 86400s;
     }
 
+    # Local storage public files (khi dùng local storage thay R2)
+    location /storage/public/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
     # SPA fallback
     location / {
         try_files $uri $uri/ /index.html;
     }
 
-    # Cache static assets
+    # Cache static assets (Vite hashed filenames)
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
@@ -279,8 +317,9 @@ server {
 ```
 
 #### SSL Certificate
+
 ```bash
-# Lấy cert (cần DNS đã trỏ về VPS)
+# Lấy cert (DNS phải đã trỏ về VPS)
 certbot certonly --webroot -w /opt/webphoto/photo-storage/dist \
   -d <DOMAIN> -d www.<DOMAIN> \
   --non-interactive --agree-tos --email admin@<DOMAIN>
@@ -297,19 +336,80 @@ crontab -e
 0 2 * * * curl -sf -H "x-cron-secret: <CRON_SECRET>" http://localhost:4000/api/cron/expire-images >> /var/log/cron-photo.log 2>&1
 0 3 * * * curl -sf -H "x-cron-secret: <CRON_SECRET>" http://localhost:4000/api/cron/reconcile-quota >> /var/log/cron-photo.log 2>&1
 0 * * * * curl -sf -H "x-cron-secret: <CRON_SECRET>" http://localhost:4000/api/cron/remind-payments >> /var/log/cron-photo.log 2>&1
+0 1 * * 0 cd /opt/webphoto && bash scripts/backup.sh >> /var/log/cron-photo.log 2>&1
 ```
+
+---
+
+## Quản lý Production
+
+```bash
+# === KẾT NỐI VPS ===
+ssh root@213.163.199.176
+cd /opt/webphoto
+
+# === TRẠNG THÁI ===
+docker compose ps                           # Xem containers
+docker compose logs -f api                  # Logs API (realtime)
+docker compose logs -f worker               # Logs Worker
+docker exec photo-api cat /app/logs/*.log   # File logs (structured JSON)
+
+# === RESTART ===
+docker compose restart api worker           # Restart API + Worker
+docker compose restart                      # Restart tất cả
+docker compose down && docker compose up -d # Recreate tất cả
+
+# === DATABASE ===
+# Backup
+docker exec photo-mysql mysqldump -u root -p"<ROOT_PASS>" photo_storage \
+  --single-transaction | gzip > backup_$(date +%Y%m%d).sql.gz
+
+# Restore
+gunzip < backup.sql.gz | docker exec -i photo-mysql mysql -u root -p"<ROOT_PASS>" photo_storage
+
+# === CẬP NHẬT CODE (từ máy local) ===
+bash scripts/update-deploy.sh 213.163.199.176
+
+# === DEPLOY VPS MỚI (từ máy local) ===
+bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
+```
+
+---
+
+## Biến môi trường (.env)
+
+| Biến | Mô tả | Ví dụ |
+|------|--------|-------|
+| `MYSQL_ROOT_PASSWORD` | Root password MySQL | `StrongRootPass2024!` |
+| `MYSQL_PASSWORD` | App user password MySQL | `StrongUserPass2024!` |
+| `JWT_SECRET` | Secret cho JWT token (32 bytes hex) | `openssl rand -hex 32` |
+| `R2_ENDPOINT` | Cloudflare R2 S3-compatible endpoint | `https://xxx.r2.cloudflarestorage.com` |
+| `R2_ACCESS_KEY` | R2 API token access key | |
+| `R2_SECRET_KEY` | R2 API token secret key | |
+| `R2_PRIVATE_BUCKET` | Bucket chứa file gốc (private) | `webphoto` |
+| `R2_PUBLIC_BUCKET` | Bucket chứa thumb/preview (public) | `webphoto-public` |
+| `CDN_URL` | R2 public bucket CDN URL | `https://pub-xxx.r2.dev` |
+| `RESEND_API_KEY` | API key gửi email (Resend) | `re_xxx` |
+| `FROM_EMAIL` | Email gửi đi | `noreply@bhquan.site` |
+| `CORS_ORIGIN` | Allowed origins (comma-separated) | `https://bhquan.site` |
+| `CRON_SECRET` | Secret header cho cron endpoints | `openssl rand -hex 16` |
+| `DOMAIN` | Domain chính | `bhquan.site` |
 
 ---
 
 ## Troubleshooting
 
-### API không start — xem file log (production logger không ghi console)
+### API không start
+
 ```bash
-docker exec photo-api cat /app/logs/*.log | tail -20
+docker compose logs api --tail 50          # Xem lỗi gần nhất
+docker exec photo-api cat /app/logs/*.log | tail -20  # File log chi tiết
 ```
 
-### MySQL access denied — fix auth plugin
+### MySQL access denied
+
 ```bash
+# Fix auth plugin: caching_sha2_password → mysql_native_password
 docker exec photo-api node -e "
   import mysql from 'mysql2/promise';
   const conn = await mysql.createConnection({host:'mysql',port:3306,user:'root',password:'<ROOT_PASS>'});
@@ -320,57 +420,70 @@ docker exec photo-api node -e "
 ```
 
 ### BullMQ spam "Eviction policy" warning
-Redis đang dùng `allkeys-lru`, BullMQ yêu cầu `noeviction`. Sửa trong docker-compose:
+
+Redis đang dùng `allkeys-lru`, BullMQ yêu cầu `noeviction`:
+
 ```yaml
+# docker-compose.yml → redis service
 command: redis-server --maxmemory 128mb --maxmemory-policy noeviction --appendonly yes
 ```
 
 ### drizzle-kit push lỗi shell escaping (ký tự `!` trong password)
+
 Ghi DATABASE_URL vào file .env thay vì truyền qua command line:
+
 ```bash
 docker exec -w /app photo-api sh -c 'echo "DATABASE_URL=mysql://root:PASS@mysql:3306/photo_storage" > .env'
 docker exec -w /app photo-api npx drizzle-kit push --force
 ```
 
-### Frontend trắng — kiểm tra SPA fallback
-Nginx phải có `try_files $uri $uri/ /index.html;` trong location `/`
+### Upload lỗi 413 Request Entity Too Large
 
-### SSL cert lỗi — DNS chưa trỏ
-Certbot cần DNS A record trỏ về VPS IP. Kiểm tra:
+Nginx `client_max_body_size` quá nhỏ. Kiểm tra:
+
+```bash
+# BT Panel
+grep client_max_body_size /www/server/panel/vhost/nginx/bhquan.site.conf
+# Cần >= 12m (chunk 10MB + overhead), hiện set 500m
+```
+
+### Frontend trắng
+
+Nginx thiếu SPA fallback. Cần `try_files $uri $uri/ /index.html;` trong location `/`
+
+### SSL cert lỗi
+
+DNS chưa trỏ. Kiểm tra:
+
 ```bash
 dig +short <DOMAIN>  # Phải trả về VPS IP
 ```
 
 ---
 
-## Quản lý Production
+## Bảo mật
 
-```bash
-# === TRẠNG THÁI ===
-cd /opt/webphoto
-docker compose ps                           # Xem containers
-docker compose logs -f api                  # Logs API (realtime)
-docker compose logs -f worker               # Logs Worker
-docker exec photo-api cat /app/logs/*.log   # File logs (đầy đủ hơn)
+### Upload Security
 
-# === RESTART ===
-docker compose restart api worker           # Restart API + Worker
-docker compose restart                      # Restart tất cả
-docker compose down && docker compose up -d # Recreate tất cả
+- **Không dùng presigned URL**: Tất cả upload (ảnh, avatar, QR) đều proxy qua API server. R2 credentials chỉ nằm trên server, client không bao giờ thấy R2 endpoint
+- **Validate client-side**: File size (200MB), extension, empty file — hiển thị toast thay vì alert
+- **Validate server-side**: File size, MIME type whitelist, extension whitelist, quota check
+- **Chunk upload**: 10MB/chunk qua `/api/storage/upload-chunk`, Nginx cho phép `client_max_body_size 500m`
 
-# === DATABASE ===
-# Backup
-docker exec photo-mysql mysqldump -u root -p"<ROOT_PASS>" photo_storage --single-transaction | gzip > backup_$(date +%Y%m%d).sql.gz
+### Auth Security
 
-# Restore
-gunzip < backup.sql.gz | docker exec -i photo-mysql mysql -u root -p"<ROOT_PASS>" photo_storage
+- JWT access token: 15 phút, HttpOnly + SameSite=Strict cookie
+- Refresh token: 7 ngày
+- CORS: chỉ cho phép `https://bhquan.site`
+- Rate limiting: Redis-based per endpoint
+- Password: bcrypt hash, validate strength
 
-# === CẬP NHẬT CODE (từ máy local) ===
-bash scripts/update-deploy.sh <VPS_IP>
+### Headers
 
-# === DEPLOY VPS MỚI (từ máy local) ===
-bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
-```
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `Referrer-Policy: strict-origin-when-cross-origin`
 
 ---
 
@@ -381,14 +494,16 @@ bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
 □ DNS trỏ về VPS IP (DNS only / grey cloud)
 □ Database đã seed (plans + settings + admin user)
 □ curl https://<DOMAIN>/api/health → {"status":"ok"}
-□ https://<DOMAIN> → frontend hiển thị
+□ https://<DOMAIN> → frontend hiển thị đúng
 □ Đăng ký user mới → nhận welcome email
 □ Upload ảnh JPEG → worker xử lý → hiện thumbnail
+□ Upload ảnh RAW (CR2/ARW) → worker xử lý → hiện thumbnail
 □ https://<DOMAIN>/admin → dashboard hoạt động
 □ Đổi admin password mặc định (admin@photostorage.com / admin123)
-□ SSL/HTTPS hoạt động
-□ Cron jobs đã cấu hình
+□ SSL/HTTPS hoạt động (certbot)
+□ Cron jobs đã cấu hình (crontab -l)
 □ Backup database lần đầu OK
+□ Nginx client_max_body_size >= 12m
 ```
 
 ---
@@ -397,11 +512,26 @@ bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
 
 | Script | Chạy từ | Mô tả |
 |--------|---------|-------|
-| `scripts/quick-deploy.sh <ip> [domain]` | Local | Deploy VPS mới từ đầu |
-| `scripts/update-deploy.sh <ip>` | Local | Cập nhật code lên VPS đã deploy |
+| `scripts/quick-deploy.sh <ip> [domain]` | Local | Deploy VPS mới từ đầu (8 bước) |
+| `scripts/update-deploy.sh <ip>` | Local | Cập nhật code lên VPS đã deploy (5 bước) |
 | `scripts/deploy.sh` | VPS | Deploy trên VPS (dùng Docker Compose gốc) |
-| `scripts/vps-setup.sh` | VPS | Setup VPS Ubuntu từ đầu |
-| `scripts/backup.sh` | VPS | Backup database |
-| `scripts/ssl-init.sh` | VPS | Lấy SSL cert lần đầu (Docker mode) |
-| `scripts/build.sh` | Local | Build FE + BE |
+| `scripts/backup.sh` | VPS | Backup database MySQL |
 | `scripts/dev.sh` / `dev.bat` | Local | Start dev environment |
+
+---
+
+## Thông tin VPS hiện tại
+
+| Mục | Giá trị |
+|-----|---------|
+| **IP** | 213.163.199.176 |
+| **OS** | Ubuntu |
+| **Panel** | BT Panel (aaPanel) |
+| **Nginx config** | `/www/server/panel/vhost/nginx/bhquan.site.conf` |
+| **Nginx binary** | `/www/server/nginx/sbin/nginx` (hoặc `/usr/bin/nginx`) |
+| **App directory** | `/opt/webphoto` |
+| **Frontend dist** | `/opt/webphoto/photo-storage/dist` |
+| **SSL certs** | `/etc/letsencrypt/live/bhquan.site/` |
+| **Docker containers** | photo-api, photo-worker, photo-mysql, photo-redis |
+| **Ports** | 4000 (API), 4001 (Socket.io), 3306 (MySQL), 6379 (Redis) |
+| **Default admin** | admin@photostorage.com / admin123 |
