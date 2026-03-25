@@ -135,19 +135,44 @@ app.use('/api/share', shareRoutes)
 app.use('/api/cron', cronRoutes)
 
 // Error handler — structured logging + debug mode toggle
-app.use(async (err: Error & { statusCode?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use(async (err: Error & { statusCode?: number; code?: string }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = err.statusCode ?? 500
 
-  // Always log via structured logger
-  const logLevel = status >= 500 ? 'error' : 'warn' as const
-  logger[logLevel](err.message, {
+  // Build comprehensive error context
+  const meta: Record<string, unknown> = {
     requestId: req.requestId,
     method: req.method,
     url: req.originalUrl,
     userId: req.user?.sub,
     statusCode: status,
-    stack: status >= 500 ? err.stack : undefined,
-  })
+    errorName: err.constructor?.name !== 'Error' ? err.constructor?.name : undefined,
+    errorCode: err.code,
+  }
+
+  // Always include stack for 5xx, include for 4xx too (helps trace origin)
+  if (status >= 500) {
+    meta.stack = err.stack
+    // Include request context for debugging 5xx
+    if (req.body && !Buffer.isBuffer(req.body)) {
+      try { meta.reqBody = JSON.stringify(req.body).slice(0, 1000) } catch { /* skip */ }
+    }
+    if (req.query && Object.keys(req.query).length > 0) {
+      meta.query = req.query
+    }
+    meta.ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+    meta.ua = (req.headers['user-agent'] ?? '').slice(0, 150)
+    // Include cause chain if present
+    const cause = (err as Error & { cause?: Error }).cause
+    if (cause) {
+      meta.cause = { message: cause.message, name: cause.constructor?.name, stack: cause.stack?.split('\n').slice(0, 3).join('\n') }
+    }
+  } else {
+    // 4xx — lighter context but still include stack origin (first 3 lines)
+    meta.stackOrigin = err.stack?.split('\n').slice(0, 4).join('\n')
+  }
+
+  const logLevel = status >= 500 ? 'error' : 'warn' as const
+  logger[logLevel](err.message, meta)
 
   // Check debug mode for detailed 5xx responses
   if (status >= 500) {
@@ -155,9 +180,11 @@ app.use(async (err: Error & { statusCode?: number }, req: express.Request, res: 
     if (debugMode === 'true') {
       return res.status(status).json({
         message: err.message,
+        errorName: err.constructor?.name,
+        errorCode: err.code,
         stack: err.stack,
         requestId: req.requestId,
-        context: { method: req.method, url: req.originalUrl },
+        context: { method: req.method, url: req.originalUrl, query: req.query },
       })
     }
     return res.status(status).json({
@@ -214,5 +241,23 @@ async function start() {
     logger.warn('Socket.io server failed to start, API continues', { stack: (err as Error).stack })
   }
 }
+
+// Catch unhandled errors globally
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason))
+  logger.fatal(`Unhandled rejection: ${err.message}`, {
+    errorName: err.constructor?.name,
+    stack: err.stack,
+  })
+})
+
+process.on('uncaughtException', (err) => {
+  logger.fatal(`Uncaught exception: ${err.message}`, {
+    errorName: err.constructor?.name,
+    stack: err.stack,
+  })
+  // Give logger time to flush, then exit
+  setTimeout(() => process.exit(1), 1000)
+})
 
 start().catch((err) => logger.fatal('Server start failed', { stack: (err as Error).stack }))

@@ -72,7 +72,8 @@ export function createImageWorker() {
         thumbUrl: storage().publicUrl(`${base}/thumb.webp`),
       })
     } catch (err) {
-      logger.error(`[Worker] Image failed ${imageId}: ${err}`, { source: 'worker:image-process', userId, imageId, stack: (err as Error).stack })
+      const e = err as Error & { code?: string }
+      logger.error(`[Worker] Image failed ${imageId}: ${e.message}`, { source: 'worker:image-process', userId, imageId, errorName: e.constructor?.name, errorCode: e.code, originalKey: job.data.originalKey, mimeType: job.data.mimeType, stack: e.stack })
       await db.update(images).set({ status: 'failed' }).where(eq(images.id, imageId))
       await emitToUser(userId, { type: 'image:failed', imageId, reason: String(err) })
       throw err
