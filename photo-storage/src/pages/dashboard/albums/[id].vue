@@ -37,6 +37,12 @@ const editLoading = ref(false)
 const deleteLoading = ref(false)
 const shareToken = ref<string | null>(null)
 const shareLoading = ref(false)
+const sharePermissions = ref({
+  allowLike: true,
+  allowComment: true,
+  allowDownload: false,
+})
+const permissionsLoading = ref(false)
 const shareUrl = computed(() => shareToken.value ? `${window.location.origin}/share/${shareToken.value}` : '')
 const lightboxImage = ref<ImageItem | null>(null)
 const lightboxIndex = ref(0)
@@ -106,8 +112,31 @@ async function openShareDialog() {
   try {
     const res = await api.get(`/albums/${albumId.value}/share`)
     shareToken.value = res.data.token
+    if (res.data.permissions) {
+      sharePermissions.value = {
+        allowLike: res.data.permissions.allowLike ?? true,
+        allowComment: res.data.permissions.allowComment ?? true,
+        allowDownload: res.data.permissions.allowDownload ?? false,
+      }
+    }
   } catch {
     shareToken.value = null
+  }
+}
+
+async function updateSharePermissions() {
+  permissionsLoading.value = true
+  try {
+    await api.patch(`/albums/${albumId.value}/share`, {
+      allowLike: sharePermissions.value.allowLike,
+      allowComment: sharePermissions.value.allowComment,
+      allowDownload: sharePermissions.value.allowDownload,
+    })
+    toast.success(t('album.permissionsUpdated'))
+  } catch {
+    toast.error(t('album.permissionsUpdateFailed'))
+  } finally {
+    permissionsLoading.value = false
   }
 }
 
@@ -429,7 +458,7 @@ onUnmounted(stopPolling)
           {{ $t('album.shareDesc') }}
         </p>
 
-        <div v-if="shareToken" class="space-y-3">
+        <div v-if="shareToken" class="space-y-4">
           <div class="flex items-center gap-2">
             <input
               :value="shareUrl"
@@ -439,6 +468,59 @@ onUnmounted(stopPolling)
             />
             <BaseButton variant="primary" size="sm" @click="copyShareLink">{{ $t('album.copyLink') }}</BaseButton>
           </div>
+
+          <!-- Share Permissions -->
+          <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ $t('album.sharePermissions') }}</h4>
+            <div class="space-y-3">
+              <!-- Allow Like -->
+              <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-sm text-gray-600 dark:text-gray-400">{{ $t('album.allowLike') }}</span>
+                <button
+                  type="button"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  :class="sharePermissions.allowLike ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'"
+                  @click="sharePermissions.allowLike = !sharePermissions.allowLike; updateSharePermissions()"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    :class="sharePermissions.allowLike ? 'translate-x-6' : 'translate-x-1'"
+                  />
+                </button>
+              </label>
+              <!-- Allow Comment -->
+              <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-sm text-gray-600 dark:text-gray-400">{{ $t('album.allowComment') }}</span>
+                <button
+                  type="button"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  :class="sharePermissions.allowComment ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'"
+                  @click="sharePermissions.allowComment = !sharePermissions.allowComment; updateSharePermissions()"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    :class="sharePermissions.allowComment ? 'translate-x-6' : 'translate-x-1'"
+                  />
+                </button>
+              </label>
+              <!-- Allow Download -->
+              <label class="flex items-center justify-between cursor-pointer">
+                <span class="text-sm text-gray-600 dark:text-gray-400">{{ $t('album.allowDownload') }}</span>
+                <button
+                  type="button"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  :class="sharePermissions.allowDownload ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'"
+                  @click="sharePermissions.allowDownload = !sharePermissions.allowDownload; updateSharePermissions()"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    :class="sharePermissions.allowDownload ? 'translate-x-6' : 'translate-x-1'"
+                  />
+                </button>
+              </label>
+            </div>
+          </div>
+
           <BaseButton variant="danger" size="sm" :loading="shareLoading" @click="revokeShareLink">
             {{ $t('album.revokeShareLink') }}
           </BaseButton>

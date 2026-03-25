@@ -134,7 +134,13 @@
     "downloadNoImages": "No photos ready to download",
     "downloadZipProgress": "Creating ZIP... {current}/{total} batches",
     "downloadZipBatch": "Batch {n}: {count} photos",
-    "downloadRequirePlan": "Basic plan or higher required to download album"
+    "downloadRequirePlan": "Basic plan or higher required to download album",
+    "sharePermissions": "Share permissions",
+    "allowLike": "Allow liking photos",
+    "allowComment": "Allow comments",
+    "allowDownload": "Allow downloading photos",
+    "permissionsUpdated": "Share permissions updated",
+    "permissionsUpdateFailed": "Cannot update share permissions"
   },
   "image": {
     "deleteImage": "Delete photo",
@@ -191,7 +197,9 @@
     "title": "Comments",
     "noComments": "No comments yet",
     "placeholder": "Write a comment...",
-    "sendFailed": "Cannot post comment"
+    "sendFailed": "Cannot post comment",
+    "guestNamePlaceholder": "Your name",
+    "guestCommentPlaceholder": "Write a comment..."
   },
   "profile": {
     "editProfile": "Edit",
@@ -231,7 +239,14 @@
   },
   "favorites": {
     "title": "Favorites",
-    "empty": "You haven't favorited any photos"
+    "empty": "You haven't favorited any photos",
+    "exportList": "Export favorites list",
+    "exportTitle": "Favorite photos list",
+    "copyList": "Copy list",
+    "downloadTxt": "Download TXT",
+    "totalCount": "Total: {count} photos",
+    "copied": "List copied",
+    "copyFailed": "Cannot copy"
   },
   "pricing": {
     "title": "Pricing",
@@ -294,6 +309,12 @@
     "revenueVnd": "Revenue (VND)",
     "privateGb": "Private (GB)",
     "publicGb": "Public (GB)"
+  },
+  "share": {
+    "canLike": "Can like",
+    "canComment": "Can comment",
+    "canDownload": "Can download",
+    "downloadFailed": "Cannot download photo"
   },
   "notification": {
     "title": "Notifications",

@@ -165,7 +165,8 @@ export const likes = mysqlTable('likes', {
 export const comments = mysqlTable('comments', {
   id:        varchar('id', { length: 26 }).primaryKey(),
   imageId:   varchar('image_id', { length: 26 }).notNull(),
-  userId:    varchar('user_id', { length: 26 }).notNull(),
+  userId:    varchar('user_id', { length: 26 }),
+  guestName: varchar('guest_name', { length: 50 }),
   content:   text('content').notNull(),
   createdAt: datetime('created_at').default(sql`NOW()`).notNull(),
 }, (t) => ({
@@ -185,11 +186,14 @@ export const refreshTokens = mysqlTable('refresh_tokens', {
 
 // ─── ALBUM SHARE TOKENS ──────────────────────────────────────────────────
 export const albumShareTokens = mysqlTable('album_share_tokens', {
-  id:        varchar('id', { length: 26 }).primaryKey(),
-  albumId:   varchar('album_id', { length: 26 }).notNull(),
-  token:     varchar('token', { length: 64 }).notNull().unique(),
-  expiresAt: datetime('expires_at'),
-  createdAt: datetime('created_at').default(sql`NOW()`).notNull(),
+  id:            varchar('id', { length: 26 }).primaryKey(),
+  albumId:       varchar('album_id', { length: 26 }).notNull(),
+  token:         varchar('token', { length: 64 }).notNull().unique(),
+  allowLike:     boolean('allow_like').default(true).notNull(),
+  allowComment:  boolean('allow_comment').default(true).notNull(),
+  allowDownload: boolean('allow_download').default(true).notNull(),
+  expiresAt:     datetime('expires_at'),
+  createdAt:     datetime('created_at').default(sql`NOW()`).notNull(),
 }, (t) => ({
   tokenIdx: uniqueIndex('share_tokens_token_idx').on(t.token),
   albumIdx: index('share_tokens_album_idx').on(t.albumId),

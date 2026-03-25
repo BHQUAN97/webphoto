@@ -134,7 +134,13 @@
     "downloadNoImages": "Không có ảnh nào sẵn sàng để tải",
     "downloadZipProgress": "Đang tạo ZIP... {current}/{total} batch",
     "downloadZipBatch": "Batch {n}: {count} ảnh",
-    "downloadRequirePlan": "Cần gói Basic trở lên để tải album"
+    "downloadRequirePlan": "Cần gói Basic trở lên để tải album",
+    "sharePermissions": "Quyền chia sẻ",
+    "allowLike": "Cho phép yêu thích ảnh",
+    "allowComment": "Cho phép nhận xét",
+    "allowDownload": "Cho phép tải ảnh",
+    "permissionsUpdated": "Đã cập nhật quyền chia sẻ",
+    "permissionsUpdateFailed": "Không thể cập nhật quyền chia sẻ"
   },
   "image": {
     "deleteImage": "Xóa ảnh",
@@ -191,7 +197,9 @@
     "title": "Bình luận",
     "noComments": "Chưa có bình luận",
     "placeholder": "Viết bình luận...",
-    "sendFailed": "Không thể gửi bình luận"
+    "sendFailed": "Không thể gửi bình luận",
+    "guestNamePlaceholder": "Tên của bạn",
+    "guestCommentPlaceholder": "Viết nhận xét..."
   },
   "profile": {
     "editProfile": "Chỉnh sửa",
@@ -231,7 +239,14 @@
   },
   "favorites": {
     "title": "Ảnh yêu thích",
-    "empty": "Bạn chưa yêu thích ảnh nào"
+    "empty": "Bạn chưa yêu thích ảnh nào",
+    "exportList": "Xuất danh sách yêu thích",
+    "exportTitle": "Danh sách ảnh yêu thích",
+    "copyList": "Sao chép danh sách",
+    "downloadTxt": "Tải về TXT",
+    "totalCount": "Tổng: {count} ảnh",
+    "copied": "Đã sao chép danh sách",
+    "copyFailed": "Không thể sao chép"
   },
   "pricing": {
     "title": "Bảng giá",
@@ -294,6 +309,12 @@
     "revenueVnd": "Doanh thu (VNĐ)",
     "privateGb": "Private (GB)",
     "publicGb": "Public (GB)"
+  },
+  "share": {
+    "canLike": "Có thể like",
+    "canComment": "Có thể comment",
+    "canDownload": "Có thể tải",
+    "downloadFailed": "Không thể tải ảnh"
   },
   "notification": {
     "title": "Thông báo",

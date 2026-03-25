@@ -356,14 +356,25 @@ router.get('/:id/comments', async (req, res) => {
 
   const commentList = await db.select({
     id: comments.id, content: comments.content, createdAt: comments.createdAt,
-    userId: comments.userId, displayName: users.displayName, avatarKey: users.avatarKey,
+    userId: comments.userId, guestName: comments.guestName,
+    displayName: users.displayName, avatarKey: users.avatarKey,
   })
   .from(comments)
-  .innerJoin(users, eq(comments.userId, users.id))
+  .leftJoin(users, eq(comments.userId, users.id))
   .where(eq(comments.imageId, id))
   .orderBy(desc(comments.createdAt))
 
-  res.json({ comments: commentList })
+  res.json({
+    comments: commentList.map(c => ({
+      id: c.id,
+      content: c.content,
+      createdAt: c.createdAt,
+      userId: c.userId,
+      guestName: c.guestName,
+      displayName: c.displayName ?? c.guestName ?? 'Khách',
+      avatarKey: c.avatarKey,
+    })),
+  })
 })
 
 // POST /:id/comments

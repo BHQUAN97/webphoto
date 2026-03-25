@@ -196,6 +196,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/share', async (req, res) => {
   const user = requireAuth(req)
   const { id } = req.params
+  const { allowLike, allowComment, allowDownload } = req.body ?? {}
 
   const [album] = await db.select().from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
@@ -207,7 +208,15 @@ router.post('/:id/share', async (req, res) => {
     .where(eq(albumShareTokens.albumId, id)).limit(1)
 
   if (existing) {
-    return res.json({ token: existing.token, expiresAt: existing.expiresAt })
+    return res.json({
+      token: existing.token,
+      expiresAt: existing.expiresAt,
+      permissions: {
+        allowLike: existing.allowLike,
+        allowComment: existing.allowComment,
+        allowDownload: existing.allowDownload,
+      },
+    })
   }
 
   const token = crypto.randomBytes(32).toString('hex')
@@ -217,10 +226,21 @@ router.post('/:id/share', async (req, res) => {
     id: shareId,
     albumId: id,
     token,
+    allowLike: allowLike ?? true,
+    allowComment: allowComment ?? true,
+    allowDownload: allowDownload ?? true,
     expiresAt: null, // no expiry by default
   })
 
-  res.json({ token, expiresAt: null })
+  res.json({
+    token,
+    expiresAt: null,
+    permissions: {
+      allowLike: allowLike ?? true,
+      allowComment: allowComment ?? true,
+      allowDownload: allowDownload ?? true,
+    },
+  })
 })
 
 // DELETE /:id/share — revoke share link
@@ -251,7 +271,57 @@ router.get('/:id/share', async (req, res) => {
   const [token] = await db.select().from(albumShareTokens)
     .where(eq(albumShareTokens.albumId, id)).limit(1)
 
-  res.json({ token: token?.token ?? null, expiresAt: token?.expiresAt ?? null })
+  res.json({
+    token: token?.token ?? null,
+    expiresAt: token?.expiresAt ?? null,
+    permissions: token ? {
+      allowLike: token.allowLike,
+      allowComment: token.allowComment,
+      allowDownload: token.allowDownload,
+    } : null,
+  })
+})
+
+// PATCH /:id/share — update share permissions on existing token
+router.patch('/:id/share', async (req, res) => {
+  const user = requireAuth(req)
+  const { id } = req.params
+  const { allowLike, allowComment, allowDownload } = req.body
+
+  const [album] = await db.select().from(albums)
+    .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
+
+  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+
+  const [existing] = await db.select().from(albumShareTokens)
+    .where(eq(albumShareTokens.albumId, id)).limit(1)
+
+  if (!existing) return res.status(404).json({ message: 'Chưa có link chia sẻ cho album này' })
+
+  const updates: Record<string, unknown> = {}
+  if (typeof allowLike === 'boolean') updates.allowLike = allowLike
+  if (typeof allowComment === 'boolean') updates.allowComment = allowComment
+  if (typeof allowDownload === 'boolean') updates.allowDownload = allowDownload
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: 'Không có thông tin cần cập nhật' })
+  }
+
+  await db.update(albumShareTokens).set(updates).where(eq(albumShareTokens.id, existing.id))
+
+  // Fetch updated record
+  const [updated] = await db.select().from(albumShareTokens)
+    .where(eq(albumShareTokens.id, existing.id)).limit(1)
+
+  res.json({
+    token: updated.token,
+    expiresAt: updated.expiresAt,
+    permissions: {
+      allowLike: updated.allowLike,
+      allowComment: updated.allowComment,
+      allowDownload: updated.allowDownload,
+    },
+  })
 })
 
 // POST /:id/download-zip — batch download album as ZIP
