@@ -1,0 +1,112 @@
+============================================================
+  PHOTO STORAGE — HUONG DAN TRIEN KHAI VPS UBUNTU
+============================================================
+
+YEU CAU:
+  - VPS Ubuntu 22.04/24.04
+  - RAM: 2GB+
+  - Disk: 20GB+ SSD
+  - Nha cung cap: Vultr, DigitalOcean, Hetzner (~$10/thang)
+
+============================================================
+BUOC 1: MUA VPS
+============================================================
+
+  Dang ky tai Vultr/DigitalOcean/Hetzner
+  Chon: Ubuntu 22.04, 2GB RAM, 1 vCPU
+  Ghi nho IP cua VPS
+
+============================================================
+BUOC 2: PUSH CODE LEN GITHUB (tren may Windows)
+============================================================
+
+  cd E:\DEVELOP\WebPhoto
+  git init
+  git add .
+  git commit -m "Initial commit"
+  git remote add origin https://github.com/YOUR_USER/webphoto.git
+  git push -u origin main
+
+  (Tao repo PRIVATE tren GitHub truoc)
+
+============================================================
+BUOC 3: SSH VAO VPS
+============================================================
+
+  ssh root@<vps-ip>
+
+============================================================
+BUOC 4: CHAY SETUP SCRIPT (1 LENH DUY NHAT)
+============================================================
+
+  # Cach 1: Clone repo roi chay
+  git clone https://github.com/YOUR_USER/webphoto.git /opt/webphoto
+  cd /opt/webphoto
+  bash scripts/vps-setup.sh
+
+  # Cach 2: Upload truc tiep tu Windows (khong can GitHub)
+  # Tren Windows:
+  scp -r E:\DEVELOP\WebPhoto\* root@<vps-ip>:/opt/webphoto/
+  # Tren VPS:
+  cd /opt/webphoto
+  bash scripts/vps-setup.sh
+
+============================================================
+BUOC 5: CAU HINH CLOUDFLARE TUNNEL
+============================================================
+
+  1. Vao Cloudflare Dashboard > Zero Trust > Networks > Tunnels
+  2. Create Tunnel > chon Cloudflared
+  3. Dat ten: webphoto
+  4. Copy TUNNEL_TOKEN
+  5. Them Public Hostname:
+     - bhquan.site       -> http://nginx:80
+     - api.bhquan.site   -> http://nginx:80
+     - ws.bhquan.site    -> http://nginx:80
+  6. Dan token vao khi script hoi
+
+============================================================
+SAU KHI SETUP XONG
+============================================================
+
+  Kiem tra:   https://bhquan.site
+  API:        https://bhquan.site/api/health
+  Admin:      https://bhquan.site/admin
+
+  Xem logs:
+    cd /opt/webphoto
+    docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml logs -f
+
+  Restart:
+    docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml restart
+
+  Cap nhat code:
+    cd /opt/webphoto
+    git pull
+    bash scripts/deploy.sh tunnel
+
+============================================================
+XU LY LOI THUONG GAP
+============================================================
+
+  1. Error 1033 (Tunnel error):
+     - Kiem tra container cloudflared co chay khong:
+       docker ps | grep cloudflared
+     - Kiem tra logs:
+       docker logs photo-cloudflared
+
+  2. API khong phan hoi:
+     - docker logs photo-api --tail 50
+     - Kiem tra MySQL:
+       docker exec photo-mysql mysqladmin ping
+
+  3. Anh khong hien:
+     - Kiem tra CDN_URL trong docker-compose.prod.yml
+     - CDN_URL phai la URL PUBLIC cua R2 (pub-xxx.r2.dev)
+       KHONG phai R2 API endpoint
+
+  4. Upload loi:
+     - Kiem tra R2 credentials
+     - Kiem tra quota: docker logs photo-api | grep quota
+
+============================================================

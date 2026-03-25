@@ -1,0 +1,10 @@
+node_modules
+src
+*.ts
+!dist
+.env
+.env.*
+*.md
+scripts
+drizzle.config.ts
+tsconfig.json

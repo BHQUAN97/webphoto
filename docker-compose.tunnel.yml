@@ -1,0 +1,31 @@
+# ============================================
+# CLOUDFLARE TUNNEL OVERRIDE
+# Usage: docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml up -d
+# ============================================
+
+services:
+  # ─── Cloudflare Tunnel ─────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: photo-cloudflared
+    restart: always
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - nginx
+    networks:
+      - frontend
+
+  # Override nginx: use tunnel config, no SSL, no host ports
+  nginx:
+    ports: []
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/bhquan.site.tunnel.conf:/etc/nginx/conf.d/bhquan.site.conf:ro
+      - ./photo-storage/dist:/usr/share/nginx/html:ro
+
+  # Disable certbot (not needed with Cloudflare Tunnel)
+  certbot:
+    entrypoint: "echo 'Certbot disabled in tunnel mode'"
+    restart: "no"

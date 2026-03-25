@@ -1,0 +1,35 @@
+name: Scheduled Tasks
+
+on:
+  schedule:
+    - cron: '0 19 * * *'   # 2:00 AM UTC+7 — expire images
+    - cron: '0 20 * * *'   # 3:00 AM UTC+7 — reconcile quota
+    - cron: '0 * * * *'    # Every hour — remind payments
+
+jobs:
+  expire-images:
+    if: github.event.schedule == '0 19 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run expire-images cron
+        run: |
+          curl -f -s -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_URL }}/api/cron/expire-images"
+
+  reconcile-quota:
+    if: github.event.schedule == '0 20 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run reconcile-quota cron
+        run: |
+          curl -f -s -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_URL }}/api/cron/reconcile-quota"
+
+  remind-payments:
+    if: github.event.schedule == '0 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run remind-payments cron
+        run: |
+          curl -f -s -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.API_URL }}/api/cron/remind-payments"
