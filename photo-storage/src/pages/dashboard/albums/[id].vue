@@ -433,7 +433,7 @@ onUnmounted(stopPolling)
     <ImageFilterBar v-if="auth.canFilter" @filter="handleFilter" />
 
     <!-- Images Grid -->
-    <div v-if="images.length > 0" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div v-if="images.length > 0" class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4">
       <ImageCard
         v-for="img in images"
         :key="img.id"

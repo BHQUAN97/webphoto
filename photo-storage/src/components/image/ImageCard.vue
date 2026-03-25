@@ -29,27 +29,27 @@ const statusBadge = computed(() => ({
 </script>
 
 <template>
-  <div class="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
-    <div class="aspect-square bg-gray-100 relative" @click="emit('click', image)">
+  <div class="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow break-inside-avoid mb-4">
+    <div class="bg-gray-100 dark:bg-gray-700 relative" @click="emit('click', image)">
       <img
         v-if="image.thumbUrl || image.thumbKey"
         :src="image.thumbUrl || image.thumbKey || ''"
-        class="w-full h-full object-cover"
+        class="w-full h-auto object-cover"
         :alt="image.originalName"
         loading="lazy"
       />
-      <div v-else-if="image.status === 'processing'" class="w-full h-full flex items-center justify-center">
+      <div v-else-if="image.status === 'processing'" class="aspect-square w-full flex items-center justify-center">
         <svg class="animate-spin h-8 w-8 text-orange-500" viewBox="0 0 24 24" fill="none">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
       </div>
-      <div v-else-if="image.status === 'failed'" class="w-full h-full flex items-center justify-center text-red-400">
+      <div v-else-if="image.status === 'failed'" class="aspect-square w-full flex items-center justify-center text-red-400">
         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
-      <div v-else class="w-full h-full flex items-center justify-center text-gray-300">
+      <div v-else class="aspect-square w-full flex items-center justify-center text-gray-300">
         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
