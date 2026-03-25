@@ -6,10 +6,12 @@ import { db } from '../../utils/db.js'
 import { albums, images, users, userPlans, plans, albumShareTokens } from '../../database/schema.js'
 import { eq, and, desc, sql, lt, isNotNull } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
+import { rateLimit } from '../../middleware/rateLimit.js'
 import { feedCache } from '../../utils/redis.js'
 import { storage } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid, clampInt } from '../../utils/validate.js'
 import { logger } from '../../utils/logger.js'
+import { quotaUtils } from '../../utils/quota.js'
 import { listFiles, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
 import { driveImportQueue } from '../../plugins/bullmq.js'
 
@@ -106,7 +108,7 @@ router.post('/', async (req, res) => {
 })
 
 // POST /from-drive — create album from Google Drive folder
-router.post('/from-drive', async (req, res) => {
+router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) => {
   const user = requireAuth(req)
   const { folderId: rawFolderId, title, includeSubfolders } = req.body
 
@@ -120,6 +122,19 @@ router.post('/from-drive', async (req, res) => {
     folderId = extractFolderId(rawFolderId)
   } catch (err) {
     return res.status(400).json({ message: (err as Error).message })
+  }
+
+  // Dedup: check if album with same driveFolderId already exists for this user
+  const [existingAlbum] = await db.select({ id: albums.id })
+    .from(albums)
+    .where(and(eq(albums.userId, user.sub), eq(albums.driveFolderId, folderId), eq(albums.isActive, true)))
+    .limit(1)
+
+  if (existingAlbum) {
+    return res.status(409).json({
+      message: 'Folder Google Drive này đã được import trước đó',
+      existingAlbumId: existingAlbum.id,
+    })
   }
 
   // Check album limit
@@ -146,10 +161,6 @@ router.post('/from-drive', async (req, res) => {
     return res.status(400).json({ message: (err as Error).message })
   }
 
-  if (driveFiles.length === 0) {
-    return res.status(400).json({ message: 'Không tìm thấy ảnh nào trong folder Google Drive' })
-  }
-
   // List subfolders if requested
   let subfolders: { id: string; name: string }[] = []
   if (includeSubfolders) {
@@ -160,7 +171,7 @@ router.post('/from-drive', async (req, res) => {
     }
   }
 
-  // Create album record
+  // Create album record (imageCount starts at 0 — worker increments on success)
   const albumId = ulid()
   const albumTitle = title ? sanitizeText(title, 200) : `Google Drive Import`
 
@@ -171,9 +182,26 @@ router.post('/from-drive', async (req, res) => {
     driveFolderId: folderId,
     isPublic: false,
     isActive: true,
-    imageCount: driveFiles.length,
+    imageCount: 0,
     totalBytes: BigInt(0),
   })
+
+  // Handle empty folder
+  if (driveFiles.length === 0) {
+    logger.info(`[DriveImport] Empty Drive folder`, { userId: user.sub, albumId, folderId })
+    return res.json({ albumId, imageCount: 0, subfolders, message: 'Folder rỗng' })
+  }
+
+  // Quota pre-check: estimate total size from Drive file sizes
+  const estimatedTotalBytes = driveFiles.reduce((sum, f) => sum + BigInt(f.size || 0), BigInt(0))
+  const quotaCheck = await quotaUtils.canUpload(user.sub, estimatedTotalBytes)
+  if (!quotaCheck.ok) {
+    // Remove the empty album we just created
+    await db.delete(albums).where(eq(albums.id, albumId))
+    return res.status(403).json({
+      message: quotaCheck.reason ?? 'Không đủ dung lượng để import toàn bộ folder',
+    })
+  }
 
   // Default expiry: 365 days from now
   const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
@@ -209,7 +237,7 @@ router.post('/from-drive', async (req, res) => {
   }
 
   logger.info(`[DriveImport] Album created from Drive folder`, {
-    userId: user.sub, albumId, folderId, imageCount: driveFiles.length,
+    userId: user.sub, albumId, folderId, fileCount: driveFiles.length,
   })
 
   res.json({

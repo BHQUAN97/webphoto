@@ -14,9 +14,10 @@ import { ulid } from 'ulid'
 
 const router = Router()
 
-// Verify cron secret
+// Verify cron secret — reject ALL requests if CRON_SECRET is not configured
 function verifyCron(req: any, res: any): boolean {
-  if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
+  const secret = process.env.CRON_SECRET
+  if (!secret || req.headers['x-cron-secret'] !== secret) {
     res.status(401).json({ message: 'Unauthorized' })
     return false
   }
@@ -158,48 +159,58 @@ router.get('/cleanup-logs', async (req, res) => {
 router.post('/sync-drive', async (req, res) => {
   if (!verifyCron(req, res)) return
 
-  // Find all albums with a driveFolderId
-  const driveAlbums = await db.select({
-    id: albums.id,
-    userId: albums.userId,
-    driveFolderId: albums.driveFolderId,
-  }).from(albums).where(
-    and(eq(albums.isActive, true), isNotNull(albums.driveFolderId))
-  )
+  // Acquire Redis lock to prevent concurrent sync-drive runs (5 min TTL)
+  const lockAcquired = await redis.set('sync-drive-lock', '1', { EX: 300, NX: true } as any)
+  if (!lockAcquired) {
+    return res.status(409).json({ message: 'sync-drive đang chạy, vui lòng thử lại sau' })
+  }
 
-  let totalNewFiles = 0
-  let albumsSynced = 0
-  const errors: string[] = []
+  try {
+    // Find all albums with a driveFolderId
+    const driveAlbums = await db.select({
+      id: albums.id,
+      userId: albums.userId,
+      driveFolderId: albums.driveFolderId,
+    }).from(albums).where(
+      and(eq(albums.isActive, true), isNotNull(albums.driveFolderId))
+    )
 
-  for (const album of driveAlbums) {
-    if (!album.driveFolderId) continue
+    let totalNewFiles = 0
+    let albumsSynced = 0
+    const errors: string[] = []
 
-    try {
-      // List current files on Drive
-      const driveFiles = await listFiles(album.driveFolderId)
+    for (const album of driveAlbums) {
+      if (!album.driveFolderId) continue
 
-      // Get existing driveFileIds for this album
-      const existingImages = await db.select({ driveFileId: images.driveFileId })
-        .from(images)
-        .where(and(eq(images.albumId, album.id), isNotNull(images.driveFileId)))
+      try {
+        // List current files on Drive
+        const driveFiles = await listFiles(album.driveFolderId)
 
-      const existingDriveIds = new Set(existingImages.map(i => i.driveFileId).filter(Boolean))
+        // Get existing driveFileIds for this album
+        const existingImages = await db.select({ driveFileId: images.driveFileId })
+          .from(images)
+          .where(and(eq(images.albumId, album.id), isNotNull(images.driveFileId)))
 
-      // Find new files not yet imported
-      const newFiles = driveFiles.filter(f => !existingDriveIds.has(f.id))
+        const existingDriveIds = new Set(existingImages.map(i => i.driveFileId).filter(Boolean))
 
-      if (newFiles.length === 0) {
-        albumsSynced++
-        continue
-      }
+        // Find new files not yet imported
+        const newFiles = driveFiles.filter(f => !existingDriveIds.has(f.id))
 
-      const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
+        if (newFiles.length === 0) {
+          albumsSynced++
+          continue
+        }
 
-      for (const file of newFiles) {
-        const imageId = ulid()
-        const originalKey = `${album.userId}/${imageId}/${file.name}`
+        const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
 
-        await db.insert(images).values({
+        // Batch insert image records instead of one-by-one
+        const imageRecords = newFiles.map(file => {
+          const imageId = ulid()
+          const originalKey = `${album.userId}/${imageId}/${file.name}`
+          return { imageId, originalKey, file }
+        })
+
+        await db.insert(images).values(imageRecords.map(({ imageId, originalKey, file }) => ({
           id: imageId,
           albumId: album.id,
           userId: album.userId,
@@ -208,51 +219,56 @@ router.post('/sync-drive', async (req, res) => {
           originalName: file.name,
           mimeType: file.mimeType,
           originalSize: BigInt(file.size || 0),
-          status: 'syncing',
+          status: 'syncing' as const,
           expiresAt,
-        })
+        })))
 
-        await driveImportQueue.add('import', {
-          imageId,
-          userId: album.userId,
-          albumId: album.id,
-          driveFileId: file.id,
-          originalKey,
-          mimeType: file.mimeType,
-          originalName: file.name,
-          fileSize: file.size,
+        // Queue import jobs for each file
+        for (const { imageId, originalKey, file } of imageRecords) {
+          await driveImportQueue.add('import', {
+            imageId,
+            userId: album.userId,
+            albumId: album.id,
+            driveFileId: file.id,
+            originalKey,
+            mimeType: file.mimeType,
+            originalName: file.name,
+            fileSize: file.size,
+          })
+        }
+
+        // Update album updatedAt (imageCount is incremented by worker on each success)
+        await db.update(albums).set({
+          updatedAt: new Date(),
+        }).where(eq(albums.id, album.id))
+
+        totalNewFiles += newFiles.length
+        albumsSynced++
+
+        logger.info(`[Cron:SyncDrive] Album ${album.id}: ${newFiles.length} new files`, {
+          source: 'cron', albumId: album.id, newFiles: newFiles.length,
         })
+      } catch (err) {
+        const msg = `Album ${album.id}: ${(err as Error).message}`
+        errors.push(msg)
+        logger.error(`[Cron:SyncDrive] ${msg}`, { source: 'cron', albumId: album.id })
       }
-
-      // Update album imageCount
-      await db.update(albums).set({
-        imageCount: sql`image_count + ${newFiles.length}`,
-        updatedAt: new Date(),
-      }).where(eq(albums.id, album.id))
-
-      totalNewFiles += newFiles.length
-      albumsSynced++
-
-      logger.info(`[Cron:SyncDrive] Album ${album.id}: ${newFiles.length} new files`, {
-        source: 'cron', albumId: album.id, newFiles: newFiles.length,
-      })
-    } catch (err) {
-      const msg = `Album ${album.id}: ${(err as Error).message}`
-      errors.push(msg)
-      logger.error(`[Cron:SyncDrive] ${msg}`, { source: 'cron', albumId: album.id })
     }
+
+    logger.info(`[Cron:SyncDrive] Completed`, {
+      source: 'cron', albumsSynced, totalNewFiles, errors: errors.length,
+    })
+
+    res.json({
+      albumsSynced,
+      totalNewFiles,
+      totalAlbums: driveAlbums.length,
+      errors: errors.length > 0 ? errors : undefined,
+    })
+  } finally {
+    // Release lock
+    await redis.del('sync-drive-lock')
   }
-
-  logger.info(`[Cron:SyncDrive] Completed`, {
-    source: 'cron', albumsSynced, totalNewFiles, errors: errors.length,
-  })
-
-  res.json({
-    albumsSynced,
-    totalNewFiles,
-    totalAlbums: driveAlbums.length,
-    errors: errors.length > 0 ? errors : undefined,
-  })
 })
 
 export default router

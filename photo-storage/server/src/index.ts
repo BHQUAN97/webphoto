@@ -11,6 +11,7 @@ import { initStorage, getStorageBackend } from './utils/storage/index.js'
 import { logger } from './utils/logger.js'
 import { getSetting } from './utils/settings-cache.js'
 import { mailService } from './utils/mailService.js'
+import { validateDriveConfig } from './utils/googleDrive.js'
 
 // Auth routes
 import registerRoute from './routes/auth/register.js'
@@ -205,6 +206,10 @@ async function start() {
   await connectRedis()
   await initStorage()
   await initSocketEmitter()
+
+  // Validate Google Drive config (non-fatal — Drive is optional)
+  const driveStatus = validateDriveConfig()
+  logger[driveStatus.ok ? 'info' : 'warn'](driveStatus.message)
 
   // Serve local storage public files if backend is local
   const backend = await getStorageBackend()

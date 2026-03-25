@@ -30,6 +30,8 @@ const includeSubfolders = ref(false)
 const driveImporting = ref(false)
 const driveImportProgress = ref('')
 const driveImportCount = ref(0)
+const showLargeFolderWarning = ref(false)
+const largeFolderConfirmed = ref(false)
 
 async function handleSubmit(data: { title: string; description: string; isPublic: boolean }) {
   loading.value = true
@@ -67,17 +69,30 @@ async function handleDriveImport() {
       folderId,
       title: driveTitle.value.trim() || undefined,
       includeSubfolders: includeSubfolders.value,
-    })
+    }, { timeout: 60000 })
 
     driveImportCount.value = res.data.imageCount || 0
+
+    // Show warning if folder has many files (> 500)
+    if (driveImportCount.value > 500 && !largeFolderConfirmed.value) {
+      showLargeFolderWarning.value = true
+      return
+    }
+
     toast.success(t('drive.importSuccess', { count: driveImportCount.value }))
-    router.push(`/dashboard/albums/${res.data.id}`)
+    router.push(`/dashboard/albums/${res.data.albumId}`)
   } catch {
     toast.error(t('drive.importFailed'))
   } finally {
     driveImporting.value = false
     driveImportProgress.value = ''
   }
+}
+
+function confirmLargeFolderImport() {
+  showLargeFolderWarning.value = false
+  largeFolderConfirmed.value = true
+  handleDriveImport()
 }
 </script>
 
@@ -168,6 +183,17 @@ async function handleDriveImport() {
               :class="includeSubfolders ? 'translate-x-6' : 'translate-x-1'"
             />
           </button>
+        </div>
+
+        <!-- Large Folder Warning -->
+        <div v-if="showLargeFolderWarning" class="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4">
+          <p class="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+            {{ $t('drive.largeFolderWarning', { count: driveImportCount }) || `Folder chứa ${driveImportCount} ảnh. Quá trình import có thể mất nhiều thời gian.` }}
+          </p>
+          <div class="flex gap-2">
+            <BaseButton variant="secondary" size="sm" @click="showLargeFolderWarning = false">{{ $t('common.cancel') }}</BaseButton>
+            <BaseButton size="sm" @click="confirmLargeFolderImport">{{ $t('drive.continueImport') || 'Tiếp tục import' }}</BaseButton>
+          </div>
         </div>
 
         <!-- Import Progress -->
