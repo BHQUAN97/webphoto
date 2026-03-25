@@ -2,10 +2,10 @@ import { useUploadStore } from '@/stores/upload'
 import { useToast } from '@/composables/useToast'
 import api from '@/utils/api'
 
-const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB — must match backend max_upload_size_mb setting
-const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB — smaller chunks = smoother progress
-const MAX_CONCURRENT_CHUNKS = 3 // parallel chunk uploads per file
-const MAX_CONCURRENT_FILES = 2 // parallel file uploads
+const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
+const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_CONCURRENT_CHUNKS = 3 // parallel chunks per file
+const MAX_CONCURRENT_FILES = 5 // parallel file uploads
 
 interface UploadUrlResponse {
   imageId: string
@@ -14,6 +14,11 @@ interface UploadUrlResponse {
   mode: 'direct'
   totalParts: number
   chunkSize: number
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 export function useUpload() {
@@ -36,7 +41,6 @@ export function useUpload() {
       const totalParts = data.totalParts || Math.ceil(file.size / chunkSize)
       const completedParts: { ETag: string; PartNumber: number }[] = []
 
-      // Track progress per chunk for smooth updates
       const chunkProgress = new Array(totalParts).fill(0)
       const startTime = Date.now()
 
@@ -48,9 +52,7 @@ export function useUpload() {
         store.setProgress(localId, percent, speed)
       }
 
-      // Upload chunks with concurrency limit
       let nextPart = 0
-
       async function uploadNextChunk(): Promise<void> {
         while (nextPart < totalParts) {
           const i = nextPart++
@@ -76,14 +78,11 @@ export function useUpload() {
         }
       }
 
-      // Launch concurrent chunk uploaders
       const workers = Array.from(
         { length: Math.min(MAX_CONCURRENT_CHUNKS, totalParts) },
         () => uploadNextChunk(),
       )
       await Promise.all(workers)
-
-      // Sort parts by number (parallel upload may complete out of order)
       completedParts.sort((a, b) => a.PartNumber - b.PartNumber)
 
       store.setStatus(localId, 'processing')
@@ -95,20 +94,17 @@ export function useUpload() {
       })
 
       store.setStatus(localId, 'processing', data.imageId)
-      toast.success(`"${file.name}" — upload thành công, đang xử lý ảnh...`)
       return true
     } catch (err: unknown) {
       const resp = (err as { response?: { status?: number; data?: { message?: string } } })?.response
       const errMsg = resp?.data?.message || (err instanceof Error ? err.message : 'Lỗi upload')
       console.error(`[Upload] Failed: ${file.name}`, { error: errMsg, status: resp?.status })
       store.setStatus(localId, 'failed')
-      toast.error(`"${file.name}" — ${errMsg}`)
       return false
     }
   }
 
   async function uploadFiles(files: File[], albumId: string): Promise<number> {
-    // Validate all files first
     const validFiles = files.filter(f => {
       if (f.size > MAX_FILE_SIZE) {
         toast.error(`"${f.name}" vượt quá giới hạn 200MB`)
@@ -122,15 +118,20 @@ export function useUpload() {
     })
     if (!validFiles.length) return 0
 
-    // Upload files with concurrency limit
+    const totalFiles = validFiles.length
     let nextFile = 0
     let successCount = 0
+    let failCount = 0
 
     async function uploadNextFile(): Promise<void> {
       while (nextFile < validFiles.length) {
         const file = validFiles[nextFile++]
         const ok = await uploadSingleFile(file, albumId)
-        if (ok) successCount++
+        if (ok) {
+          successCount++
+        } else {
+          failCount++
+        }
       }
     }
 
@@ -140,9 +141,23 @@ export function useUpload() {
     )
     await Promise.all(fileWorkers)
 
-    if (validFiles.length > 1) {
-      toast.info(`Upload hoàn tất: ${successCount}/${validFiles.length} ảnh thành công`)
+    // Summary toast
+    if (totalFiles === 1) {
+      if (successCount === 1) {
+        toast.success(`Đã upload "${validFiles[0].name}" (${formatSize(validFiles[0].size)}), đang xử lý ảnh...`)
+      } else {
+        toast.error(`Upload "${validFiles[0].name}" thất bại`)
+      }
+    } else {
+      if (failCount === 0) {
+        toast.success(`Upload hoàn tất: ${successCount}/${totalFiles} ảnh thành công`)
+      } else if (successCount === 0) {
+        toast.error(`Upload thất bại: tất cả ${totalFiles} ảnh đều lỗi`)
+      } else {
+        toast.warning(`Upload hoàn tất: ${successCount} thành công, ${failCount} thất bại (tổng ${totalFiles} ảnh)`)
+      }
     }
+
     return successCount
   }
 

@@ -24,6 +24,14 @@ const qrPreview = ref<string | null>(null)
 function onQrSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    toast.error('Ảnh QR chỉ hỗ trợ JPEG, PNG, WebP')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    toast.error('Ảnh QR tối đa 5MB')
+    return
+  }
   form.value.qrFile = file
   qrPreview.value = URL.createObjectURL(file)
 }

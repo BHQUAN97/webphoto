@@ -1,9 +1,21 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { UploadFile, UploadFileStatus } from '@/types'
 
 export const useUploadStore = defineStore('upload', () => {
   const files = ref<UploadFile[]>([])
+
+  // Batch summary — computed from files
+  const summary = computed(() => {
+    const total = files.value.length
+    const uploading = files.value.filter(f => f.status === 'uploading').length
+    const processing = files.value.filter(f => f.status === 'processing').length
+    const ready = files.value.filter(f => f.status === 'ready').length
+    const failed = files.value.filter(f => f.status === 'failed').length
+    const done = ready + failed
+    const active = uploading + processing
+    return { total, uploading, processing, ready, failed, done, active }
+  })
 
   function add(file: UploadFile) {
     files.value.push(file)
@@ -33,5 +45,5 @@ export const useUploadStore = defineStore('upload', () => {
     files.value = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing')
   }
 
-  return { files, add, setProgress, setStatus, remove, clear }
+  return { files, summary, add, setProgress, setStatus, remove, clear }
 })
