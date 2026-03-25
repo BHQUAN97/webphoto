@@ -18,8 +18,9 @@ export function accessTokenCookie(req: Request): CookieOptions {
   return {
     httpOnly: true,
     secure: isSecureRequest(req),
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 15 * 60 * 1000,
+    path: '/',
   }
 }
 
@@ -27,8 +28,8 @@ export function refreshTokenCookie(req: Request): CookieOptions {
   return {
     httpOnly: true,
     secure: isSecureRequest(req),
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 7 * 86400 * 1000,
-    path: '/api/auth/refresh',
+    path: '/',
   }
 }

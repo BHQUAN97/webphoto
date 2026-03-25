@@ -144,9 +144,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         v-if="show && image"
         class="fixed inset-0 z-50 flex flex-col bg-black/95"
       >
-        <!-- Close button — top-right, always visible -->
+        <!-- Close button — top-right, always visible, highest z-index -->
         <button
-          class="absolute top-4 right-4 z-30 w-11 h-11 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+          class="absolute top-4 right-4 z-50 w-11 h-11 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
           :title="t('common.close')"
           @click="emit('close')"
         >
@@ -224,7 +224,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           >
             <div
               v-if="showComments"
-              class="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-gray-800 shadow-xl z-20 flex flex-col"
+              class="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-gray-800 shadow-xl z-40 flex flex-col"
             >
               <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
                 <h3 class="font-semibold text-gray-900 dark:text-white text-sm">

@@ -12,8 +12,8 @@ router.post('/logout', async (req, res) => {
   // Delete all refresh tokens for this user
   await db.delete(refreshTokens).where(eq(refreshTokens.userId, user.sub))
 
-  res.clearCookie('access_token')
-  res.clearCookie('refresh_token', { path: '/api/auth/refresh' })
+  res.clearCookie('access_token', { path: '/' })
+  res.clearCookie('refresh_token', { path: '/' })
   res.json({ ok: true })
 })
 

@@ -18,7 +18,7 @@ useNotify()
       <template v-if="route.path.startsWith('/dashboard') || route.path.startsWith('/admin')">
         <component :is="Component" class="flex-1" />
       </template>
-      <template v-else-if="route.path === '/login' || route.path === '/register'">
+      <template v-else-if="route.path === '/login' || route.path === '/register' || route.path.startsWith('/share')">
         <component :is="Component" class="flex-1" />
       </template>
       <template v-else>

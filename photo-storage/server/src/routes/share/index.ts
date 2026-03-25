@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db } from '../../utils/db.js'
 import { albums, images, users, albumShareTokens } from '../../database/schema.js'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, sql } from 'drizzle-orm'
 import { storage } from '../../utils/storage/index.js'
 
 const router = Router()
@@ -57,6 +57,47 @@ router.get('/:token', async (req, res) => {
     },
     images: imageItems,
   })
+})
+
+// POST /:token/images/:imageId/like — guest like (no auth, increments count)
+router.post('/:token/images/:imageId/like', async (req, res) => {
+  const { token, imageId } = req.params
+
+  // Validate share token
+  const [share] = await db.select().from(albumShareTokens)
+    .where(eq(albumShareTokens.token, token)).limit(1)
+  if (!share) return res.status(404).json({ message: 'Link chia sẻ không tồn tại' })
+  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+    return res.status(410).json({ message: 'Link chia sẻ đã hết hạn' })
+  }
+
+  // Verify image belongs to shared album
+  const [image] = await db.select().from(images)
+    .where(and(eq(images.id, imageId), eq(images.albumId, share.albumId))).limit(1)
+  if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
+
+  await db.update(images).set({ likeCount: sql`like_count + 1` }).where(eq(images.id, imageId))
+  res.json({ ok: true, likeCount: image.likeCount + 1 })
+})
+
+// DELETE /:token/images/:imageId/like — guest unlike
+router.delete('/:token/images/:imageId/like', async (req, res) => {
+  const { token, imageId } = req.params
+
+  const [share] = await db.select().from(albumShareTokens)
+    .where(eq(albumShareTokens.token, token)).limit(1)
+  if (!share) return res.status(404).json({ message: 'Link chia sẻ không tồn tại' })
+  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+    return res.status(410).json({ message: 'Link chia sẻ đã hết hạn' })
+  }
+
+  const [image] = await db.select().from(images)
+    .where(and(eq(images.id, imageId), eq(images.albumId, share.albumId))).limit(1)
+  if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
+
+  await db.update(images).set({ likeCount: sql`GREATEST(like_count - 1, 0)` }).where(eq(images.id, imageId))
+  const [updated] = await db.select({ likeCount: images.likeCount }).from(images).where(eq(images.id, imageId)).limit(1)
+  res.json({ ok: true, likeCount: updated?.likeCount ?? 0 })
 })
 
 export default router
