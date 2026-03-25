@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { debounce } from '@/utils/debounce'
+
+const { t } = useI18n()
 
 interface Filters {
   liked: boolean
@@ -44,7 +47,7 @@ function reset() {
       <input
         v-model="filters.search"
         type="text"
-        placeholder="Tìm theo tên file..."
+        :placeholder="t('filter.searchPlaceholder')"
         class="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
         @input="applyDebounced"
       />
@@ -53,29 +56,29 @@ function reset() {
         class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
-        <option value="">Tất cả trạng thái</option>
-        <option value="ready">Đã xử lý</option>
-        <option value="processing">Đang xử lý</option>
-        <option value="failed">Lỗi</option>
+        <option value="">{{ $t('filter.allStatus') }}</option>
+        <option value="ready">{{ $t('filter.processed') }}</option>
+        <option value="processing">{{ $t('filter.processing') }}</option>
+        <option value="failed">{{ $t('filter.failed') }}</option>
       </select>
       <select
         v-model="filters.sortBy"
         class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
-        <option value="newest">Mới nhất</option>
-        <option value="oldest">Cũ nhất</option>
-        <option value="most_liked">Nhiều like nhất</option>
-        <option value="largest">Dung lượng lớn nhất</option>
+        <option value="newest">{{ $t('filter.newest') }}</option>
+        <option value="oldest">{{ $t('filter.oldest') }}</option>
+        <option value="most_liked">{{ $t('filter.mostLiked') }}</option>
+        <option value="largest">{{ $t('filter.largestSize') }}</option>
       </select>
       <input v-model="filters.dateFrom" type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="apply" />
       <input v-model="filters.dateTo" type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="apply" />
       <div class="flex items-center gap-3">
         <label class="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap">
           <input v-model="filters.liked" type="checkbox" class="rounded border-gray-300 text-orange-500" @change="apply" />
-          Yêu thích
+          {{ $t('filter.favorite') }}
         </label>
-        <button class="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap" @click="reset">Xóa lọc</button>
+        <button class="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap" @click="reset">{{ $t('filter.clearFilter') }}</button>
       </div>
     </div>
   </div>

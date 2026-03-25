@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import api from '@/utils/api'
 import { useAuthStore } from '@/stores/auth'
 import type { Comment } from '@/types'
 import { cdnUrl, timeAgo } from '@/utils/format'
+
+const { t } = useI18n()
 
 const props = defineProps<{ imageId: string }>()
 const auth = useAuthStore()
@@ -33,7 +36,7 @@ async function postComment() {
     comments.value.push(res.data)
     newComment.value = ''
   } catch {
-    alert('Không thể gửi bình luận')
+    alert(t('comment.sendFailed'))
   } finally {
     posting.value = false
   }
@@ -42,9 +45,9 @@ async function postComment() {
 
 <template>
   <div>
-    <h4 class="text-sm font-semibold text-gray-900 mb-3">Bình luận</h4>
+    <h4 class="text-sm font-semibold text-gray-900 mb-3">{{ $t('comment.title') }}</h4>
 
-    <div v-if="loading" class="text-center py-4 text-gray-400 text-sm">Đang tải...</div>
+    <div v-if="loading" class="text-center py-4 text-gray-400 text-sm">{{ $t('common.loading') }}</div>
 
     <div v-else class="space-y-3 mb-4 max-h-64 overflow-y-auto">
       <div v-for="c in comments" :key="c.id" class="flex gap-2">
@@ -61,7 +64,7 @@ async function postComment() {
           <p class="text-sm text-gray-700 mt-0.5">{{ c.content }}</p>
         </div>
       </div>
-      <p v-if="comments.length === 0" class="text-sm text-gray-400">Chưa có bình luận</p>
+      <p v-if="comments.length === 0" class="text-sm text-gray-400">{{ $t('comment.noComments') }}</p>
     </div>
 
     <!-- Input -->
@@ -70,7 +73,7 @@ async function postComment() {
         v-model="newComment"
         type="text"
         maxlength="2000"
-        placeholder="Viết bình luận..."
+        :placeholder="$t('comment.placeholder')"
         class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
         @keyup.enter="postComment"
       />
@@ -79,7 +82,7 @@ async function postComment() {
         :disabled="!newComment.trim() || posting"
         @click="postComment"
       >
-        Gửi
+        {{ $t('common.send') }}
       </button>
     </div>
   </div>

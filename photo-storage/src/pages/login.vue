@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -28,7 +30,7 @@ async function handleSubmit() {
     const redirect = getSafeRedirect(route.query.redirect as string)
     router.push(redirect)
   } catch (e: any) {
-    error.value = e.response?.data?.message || 'Đăng nhập thất bại'
+    error.value = e.response?.data?.message || t('auth.loginFailed')
   }
 }
 </script>
@@ -46,7 +48,7 @@ async function handleSubmit() {
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Đăng nhập</h2>
+        <h2 class="text-xl font-semibold text-gray-900 mb-6">{{ $t('auth.login') }}</h2>
 
         <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
           {{ error }}
@@ -54,33 +56,33 @@ async function handleSubmit() {
 
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.email') }}</label>
             <input
               v-model="form.email"
               type="email"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="email@example.com"
+              :placeholder="$t('auth.emailPlaceholder')"
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.password') }}</label>
             <input
               v-model="form.password"
               type="password"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="••••••••"
+              :placeholder="$t('auth.passwordPlaceholder')"
             />
           </div>
           <BaseButton type="submit" :loading="auth.loading" class="w-full">
-            Đăng nhập
+            {{ $t('auth.login') }}
           </BaseButton>
         </form>
 
         <p class="mt-4 text-sm text-center text-gray-500">
-          Chưa có tài khoản?
-          <router-link to="/register" class="text-orange-500 hover:text-orange-600 font-medium">Đăng ký</router-link>
+          {{ $t('auth.noAccount') }}
+          <router-link to="/register" class="text-orange-500 hover:text-orange-600 font-medium">{{ $t('auth.register') }}</router-link>
         </p>
       </div>
     </div>

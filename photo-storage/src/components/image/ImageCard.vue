@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ImageItem } from '@/types'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   image: ImageItem
@@ -16,12 +20,12 @@ const emit = defineEmits<{
   setCover: [image: ImageItem]
 }>()
 
-const statusBadge: Record<string, { label: string; variant: 'success' | 'warning' | 'danger' | 'default' }> = {
-  uploading: { label: 'Uploading', variant: 'default' },
-  processing: { label: 'Đang xử lý', variant: 'warning' },
-  ready: { label: '', variant: 'success' },
-  failed: { label: 'Lỗi', variant: 'danger' },
-}
+const statusBadge = computed(() => ({
+  uploading: { label: t('image.status.uploading'), variant: 'default' as const },
+  processing: { label: t('image.status.processing'), variant: 'warning' as const },
+  ready: { label: '', variant: 'success' as const },
+  failed: { label: t('image.status.failed'), variant: 'danger' as const },
+}))
 </script>
 
 <template>
@@ -86,7 +90,7 @@ const statusBadge: Record<string, { label: string; variant: 'success' | 'warning
           <button
             v-if="showSetCover && image.status === 'ready'"
             class="text-gray-400 hover:text-orange-500 transition-colors"
-            title="Đặt ảnh bìa"
+            :title="$t('album.setCover')"
             @click.stop="emit('setCover', image)"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,7 +100,7 @@ const statusBadge: Record<string, { label: string; variant: 'success' | 'warning
           <button
             v-if="showDelete"
             class="text-gray-400 hover:text-red-500 transition-colors"
-            title="Xóa ảnh"
+            :title="$t('image.deleteImage')"
             @click.stop="emit('delete', image)"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

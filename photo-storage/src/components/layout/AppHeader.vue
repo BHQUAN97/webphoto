@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { cdnUrl } from '@/utils/format'
 import { useTheme } from '@/composables/useTheme'
 import NotificationBell from './NotificationBell.vue'
 
+useI18n()
 const props = defineProps<{ hasSidebar?: boolean }>()
 const emit = defineEmits<{ 'toggle-sidebar': [] }>()
 const auth = useAuthStore()
@@ -43,11 +45,11 @@ function handleHamburger() {
 
         <!-- Desktop Nav -->
         <nav class="hidden md:flex items-center gap-6">
-          <router-link to="/" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Trang chủ</router-link>
+          <router-link to="/" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">{{ $t('nav.home') }}</router-link>
           <template v-if="auth.isAuthenticated">
-            <router-link to="/dashboard" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Dashboard</router-link>
-            <router-link to="/dashboard/albums" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Album</router-link>
-            <router-link v-if="auth.isAdmin" to="/admin" class="text-sm text-orange-500 hover:text-orange-400 font-medium">Admin</router-link>
+            <router-link to="/dashboard" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">{{ $t('nav.dashboard') }}</router-link>
+            <router-link to="/dashboard/albums" class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">{{ $t('nav.album') }}</router-link>
+            <router-link v-if="auth.isAdmin" to="/admin" class="text-sm text-orange-500 hover:text-orange-400 font-medium">{{ $t('nav.admin') }}</router-link>
           </template>
         </nav>
 
@@ -92,24 +94,24 @@ function handleHamburger() {
                   class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 z-50"
                   @click="menuOpen = false"
                 >
-                  <router-link to="/dashboard/profile" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Hồ sơ</router-link>
-                  <router-link to="/dashboard/settings" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Cài đặt</router-link>
-                  <router-link to="/upgrade" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Nâng cấp</router-link>
+                  <router-link to="/dashboard/profile" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">{{ $t('nav.profile') }}</router-link>
+                  <router-link to="/dashboard/settings" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">{{ $t('nav.settings') }}</router-link>
+                  <router-link to="/upgrade" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">{{ $t('nav.upgrade') }}</router-link>
                   <hr class="my-1 border-gray-200 dark:border-gray-600" />
                   <button class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700" @click="handleLogout">
-                    Đăng xuất
+                    {{ $t('nav.logout') }}
                   </button>
                 </div>
               </Transition>
             </div>
           </template>
           <template v-else>
-            <router-link to="/login" class="hidden sm:block text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">Đăng nhập</router-link>
+            <router-link to="/login" class="hidden sm:block text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">{{ $t('auth.login') }}</router-link>
             <router-link
               to="/register"
               class="text-sm bg-orange-500 hover:bg-orange-600 text-white px-3 sm:px-4 py-2 rounded-lg"
             >
-              Đăng ký
+              {{ $t('auth.register') }}
             </router-link>
           </template>
 
@@ -131,15 +133,15 @@ function handleHamburger() {
         leave-to-class="opacity-0 -translate-y-2"
       >
         <div v-if="mobileNavOpen && !hasSidebar" class="md:hidden pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-1" @click="mobileNavOpen = false">
-          <router-link to="/" class="block py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">Trang chủ</router-link>
+          <router-link to="/" class="block py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">{{ $t('nav.home') }}</router-link>
           <template v-if="auth.isAuthenticated">
-            <router-link to="/dashboard" class="block py-2 text-sm text-gray-600 dark:text-gray-300">Dashboard</router-link>
-            <router-link to="/dashboard/albums" class="block py-2 text-sm text-gray-600 dark:text-gray-300">Album</router-link>
-            <router-link v-if="auth.isAdmin" to="/admin" class="block py-2 text-sm text-orange-500 font-medium">Admin</router-link>
+            <router-link to="/dashboard" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.dashboard') }}</router-link>
+            <router-link to="/dashboard/albums" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.album') }}</router-link>
+            <router-link v-if="auth.isAdmin" to="/admin" class="block py-2 text-sm text-orange-500 font-medium">{{ $t('nav.admin') }}</router-link>
           </template>
           <template v-else>
-            <router-link to="/login" class="block py-2 text-sm text-gray-600 dark:text-gray-300">Đăng nhập</router-link>
-            <router-link to="/register" class="block py-2 text-sm text-orange-500 font-medium">Đăng ký</router-link>
+            <router-link to="/login" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('auth.login') }}</router-link>
+            <router-link to="/register" class="block py-2 text-sm text-orange-500 font-medium">{{ $t('auth.register') }}</router-link>
           </template>
         </div>
       </Transition>

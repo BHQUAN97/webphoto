@@ -32,13 +32,13 @@ const open = ref(false)
         class="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50"
       >
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-          <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Thông báo</h4>
+          <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ $t('notification.title') }}</h4>
           <button
             v-if="store.unreadCount > 0"
             class="text-xs text-orange-500 hover:text-orange-600"
             @click="store.markAllRead()"
           >
-            Đánh dấu đã đọc
+            {{ $t('notification.markAllRead') }}
           </button>
         </div>
         <div class="max-h-80 overflow-y-auto">
@@ -52,7 +52,7 @@ const open = ref(false)
             <p class="text-xs text-gray-400 mt-1">{{ timeAgo(n.createdAt) }}</p>
           </div>
           <div v-if="store.items.length === 0" class="px-4 py-8 text-center text-sm text-gray-400">
-            Không có thông báo
+            {{ $t('notification.noNotifications') }}
           </div>
         </div>
       </div>

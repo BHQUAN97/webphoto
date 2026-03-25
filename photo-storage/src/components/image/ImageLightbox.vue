@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ImageItem } from '@/types'
 import { formatBytes, formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/utils/api'
 import CommentList from './CommentList.vue'
+
+const { t } = useI18n()
 
 interface Props {
   image: ImageItem | null
@@ -25,7 +28,7 @@ async function handleDownload() {
     const res = await api.get(`/images/${props.image.id}/download-url`)
     window.open(res.data.url, '_blank')
   } catch {
-    alert('Không thể tải ảnh')
+    alert(t('image.downloadFailed'))
   } finally {
     downloading.value = false
   }
@@ -74,7 +77,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :alt="image.originalName"
           />
           <div v-else class="text-white/50 text-center">
-            <p>Preview chưa sẵn sàng</p>
+            <p>{{ $t('image.status.processing') }}</p>
           </div>
         </div>
 
@@ -110,7 +113,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Tải gốc
+              {{ $t('image.download') }}
             </button>
             <button
               v-if="canDelete && image"
@@ -120,7 +123,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              Xóa
+              {{ $t('common.delete') }}
             </button>
           </div>
 

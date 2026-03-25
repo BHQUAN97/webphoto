@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUploadStore } from '@/stores/upload'
@@ -17,6 +18,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import { formatBytes, formatDate } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 
+const { t } = useI18n()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
@@ -71,9 +73,9 @@ async function handleEditAlbum(data: { title: string; description: string; isPub
     const res = await api.patch(`/albums/${albumId.value}`, data)
     album.value = res.data
     showEdit.value = false
-    toast.success('Cập nhật album thành công')
+    toast.success(t('album.updateSuccess'))
   } catch {
-    toast.error('Cập nhật thất bại')
+    toast.error(t('album.updateFailed'))
   } finally {
     editLoading.value = false
   }
@@ -85,7 +87,7 @@ async function handleDeleteAlbum() {
     await api.delete(`/albums/${albumId.value}`)
     router.push('/dashboard/albums')
   } catch {
-    toast.error('Xóa thất bại')
+    toast.error(t('album.deleteFailed'))
   } finally {
     deleteLoading.value = false
   }
@@ -106,9 +108,9 @@ async function generateShareLink() {
   try {
     const res = await api.post(`/albums/${albumId.value}/share`)
     shareToken.value = res.data.token
-    toast.success('Đã tạo link chia sẻ')
+    toast.success(t('album.shareCreated'))
   } catch {
-    toast.error('Không thể tạo link chia sẻ')
+    toast.error(t('album.shareFailed'))
   } finally {
     shareLoading.value = false
   }
@@ -119,9 +121,9 @@ async function revokeShareLink() {
   try {
     await api.delete(`/albums/${albumId.value}/share`)
     shareToken.value = null
-    toast.success('Đã hủy link chia sẻ')
+    toast.success(t('album.shareRevoked'))
   } catch {
-    toast.error('Không thể hủy link chia sẻ')
+    toast.error(t('album.revokeShareFailed'))
   } finally {
     shareLoading.value = false
   }
@@ -131,7 +133,7 @@ function copyShareLink() {
   if (!shareToken.value) return
   const url = `${location.origin}/share/${shareToken.value}`
   navigator.clipboard.writeText(url)
-  toast.success('Đã sao chép link')
+  toast.success(t('album.linkCopied'))
 }
 
 function confirmDeleteImage(image: ImageItem) {
@@ -149,9 +151,9 @@ async function handleDeleteImage() {
     if (album.value) album.value.imageCount--
     showDeleteImage.value = false
     deleteImageTarget.value = null
-    toast.success('Đã xóa ảnh')
+    toast.success(t('image.deleted'))
   } catch {
-    toast.error('Xóa ảnh thất bại')
+    toast.error(t('image.deleteFailed'))
   } finally {
     deleteImageLoading.value = false
   }
@@ -165,9 +167,9 @@ async function setAsCover(image: ImageItem) {
     const thumbKey = cdnPrefix ? image.thumbUrl.replace(cdnPrefix + '/', '') : image.thumbUrl
     await api.patch(`/albums/${albumId.value}`, { coverKey: thumbKey })
     if (album.value) album.value.coverKey = thumbKey
-    toast.success('Đã đặt ảnh bìa')
+    toast.success(t('album.coverSet'))
   } catch {
-    toast.error('Không thể đặt ảnh bìa')
+    toast.error(t('album.coverFailed'))
   }
 }
 
@@ -233,7 +235,7 @@ onUnmounted(stopPolling)
 </script>
 
 <template>
-  <div v-if="loading" class="text-center py-12 text-gray-400">Đang tải...</div>
+  <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>
 
   <div v-else-if="album">
     <!-- Header -->
@@ -247,7 +249,7 @@ onUnmounted(stopPolling)
         </div>
         <p v-if="album.description" class="text-sm text-gray-500 mt-1">{{ album.description }}</p>
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
-          <span>{{ album.imageCount }} ảnh</span>
+          <span>{{ album.imageCount }} {{ $t('album.images') }}</span>
           <span>{{ formatBytes(album.totalBytes) }}</span>
           <span>{{ formatDate(album.createdAt) }}</span>
         </div>
@@ -257,10 +259,10 @@ onUnmounted(stopPolling)
           <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
           </svg>
-          Chia sẻ
+          {{ $t('album.share') }}
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="showEdit = true">Sửa</BaseButton>
-        <BaseButton variant="danger" size="sm" @click="showDelete = true">Xóa</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="showEdit = true">{{ $t('common.edit') }}</BaseButton>
+        <BaseButton variant="danger" size="sm" @click="showDelete = true">{{ $t('common.delete') }}</BaseButton>
       </div>
     </div>
 
@@ -288,7 +290,7 @@ onUnmounted(stopPolling)
       />
     </div>
     <div v-else class="text-center py-12 text-gray-400">
-      <p>Chưa có ảnh nào trong album này</p>
+      <p>{{ $t('album.noImages') }}</p>
     </div>
 
     <!-- Lightbox -->
@@ -302,16 +304,16 @@ onUnmounted(stopPolling)
     />
 
     <!-- Edit Modal -->
-    <BaseModal :show="showEdit" title="Sửa album" @close="showEdit = false">
+    <BaseModal :show="showEdit" :title="$t('album.editAlbum')" @close="showEdit = false">
       <AlbumForm :album="album" :loading="editLoading" @submit="handleEditAlbum" @cancel="showEdit = false" />
     </BaseModal>
 
     <!-- Delete Album Confirm -->
     <BaseConfirm
       :show="showDelete"
-      title="Xóa album"
-      message="Tất cả ảnh trong album sẽ bị xóa vĩnh viễn. Bạn có chắc?"
-      confirm-text="Xóa"
+      :title="$t('album.deleteAlbum')"
+      :message="$t('album.deleteAlbumConfirm')"
+      :confirm-text="$t('common.delete')"
       :loading="deleteLoading"
       @confirm="handleDeleteAlbum"
       @cancel="showDelete = false"
@@ -320,19 +322,19 @@ onUnmounted(stopPolling)
     <!-- Delete Image Confirm -->
     <BaseConfirm
       :show="showDeleteImage"
-      title="Xóa ảnh"
-      :message="`Bạn có chắc muốn xóa ảnh '${deleteImageTarget?.originalName}'?`"
-      confirm-text="Xóa"
+      :title="$t('image.deleteImage')"
+      :message="$t('image.deleteConfirm', { name: deleteImageTarget?.originalName })"
+      :confirm-text="$t('common.delete')"
       :loading="deleteImageLoading"
       @confirm="handleDeleteImage"
       @cancel="showDeleteImage = false"
     />
 
     <!-- Share Modal -->
-    <BaseModal :show="showShare" title="Chia sẻ album" @close="showShare = false">
+    <BaseModal :show="showShare" :title="$t('album.shareAlbum')" @close="showShare = false">
       <div class="space-y-4">
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          Tạo link chia sẻ để khách hàng xem album mà không cần tài khoản.
+          {{ $t('album.shareDesc') }}
         </p>
 
         <div v-if="shareToken" class="space-y-3">
@@ -343,16 +345,16 @@ onUnmounted(stopPolling)
               class="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300"
               @click="($event.target as HTMLInputElement).select()"
             />
-            <BaseButton variant="primary" size="sm" @click="copyShareLink">Sao chép</BaseButton>
+            <BaseButton variant="primary" size="sm" @click="copyShareLink">{{ $t('album.copyLink') }}</BaseButton>
           </div>
           <BaseButton variant="danger" size="sm" :loading="shareLoading" @click="revokeShareLink">
-            Hủy link chia sẻ
+            {{ $t('album.revokeShareLink') }}
           </BaseButton>
         </div>
 
         <div v-else>
           <BaseButton variant="primary" :loading="shareLoading" @click="generateShareLink">
-            Tạo link chia sẻ
+            {{ $t('album.createShareLink') }}
           </BaseButton>
         </div>
       </div>

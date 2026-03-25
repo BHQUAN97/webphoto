@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUploadStore } from '@/stores/upload'
 import { useToast } from '@/composables/useToast'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
+const { t } = useI18n()
 const props = defineProps<{ albumId: string }>()
 const emit = defineEmits<{ uploaded: [] }>()
 
@@ -37,7 +39,7 @@ async function handleFiles(files: File[]) {
   const validFiles = files.filter(f => {
     const ext = f.name.lastIndexOf('.') >= 0 ? f.name.slice(f.name.lastIndexOf('.')).toLowerCase() : ''
     if (!ALLOWED_EXTENSIONS.has(ext)) {
-      toast.error(`"${f.name}" — định dạng không được hỗ trợ`)
+      toast.error(t('upload.unsupported', { name: f.name }))
       return false
     }
     return true
@@ -70,9 +72,9 @@ function fileStatusText(f: { progress: number; speed?: number; status: string })
       const pct = `${f.progress}%`
       return f.speed && f.speed > 1024 ? `${pct} · ${formatSpeed(f.speed)}` : pct
     }
-    case 'processing': return 'Đang xử lý...'
-    case 'ready': return 'Hoàn tất'
-    case 'failed': return 'Lỗi'
+    case 'processing': return t('upload.processing')
+    case 'ready': return t('upload.done')
+    case 'failed': return t('upload.failed')
     default: return f.status
   }
 }
@@ -106,21 +108,21 @@ const showSummary = computed(() => store.files.length > 1)
       <svg class="w-10 h-10 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
-      <p class="text-sm text-gray-600 dark:text-gray-300">Kéo thả ảnh hoặc <span class="text-orange-500 font-medium">chọn file</span></p>
-      <p class="text-xs text-gray-400 mt-1">CR2, ARW, NEF, DNG, JPEG, PNG, TIFF — tối đa 200MB/file</p>
+      <p class="text-sm text-gray-600 dark:text-gray-300">{{ $t('upload.dropzone') }} <span class="text-orange-500 font-medium">{{ $t('upload.selectFile') }}</span></p>
+      <p class="text-xs text-gray-400 mt-1">{{ $t('upload.hint') }}</p>
     </div>
 
     <!-- Batch summary bar -->
     <div v-if="showSummary && summary.total > 0" class="mt-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
       <div class="flex items-center justify-between mb-2">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {{ summary.done }}/{{ summary.total }} ảnh
+          {{ $t('upload.progress', { done: summary.done, total: summary.total }) }}
         </span>
         <div class="flex items-center gap-3 text-xs">
-          <span v-if="summary.uploading > 0" class="text-orange-600">{{ summary.uploading }} đang upload</span>
-          <span v-if="summary.processing > 0" class="text-blue-600">{{ summary.processing }} đang xử lý</span>
-          <span v-if="summary.ready > 0" class="text-green-600">{{ summary.ready }} thành công</span>
-          <span v-if="summary.failed > 0" class="text-red-600">{{ summary.failed }} lỗi</span>
+          <span v-if="summary.uploading > 0" class="text-orange-600">{{ $t('upload.countUploading', { n: summary.uploading }) }}</span>
+          <span v-if="summary.processing > 0" class="text-blue-600">{{ $t('upload.countProcessing', { n: summary.processing }) }}</span>
+          <span v-if="summary.ready > 0" class="text-green-600">{{ $t('upload.countSuccess', { n: summary.ready }) }}</span>
+          <span v-if="summary.failed > 0" class="text-red-600">{{ $t('upload.countFailed', { n: summary.failed }) }}</span>
         </div>
       </div>
       <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex">
@@ -164,13 +166,13 @@ const showSummary = computed(() => store.files.length > 1)
 
       <!-- Hidden files indicator -->
       <p v-if="store.hiddenCount > 0" class="text-xs text-gray-400 text-center py-1">
-        và {{ store.hiddenCount }} ảnh khác...
+        {{ $t('upload.hiddenFiles', { n: store.hiddenCount }) }}
       </p>
     </div>
 
     <!-- Clear button -->
     <div v-if="summary.done > 0 && summary.active === 0" class="flex justify-end mt-2">
-      <BaseButton variant="ghost" size="sm" @click="store.clear()">Xóa danh sách</BaseButton>
+      <BaseButton variant="ghost" size="sm" @click="store.clear()">{{ $t('upload.clearList') }}</BaseButton>
     </div>
   </div>
 </template>

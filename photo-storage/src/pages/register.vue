@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 
@@ -13,15 +15,15 @@ const error = ref('')
 async function handleSubmit() {
   error.value = ''
   if (form.value.password !== form.value.confirmPassword) {
-    error.value = 'Mật khẩu không khớp'
+    error.value = t('auth.passwordMismatch')
     return
   }
   if (form.value.password.length < 8) {
-    error.value = 'Mật khẩu tối thiểu 8 ký tự'
+    error.value = t('auth.passwordTooShort')
     return
   }
   if (!/[a-z]/.test(form.value.password) || !/[A-Z]/.test(form.value.password) || !/[0-9]/.test(form.value.password)) {
-    error.value = 'Mật khẩu cần có chữ hoa, chữ thường và số'
+    error.value = t('auth.passwordWeak')
     return
   }
   try {
@@ -32,7 +34,7 @@ async function handleSubmit() {
     })
     router.push('/dashboard')
   } catch (e: any) {
-    error.value = e.response?.data?.message || 'Đăng ký thất bại'
+    error.value = e.response?.data?.message || t('auth.registerFailed')
   }
 }
 </script>
@@ -50,7 +52,7 @@ async function handleSubmit() {
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Đăng ký tài khoản</h2>
+        <h2 class="text-xl font-semibold text-gray-900 mb-6">{{ $t('auth.register') }}</h2>
 
         <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
           {{ error }}
@@ -58,53 +60,53 @@ async function handleSubmit() {
 
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Tên hiển thị</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.displayName') }}</label>
             <input
               v-model="form.displayName"
               type="text"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="Nguyễn Văn A"
+              :placeholder="$t('auth.displayNamePlaceholder')"
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.email') }}</label>
             <input
               v-model="form.email"
               type="email"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="email@example.com"
+              :placeholder="$t('auth.emailPlaceholder')"
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.password') }}</label>
             <input
               v-model="form.password"
               type="password"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="Tối thiểu 8 ký tự (chữ hoa, thường, số)"
+              :placeholder="$t('auth.passwordHint')"
             />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Nhập lại mật khẩu</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('auth.confirmPassword') }}</label>
             <input
               v-model="form.confirmPassword"
               type="password"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              placeholder="••••••••"
+              :placeholder="$t('auth.passwordPlaceholder')"
             />
           </div>
           <BaseButton type="submit" :loading="auth.loading" class="w-full">
-            Đăng ký
+            {{ $t('auth.register') }}
           </BaseButton>
         </form>
 
         <p class="mt-4 text-sm text-center text-gray-500">
-          Đã có tài khoản?
-          <router-link to="/login" class="text-orange-500 hover:text-orange-600 font-medium">Đăng nhập</router-link>
+          {{ $t('auth.hasAccount') }}
+          <router-link to="/login" class="text-orange-500 hover:text-orange-600 font-medium">{{ $t('auth.login') }}</router-link>
         </p>
       </div>
     </div>

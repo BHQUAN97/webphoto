@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/utils/api'
 import type { Album, StorageInfo, Payment } from '@/types'
@@ -10,6 +11,7 @@ import StorageBar from '@/components/ui/StorageBar.vue'
 import AlbumGrid from '@/components/album/AlbumGrid.vue'
 import { useToast } from '@/composables/useToast'
 
+const { t } = useI18n()
 const toast = useToast()
 const auth = useAuthStore()
 
@@ -29,11 +31,11 @@ async function uploadAvatar(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    toast.error('Chỉ hỗ trợ JPEG, PNG, WebP')
+    toast.error(t('profile.avatarOnlyFormats'))
     return
   }
   if (file.size > 5 * 1024 * 1024) {
-    toast.error('Ảnh tối đa 5MB')
+    toast.error(t('profile.avatarMaxSize'))
     return
   }
   uploadingAvatar.value = true
@@ -46,9 +48,9 @@ async function uploadAvatar(event: Event) {
     const { data } = await api.post('/users/me/avatar', { mimeType: file.type, data: base64 })
     await auth.updateProfile({ avatarKey: data.key } as any)
     await auth.fetchMe()
-    toast.success('Cập nhật avatar thành công')
+    toast.success(t('profile.avatarSuccess'))
   } catch {
-    toast.error('Upload avatar thất bại')
+    toast.error(t('profile.avatarFailed'))
   } finally {
     uploadingAvatar.value = false
   }
@@ -82,9 +84,9 @@ async function saveProfile() {
   try {
     await auth.updateProfile(form.value)
     editMode.value = false
-    toast.success('Cập nhật thành công')
+    toast.success(t('profile.updateSuccess'))
   } catch {
-    toast.error('Cập nhật thất bại')
+    toast.error(t('profile.updateFailed'))
   } finally {
     saving.value = false
   }
@@ -92,20 +94,20 @@ async function saveProfile() {
 
 const planBadge: Record<string, { label: string; variant: 'default' | 'info' | 'orange' }> = {
   free: { label: 'Free', variant: 'default' },
-  basic: { label: 'Cơ bản', variant: 'info' },
+  basic: { label: t('sidebar.planBasic'), variant: 'info' },
   pro: { label: 'Pro', variant: 'orange' },
 }
 
 const paymentStatusBadge: Record<string, { label: string; variant: 'default' | 'warning' | 'success' | 'danger' }> = {
-  pending: { label: 'Chờ thanh toán', variant: 'warning' },
-  awaiting_confirm: { label: 'Chờ xác nhận', variant: 'warning' },
-  paid: { label: 'Đã thanh toán', variant: 'success' },
-  failed: { label: 'Thất bại', variant: 'danger' },
+  pending: { label: t('paymentStatus.pending'), variant: 'warning' },
+  awaiting_confirm: { label: t('paymentStatus.awaitingConfirm'), variant: 'warning' },
+  paid: { label: t('paymentStatus.paid'), variant: 'success' },
+  failed: { label: t('paymentStatus.failed'), variant: 'danger' },
 }
 </script>
 
 <template>
-  <div v-if="loading" class="text-center py-12 text-gray-400">Đang tải...</div>
+  <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>
 
   <div v-else>
     <!-- Profile Header -->
@@ -134,9 +136,9 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
             <p class="text-sm text-gray-500 mt-1">{{ auth.user?.email }}</p>
             <p v-if="auth.user?.bio" class="text-sm text-gray-600 mt-2">{{ auth.user.bio }}</p>
             <div class="flex gap-2 mt-3">
-              <BaseButton size="sm" variant="secondary" @click="editMode = true">Chỉnh sửa</BaseButton>
+              <BaseButton size="sm" variant="secondary" @click="editMode = true">{{ $t('profile.editProfile') }}</BaseButton>
               <router-link to="/upgrade">
-                <BaseButton size="sm">Nâng cấp gói</BaseButton>
+                <BaseButton size="sm">{{ $t('profile.upgradePlan') }}</BaseButton>
               </router-link>
             </div>
           </template>
@@ -145,17 +147,17 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
               <input
                 v-model="form.displayName"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="Tên hiển thị"
+                :placeholder="$t('auth.displayName')"
               />
               <textarea
                 v-model="form.bio"
                 rows="2"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="Bio..."
+                :placeholder="$t('profile.bio')"
               />
               <div class="flex gap-2">
-                <BaseButton size="sm" :loading="saving" @click="saveProfile">Lưu</BaseButton>
-                <BaseButton size="sm" variant="secondary" @click="editMode = false">Hủy</BaseButton>
+                <BaseButton size="sm" :loading="saving" @click="saveProfile">{{ $t('common.save') }}</BaseButton>
+                <BaseButton size="sm" variant="secondary" @click="editMode = false">{{ $t('common.cancel') }}</BaseButton>
               </div>
             </div>
           </template>
@@ -166,43 +168,43 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
     <!-- Stat Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Tổng ảnh</p>
+        <p class="text-sm text-gray-500">{{ $t('profile.totalImages') }}</p>
         <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalImages }}</p>
         <div class="flex gap-3 mt-1 text-xs">
-          <span v-if="stats.processingImages" class="text-yellow-600">{{ stats.processingImages }} đang xử lý</span>
-          <span v-if="stats.failedImages" class="text-red-600">{{ stats.failedImages }} lỗi</span>
+          <span v-if="stats.processingImages" class="text-yellow-600">{{ stats.processingImages }} {{ $t('dashboard.processing') }}</span>
+          <span v-if="stats.failedImages" class="text-red-600">{{ stats.failedImages }} {{ $t('common.error') }}</span>
         </div>
       </div>
       <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Dung lượng</p>
+        <p class="text-sm text-gray-500">{{ $t('profile.storage') }}</p>
         <StorageBar :used-bytes="storage.usedBytes" :limit-bytes="storage.limitBytes" class="mt-2" />
       </div>
       <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Số album</p>
+        <p class="text-sm text-gray-500">{{ $t('profile.albumCount') }}</p>
         <p class="text-2xl font-bold text-gray-900 mt-1">{{ albums.length }}</p>
       </div>
       <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">Tương tác nhận được</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalLikes }} like</p>
-        <p class="text-xs text-gray-400 mt-1">{{ stats.totalComments }} bình luận</p>
+        <p class="text-sm text-gray-500">{{ $t('profile.interactionsReceived') }}</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalLikes }} {{ $t('dashboard.like') }}</p>
+        <p class="text-xs text-gray-400 mt-1">{{ stats.totalComments }} {{ $t('dashboard.comments') }}</p>
       </div>
     </div>
 
     <!-- Albums -->
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Album của tôi</h2>
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('profile.myAlbums') }}</h2>
     <AlbumGrid :albums="albums" class="mb-8" />
 
     <!-- Payment History -->
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Lịch sử thanh toán</h2>
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('profile.paymentHistory') }}</h2>
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gói</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Số tiền</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mã tham chiếu</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.plan') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.amount') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.referenceCode') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.status') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.date') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -218,7 +220,7 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
             <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(p.createdAt) }}</td>
           </tr>
           <tr v-if="payments.length === 0">
-            <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">Chưa có giao dịch</td>
+            <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-400">{{ $t('profile.noPayments') }}</td>
           </tr>
         </tbody>
       </table>

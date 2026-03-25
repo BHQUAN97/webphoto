@@ -1,5 +1,6 @@
 import { useUploadStore } from '@/stores/upload'
 import { useToast } from '@/composables/useToast'
+import { useI18n } from 'vue-i18n'
 import api from '@/utils/api'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
@@ -24,6 +25,7 @@ function formatSize(bytes: number): string {
 export function useUpload() {
   const store = useUploadStore()
   const toast = useToast()
+  const { t } = useI18n()
 
   async function uploadSingleFile(file: File, albumId: string): Promise<boolean> {
     const localId = crypto.randomUUID()
@@ -107,11 +109,11 @@ export function useUpload() {
   async function uploadFiles(files: File[], albumId: string): Promise<number> {
     const validFiles = files.filter(f => {
       if (f.size > MAX_FILE_SIZE) {
-        toast.error(`"${f.name}" vượt quá giới hạn 200MB`)
+        toast.error(t('upload.tooLarge', { name: f.name }))
         return false
       }
       if (f.size === 0) {
-        toast.error(`"${f.name}" — file rỗng`)
+        toast.error(t('upload.emptyFile', { name: f.name }))
         return false
       }
       return true
@@ -144,17 +146,17 @@ export function useUpload() {
     // Summary toast
     if (totalFiles === 1) {
       if (successCount === 1) {
-        toast.success(`Đã upload "${validFiles[0].name}" (${formatSize(validFiles[0].size)}), đang xử lý ảnh...`)
+        toast.success(t('upload.singleSuccess', { name: validFiles[0].name, size: formatSize(validFiles[0].size) }))
       } else {
-        toast.error(`Upload "${validFiles[0].name}" thất bại`)
+        toast.error(t('upload.singleFailed', { name: validFiles[0].name }))
       }
     } else {
       if (failCount === 0) {
-        toast.success(`Upload hoàn tất: ${successCount}/${totalFiles} ảnh thành công`)
+        toast.success(t('upload.batchSuccess', { success: successCount, total: totalFiles }))
       } else if (successCount === 0) {
-        toast.error(`Upload thất bại: tất cả ${totalFiles} ảnh đều lỗi`)
+        toast.error(t('upload.batchAllFailed', { total: totalFiles }))
       } else {
-        toast.warning(`Upload hoàn tất: ${successCount} thành công, ${failCount} thất bại (tổng ${totalFiles} ảnh)`)
+        toast.warning(t('upload.batchPartial', { success: successCount, failed: failCount, total: totalFiles }))
       }
     }
 

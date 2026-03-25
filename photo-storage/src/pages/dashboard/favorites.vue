@@ -32,9 +32,9 @@ async function handleLike(image: ImageItem) {
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Ảnh yêu thích</h1>
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ $t('favorites.title') }}</h1>
 
-    <div v-if="loading" class="text-center py-12 text-gray-400">Đang tải...</div>
+    <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>
     <div v-else-if="images.length > 0" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       <ImageCard
         v-for="img in images"
@@ -46,7 +46,7 @@ async function handleLike(image: ImageItem) {
       />
     </div>
     <div v-else class="text-center py-12 text-gray-400">
-      <p>Bạn chưa yêu thích ảnh nào</p>
+      <p>{{ $t('favorites.empty') }}</p>
     </div>
 
     <ImageLightbox
