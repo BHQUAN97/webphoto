@@ -137,7 +137,11 @@ function handleHamburger() {
           <template v-if="auth.isAuthenticated">
             <router-link to="/dashboard" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.dashboard') }}</router-link>
             <router-link to="/dashboard/albums" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.album') }}</router-link>
+            <router-link to="/dashboard/profile" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.profile') }}</router-link>
+            <router-link to="/dashboard/settings" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.settings') }}</router-link>
             <router-link v-if="auth.isAdmin" to="/admin" class="block py-2 text-sm text-orange-500 font-medium">{{ $t('nav.admin') }}</router-link>
+            <hr class="my-1 border-gray-200 dark:border-gray-600" />
+            <button class="block w-full text-left py-2 text-sm text-red-600 dark:text-red-400" @click="handleLogout">{{ $t('nav.logout') }}</button>
           </template>
           <template v-else>
             <router-link to="/login" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('auth.login') }}</router-link>

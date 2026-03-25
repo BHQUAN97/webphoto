@@ -97,7 +97,7 @@ const showSummary = computed(() => store.files.length > 1)
     <!-- Drop zone -->
     <div
       :class="[
-        'border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-colors cursor-pointer',
+        'border-2 border-dashed rounded-xl p-4 sm:p-6 md:p-8 text-center transition-colors cursor-pointer',
         dragging ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-orange-400',
       ]"
       @click="openPicker"
@@ -105,16 +105,16 @@ const showSummary = computed(() => store.files.length > 1)
       @dragleave="dragging = false"
       @drop.prevent="onDrop"
     >
-      <svg class="w-10 h-10 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2 sm:mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
-      <p class="text-sm text-gray-600 dark:text-gray-300">{{ $t('upload.dropzone') }} <span class="text-orange-500 font-medium">{{ $t('upload.selectFile') }}</span></p>
-      <p class="text-xs text-gray-400 mt-1">{{ $t('upload.hint') }}</p>
+      <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">{{ $t('upload.dropzone') }} <span class="text-orange-500 font-medium">{{ $t('upload.selectFile') }}</span></p>
+      <p class="text-[10px] sm:text-xs text-gray-400 mt-1">{{ $t('upload.hint') }}</p>
     </div>
 
     <!-- Batch summary bar -->
-    <div v-if="showSummary && summary.total > 0" class="mt-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
-      <div class="flex items-center justify-between mb-2">
+    <div v-if="showSummary && summary.total > 0" class="mt-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 sm:px-4 py-2 sm:py-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mb-2">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ $t('upload.progress', { done: summary.done, total: summary.total }) }}
         </span>

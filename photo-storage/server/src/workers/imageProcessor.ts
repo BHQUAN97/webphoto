@@ -69,21 +69,29 @@ export function createImageWorker() {
       logger.info(`[Worker] Image ready ${imageId} (${meta.width}x${meta.height})`, { source: 'worker:image-process', userId, imageId })
 
       // Auto-set album cover if album has no cover yet
-      const [img] = await db.select({ albumId: images.albumId }).from(images).where(eq(images.id, imageId)).limit(1)
+      const [img] = await db.select({ albumId: images.albumId, originalName: images.originalName }).from(images).where(eq(images.id, imageId)).limit(1)
       if (img?.albumId) {
         await db.update(albums).set({ coverKey: `${base}/thumb.webp` })
           .where(and(eq(albums.id, img.albumId), isNull(albums.coverKey)))
       }
 
+      const imageName = img?.originalName ?? imageId
+
       await emitToUser(userId, {
         type: 'image:ready', imageId,
         thumbUrl: storage().publicUrl(`${base}/thumb.webp`),
+        message: `Ảnh ${imageName} đã xử lý xong`,
       })
     } catch (err) {
       const e = err as Error & { code?: string }
       logger.error(`[Worker] Image failed ${imageId}: ${e.message}`, { source: 'worker:image-process', userId, imageId, errorName: e.constructor?.name, errorCode: e.code, originalKey: job.data.originalKey, mimeType: job.data.mimeType, stack: e.stack })
       await db.update(images).set({ status: 'failed' }).where(eq(images.id, imageId))
-      await emitToUser(userId, { type: 'image:failed', imageId, reason: String(err) })
+
+      // Query image name for meaningful notification
+      const [failedImg] = await db.select({ originalName: images.originalName }).from(images).where(eq(images.id, imageId)).limit(1)
+      const failedName = failedImg?.originalName ?? imageId
+
+      await emitToUser(userId, { type: 'image:failed', imageId, reason: String(err), message: `Xử lý ảnh ${failedName} thất bại` })
       throw err
     }
   }, { connection: { url: process.env.REDIS_URL }, concurrency: 3 })

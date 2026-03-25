@@ -16,6 +16,7 @@ import ImageFilterBar from '@/components/image/ImageFilterBar.vue'
 import AlbumForm from '@/components/album/AlbumForm.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { formatBytes, formatDate } from '@/utils/format'
+import BackButton from '@/components/ui/BackButton.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -38,6 +39,7 @@ const shareToken = ref<string | null>(null)
 const shareLoading = ref(false)
 const shareUrl = computed(() => shareToken.value ? `${window.location.origin}/share/${shareToken.value}` : '')
 const lightboxImage = ref<ImageItem | null>(null)
+const lightboxIndex = ref(0)
 const showDeleteImage = ref(false)
 const deleteImageTarget = ref<ImageItem | null>(null)
 const deleteImageLoading = ref(false)
@@ -235,6 +237,7 @@ onUnmounted(stopPolling)
 </script>
 
 <template>
+  <BackButton />
   <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>
 
   <div v-else-if="album">
@@ -283,7 +286,7 @@ onUnmounted(stopPolling)
         :show-like="auth.isAuthenticated"
         :show-delete="album?.userId === auth.user?.id"
         :show-set-cover="album?.userId === auth.user?.id"
-        @click="lightboxImage = img"
+        @click="lightboxImage = img; lightboxIndex = images.indexOf(img)"
         @like="handleLike"
         @delete="confirmDeleteImage"
         @set-cover="setAsCover"
@@ -296,11 +299,14 @@ onUnmounted(stopPolling)
     <!-- Lightbox -->
     <ImageLightbox
       :image="lightboxImage"
+      :images="images"
+      :current-index="lightboxIndex"
       :show="!!lightboxImage"
       :can-delete="album?.userId === auth.user?.id"
       @close="lightboxImage = null"
       @like="handleLike"
       @delete="confirmDeleteImage"
+      @navigate="(idx: number) => { lightboxIndex = idx; lightboxImage = images[idx] }"
     />
 
     <!-- Edit Modal -->

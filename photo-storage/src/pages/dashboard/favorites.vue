@@ -4,6 +4,7 @@ import api from '@/utils/api'
 import type { ImageItem } from '@/types'
 import ImageCard from '@/components/image/ImageCard.vue'
 import ImageLightbox from '@/components/image/ImageLightbox.vue'
+import BackButton from '@/components/ui/BackButton.vue'
 
 const images = ref<ImageItem[]>([])
 const loading = ref(true)
@@ -32,6 +33,7 @@ async function handleLike(image: ImageItem) {
 
 <template>
   <div>
+    <BackButton />
     <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ $t('favorites.title') }}</h1>
 
     <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>

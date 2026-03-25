@@ -9,6 +9,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 import StorageBar from '@/components/ui/StorageBar.vue'
 import AlbumGrid from '@/components/album/AlbumGrid.vue'
+import BackButton from '@/components/ui/BackButton.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -107,6 +108,7 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
 </script>
 
 <template>
+  <BackButton />
   <div v-if="loading" class="text-center py-12 text-gray-400">{{ $t('common.loading') }}</div>
 
   <div v-else>

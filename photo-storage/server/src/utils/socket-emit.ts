@@ -8,8 +8,8 @@ export async function initSocketEmitter() {
 }
 
 export type UserEvent =
-  | { type: 'image:ready';     imageId: string; thumbUrl: string }
-  | { type: 'image:failed';    imageId: string; reason: string }
+  | { type: 'image:ready';     imageId: string; thumbUrl: string; message: string }
+  | { type: 'image:failed';    imageId: string; reason: string; message: string }
   | { type: 'payment:success'; planCode: string; expiresAt: string }
   | { type: 'photo:liked';     imageId: string; likedBy: string }
   | { type: 'photo:commented'; imageId: string; comment: string; by: string }

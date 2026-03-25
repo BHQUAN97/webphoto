@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BackButton from '@/components/ui/BackButton.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -46,6 +47,7 @@ async function changePassword() {
 </script>
 
 <template>
+  <BackButton />
   <div class="max-w-lg">
     <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ $t('settings.title') }}</h1>
 
