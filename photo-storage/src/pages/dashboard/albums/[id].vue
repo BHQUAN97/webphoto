@@ -247,11 +247,10 @@ async function handleDownloadZip() {
   toast.info(t('album.downloadStarted'))
 
   try {
-    // First request without batch to check if multi-batch
+    // Check mode: multi-batch or single
     const checkRes = await api.post(`/albums/${albumId.value}/download-zip`, {}, { timeout: 0 })
 
     if (checkRes.data.mode === 'multi-batch') {
-      // Multi-batch: download each batch sequentially
       const { batches } = checkRes.data
       showDownloadProgress.value = true
       downloadBatchTotal.value = batches.length
@@ -259,18 +258,22 @@ async function handleDownloadZip() {
 
       for (let i = 0; i < batches.length; i++) {
         downloadBatchCurrent.value = i + 1
-        const res = await api.post(
-          `/albums/${albumId.value}/download-zip`,
-          { batch: i },
-          { responseType: 'blob', timeout: 0 }
-        )
-        triggerBlobDownload(res.data, res.headers)
+        try {
+          const res = await api.post(
+            `/albums/${albumId.value}/download-zip`,
+            { batch: i },
+            { responseType: 'blob', timeout: 0 }
+          )
+          triggerBlobDownload(res.data, res.headers)
+        } catch (batchErr) {
+          console.error(`[Download] Batch ${i} failed`, batchErr)
+          toast.warning(`Batch ${i + 1}/${batches.length} thất bại, tiếp tục...`)
+        }
       }
       showDownloadProgress.value = false
       toast.success(t('album.downloadSuccess'))
     } else {
-      // Single batch: checkRes is actually the ZIP blob if responseType was not set
-      // Re-request with blob responseType
+      // Single batch — download directly as blob
       const res = await api.post(
         `/albums/${albumId.value}/download-zip`,
         {},
@@ -279,11 +282,12 @@ async function handleDownloadZip() {
       triggerBlobDownload(res.data, res.headers)
       toast.success(t('album.downloadSuccess'))
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     showDownloadProgress.value = false
-    if (err?.response?.status === 403) {
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 403) {
       toast.error(t('album.downloadRequirePlan'))
-    } else if (err?.response?.status === 400) {
+    } else if (status === 400) {
       toast.error(t('album.downloadNoImages'))
     } else {
       toast.error(t('album.downloadFailed'))

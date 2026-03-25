@@ -32,8 +32,8 @@ onMounted(async () => {
     stats.value = statsRes.data
     chartData.value = chartsRes.data
     topUsers.value = topRes.data
-  } catch {
-    // silently fail
+  } catch (err) {
+    console.error('[AdminDashboard] Failed to load data', err)
   } finally {
     loading.value = false
   }

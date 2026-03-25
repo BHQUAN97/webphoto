@@ -353,6 +353,7 @@ router.post('/:id/download-zip', async (req, res) => {
 
   // Track filenames to avoid duplicates
   const usedNames = new Map<string, number>()
+  let skippedCount = 0
 
   for (const img of batchImages) {
     try {
@@ -371,12 +372,12 @@ router.post('/:id/download-zip', async (req, res) => {
 
       archive.append(stream, { name: filename })
     } catch (err) {
+      skippedCount++
       logger.warn(`[Download ZIP] Failed to stream image`, {
         imageId: img.id,
         key: img.originalKey,
         error: (err as Error).message,
       })
-      // Skip failed images, continue with the rest
     }
   }
 
@@ -387,6 +388,7 @@ router.post('/:id/download-zip', async (req, res) => {
     albumId: id,
     batch: batchIndex,
     imageCount: batchImages.length,
+    skippedCount,
   })
 })
 
