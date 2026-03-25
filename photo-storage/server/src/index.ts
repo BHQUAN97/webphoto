@@ -77,10 +77,15 @@ app.use(cors({
     .map(s => s.trim()),
   credentials: true,
 }))
-app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 app.use(requestLogger)
 app.use(authMiddleware)
+
+// Binary upload routes — BEFORE express.json() to avoid body stream conflict
+app.use('/api/storage', storageRoutes)
+
+// JSON body parser — after binary routes are registered
+app.use(express.json({ limit: '10mb' }))
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -122,9 +127,6 @@ app.use('/api/admin/logs', adminGuard, adminLogRoutes)
 
 // Share routes (public album sharing, no auth)
 app.use('/api/share', shareRoutes)
-
-// Storage routes (local storage upload/download)
-app.use('/api/storage', storageRoutes)
 
 // Cron routes
 app.use('/api/cron', cronRoutes)
