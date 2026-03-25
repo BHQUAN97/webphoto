@@ -34,6 +34,44 @@ const adminInfo = ref({
 })
 const savingAdminInfo = ref(false)
 
+// Google Drive config
+const driveConfig = ref<{ configured: boolean; clientEmail?: string; projectId?: string; updatedAt?: string }>({ configured: false })
+const driveJsonInput = ref('')
+const savingDrive = ref(false)
+const showDriveJson = ref(false)
+
+async function fetchDriveConfig() {
+  try {
+    const res = await api.get('/admin/settings/drive-config')
+    driveConfig.value = res.data
+  } catch { /* */ }
+}
+
+async function saveDriveConfig() {
+  if (!driveJsonInput.value.trim()) {
+    toast.error('Vui lòng dán nội dung Service Account JSON')
+    return
+  }
+  savingDrive.value = true
+  try {
+    const res = await api.post('/admin/settings/drive-config', {
+      serviceAccountJson: driveJsonInput.value.trim(),
+    })
+    driveConfig.value = {
+      configured: true,
+      clientEmail: res.data.clientEmail,
+      projectId: res.data.projectId,
+    }
+    driveJsonInput.value = ''
+    showDriveJson.value = false
+    toast.success(`Drive đã kết nối: ${res.data.clientEmail}`)
+  } catch (err: any) {
+    toast.error(err?.response?.data?.message || 'Lưu thất bại')
+  } finally {
+    savingDrive.value = false
+  }
+}
+
 // Mail test
 const mailTemplates = [
   { value: 'order_new', label: 'Đơn hàng mới (order_new)' },
@@ -92,7 +130,7 @@ onMounted(async () => {
     }
   } catch { /* */ } finally { loading.value = false }
 
-  await fetchStorageInfo()
+  await Promise.all([fetchStorageInfo(), fetchDriveConfig()])
 })
 
 async function save() {
@@ -298,6 +336,75 @@ function toggleMime(mime: string) {
           <BaseButton type="submit" :loading="savingAdminInfo">Lưu thông tin quản trị</BaseButton>
         </div>
       </form>
+
+      <!-- Google Drive Integration -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+        <div class="flex items-center gap-3">
+          <svg class="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
+          </svg>
+          <h2 class="text-lg font-semibold text-gray-900">Google Drive</h2>
+        </div>
+        <p class="text-sm text-gray-500">Kết nối Google Drive để import ảnh từ folder Drive vào album.</p>
+
+        <!-- Status -->
+        <div v-if="driveConfig.configured" class="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="text-sm font-medium text-green-700">Đã kết nối</span>
+          </div>
+          <div class="text-sm text-gray-600 space-y-1">
+            <p><span class="text-gray-500">Service Account:</span> <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{{ driveConfig.clientEmail }}</code></p>
+            <p><span class="text-gray-500">Project:</span> {{ driveConfig.projectId }}</p>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">
+            Để import ảnh, hãy share folder Google Drive với email service account ở trên (quyền Viewer).
+          </p>
+          <BaseButton variant="secondary" size="sm" @click="showDriveJson = !showDriveJson">
+            {{ showDriveJson ? 'Ẩn' : 'Cập nhật key mới' }}
+          </BaseButton>
+        </div>
+
+        <div v-else class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p class="text-sm text-yellow-700 mb-2">Chưa cấu hình Google Drive. Cần Service Account JSON từ Google Cloud Console.</p>
+          <ol class="text-xs text-yellow-600 space-y-1 list-decimal list-inside mb-3">
+            <li>Vào <a href="https://console.cloud.google.com" target="_blank" class="underline">Google Cloud Console</a></li>
+            <li>Tạo Project → Enable "Google Drive API"</li>
+            <li>Tạo Service Account → Create Key (JSON) → Download</li>
+            <li>Dán nội dung file JSON vào ô bên dưới</li>
+          </ol>
+        </div>
+
+        <!-- JSON Input -->
+        <div v-if="!driveConfig.configured || showDriveJson" class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Service Account JSON</label>
+            <textarea
+              v-model="driveJsonInput"
+              rows="8"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder='Dán nội dung file JSON tải từ Google Cloud Console...
+
+{
+  "type": "service_account",
+  "project_id": "your-project",
+  "private_key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+  "client_email": "xxx@xxx.iam.gserviceaccount.com",
+  ...
+}'
+            />
+          </div>
+          <BaseButton :loading="savingDrive" @click="saveDriveConfig">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            </svg>
+            Lưu và kết nối Drive
+          </BaseButton>
+        </div>
+      </div>
 
       <!-- Test Mail -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">

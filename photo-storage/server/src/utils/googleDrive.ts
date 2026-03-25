@@ -53,12 +53,24 @@ export function validateDriveConfig(): { ok: boolean; message: string } {
 // ─── Auth ──────────────────────────────────────────────────────────────────
 let _drive: drive_v3.Drive | null = null
 
-function getDrive(): drive_v3.Drive {
+async function getDriveAsync(): Promise<drive_v3.Drive> {
   if (_drive) return _drive
 
   let credentials: Record<string, unknown>
 
-  const jsonEnv = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  // Try env var first, then DB setting
+  let jsonEnv = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  if (!jsonEnv) {
+    try {
+      const dbValue = await getSetting('google_service_account')
+      if (dbValue) {
+        jsonEnv = dbValue
+        // Also set env so subsequent calls use cached value
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON = dbValue
+      }
+    } catch { /* DB not ready */ }
+  }
+
   if (jsonEnv) {
     // Try parsing as JSON string first, then as file path
     try {
@@ -97,7 +109,7 @@ export function extractFolderId(input: string): string {
 
 // ─── List all image files in a folder (with pagination) ────────────────────
 export async function listFiles(folderId: string): Promise<DriveFile[]> {
-  const drive = getDrive()
+  const drive = await getDriveAsync()
   const files: DriveFile[] = []
   let pageToken: string | undefined
 
@@ -162,7 +174,7 @@ export async function listFiles(folderId: string): Promise<DriveFile[]> {
 
 // ─── List subfolders in a folder ───────────────────────────────────────────
 export async function listSubfolders(folderId: string): Promise<DriveFolder[]> {
-  const drive = getDrive()
+  const drive = await getDriveAsync()
   const folders: DriveFolder[] = []
   let pageToken: string | undefined
 
@@ -194,7 +206,7 @@ export async function listSubfolders(folderId: string): Promise<DriveFolder[]> {
 
 // ─── Download a file as readable stream ────────────────────────────────────
 export async function downloadFile(fileId: string): Promise<Readable> {
-  const drive = getDrive()
+  const drive = await getDriveAsync()
 
   try {
     const res = await drive.files.get(
@@ -214,7 +226,7 @@ export async function downloadFile(fileId: string): Promise<Readable> {
 
 // ─── Get single file metadata ──────────────────────────────────────────────
 export async function getFileMetadata(fileId: string): Promise<DriveFile> {
-  const drive = getDrive()
+  const drive = await getDriveAsync()
 
   try {
     const res = await drive.files.get({

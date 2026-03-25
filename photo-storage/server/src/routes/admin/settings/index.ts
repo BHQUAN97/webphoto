@@ -121,4 +121,79 @@ router.post('/test-mail', async (req, res) => {
   }
 })
 
+// POST /drive-config — Save Google Drive service account JSON
+router.post('/drive-config', async (req, res) => {
+  const admin = requireAdmin(req)
+  const { serviceAccountJson } = req.body
+
+  if (!serviceAccountJson) {
+    return res.status(400).json({ message: 'Thiếu Service Account JSON' })
+  }
+
+  // Validate JSON format
+  let parsed: Record<string, unknown>
+  try {
+    parsed = typeof serviceAccountJson === 'string' ? JSON.parse(serviceAccountJson) : serviceAccountJson
+  } catch {
+    return res.status(400).json({ message: 'JSON không hợp lệ' })
+  }
+
+  // Validate required fields
+  const required = ['type', 'project_id', 'private_key', 'client_email']
+  const missing = required.filter(k => !parsed[k])
+  if (missing.length > 0) {
+    return res.status(400).json({ message: `Thiếu trường bắt buộc: ${missing.join(', ')}` })
+  }
+
+  if (parsed.type !== 'service_account') {
+    return res.status(400).json({ message: 'Loại key phải là "service_account"' })
+  }
+
+  // Save to system_settings (stored encrypted/obfuscated — only admin can read)
+  const jsonStr = JSON.stringify(parsed)
+  const [existing] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'google_service_account')).limit(1)
+  if (existing) {
+    await db.update(systemSettings).set({ value: jsonStr, updatedAt: new Date(), updatedBy: admin.sub })
+      .where(eq(systemSettings.key, 'google_service_account'))
+  } else {
+    await db.insert(systemSettings).values({ key: 'google_service_account', value: jsonStr, updatedBy: admin.sub })
+  }
+
+  invalidateSettingsCache()
+
+  // Test connection
+  try {
+    const { validateDriveConfig } = await import('../../../utils/googleDrive.js')
+    // Temporarily set env for validation
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON = jsonStr
+    const result = validateDriveConfig()
+    await adminStats.log(admin.sub, 'settings.drive_config', 'settings')
+    res.json({ ok: true, clientEmail: parsed.client_email, projectId: parsed.project_id, valid: !!result })
+  } catch (err) {
+    res.json({ ok: true, clientEmail: parsed.client_email, projectId: parsed.project_id, warning: (err as Error).message })
+  }
+})
+
+// GET /drive-config — Get Drive config status (no secrets)
+router.get('/drive-config', async (req, res) => {
+  requireAdmin(req)
+  const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'google_service_account')).limit(1)
+
+  if (!setting) {
+    return res.json({ configured: false })
+  }
+
+  try {
+    const parsed = JSON.parse(setting.value)
+    res.json({
+      configured: true,
+      clientEmail: parsed.client_email,
+      projectId: parsed.project_id,
+      updatedAt: setting.updatedAt,
+    })
+  } catch {
+    res.json({ configured: false })
+  }
+})
+
 export default router
