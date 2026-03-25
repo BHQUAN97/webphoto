@@ -44,6 +44,12 @@ const showDeleteImage = ref(false)
 const deleteImageTarget = ref<ImageItem | null>(null)
 const deleteImageLoading = ref(false)
 
+// Download ZIP state
+const downloadLoading = ref(false)
+const showDownloadProgress = ref(false)
+const downloadBatchTotal = ref(0)
+const downloadBatchCurrent = ref(0)
+
 async function fetchAlbum() {
   loading.value = true
   try {
@@ -232,6 +238,76 @@ async function onUploaded() {
   startPolling()
 }
 
+async function handleDownloadZip() {
+  if (!auth.canDownload) {
+    toast.error(t('album.downloadRequirePlan'))
+    return
+  }
+  downloadLoading.value = true
+  toast.info(t('album.downloadStarted'))
+
+  try {
+    // First request without batch to check if multi-batch
+    const checkRes = await api.post(`/albums/${albumId.value}/download-zip`, {}, { timeout: 0 })
+
+    if (checkRes.data.mode === 'multi-batch') {
+      // Multi-batch: download each batch sequentially
+      const { batches } = checkRes.data
+      showDownloadProgress.value = true
+      downloadBatchTotal.value = batches.length
+      downloadBatchCurrent.value = 0
+
+      for (let i = 0; i < batches.length; i++) {
+        downloadBatchCurrent.value = i + 1
+        const res = await api.post(
+          `/albums/${albumId.value}/download-zip`,
+          { batch: i },
+          { responseType: 'blob', timeout: 0 }
+        )
+        triggerBlobDownload(res.data, res.headers)
+      }
+      showDownloadProgress.value = false
+      toast.success(t('album.downloadSuccess'))
+    } else {
+      // Single batch: checkRes is actually the ZIP blob if responseType was not set
+      // Re-request with blob responseType
+      const res = await api.post(
+        `/albums/${albumId.value}/download-zip`,
+        {},
+        { responseType: 'blob', timeout: 0 }
+      )
+      triggerBlobDownload(res.data, res.headers)
+      toast.success(t('album.downloadSuccess'))
+    }
+  } catch (err: any) {
+    showDownloadProgress.value = false
+    if (err?.response?.status === 403) {
+      toast.error(t('album.downloadRequirePlan'))
+    } else if (err?.response?.status === 400) {
+      toast.error(t('album.downloadNoImages'))
+    } else {
+      toast.error(t('album.downloadFailed'))
+    }
+  } finally {
+    downloadLoading.value = false
+  }
+}
+
+function triggerBlobDownload(blob: Blob, headers: Record<string, unknown>) {
+  const disposition = String(headers['content-disposition'] || '')
+  const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/)
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `${album.value?.title || 'album'}.zip`
+
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
+
 onMounted(fetchAlbum)
 onUnmounted(stopPolling)
 </script>
@@ -257,7 +333,13 @@ onUnmounted(stopPolling)
           <span>{{ formatDate(album.createdAt) }}</span>
         </div>
       </div>
-      <div class="flex gap-2 shrink-0">
+      <div class="flex gap-2 shrink-0 flex-wrap">
+        <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" @click="handleDownloadZip">
+          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {{ $t('album.downloadAlbum') }}
+        </BaseButton>
         <BaseButton variant="secondary" size="sm" @click="openShareDialog">
           <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -362,6 +444,27 @@ onUnmounted(stopPolling)
           <BaseButton variant="primary" :loading="shareLoading" @click="generateShareLink">
             {{ $t('album.createShareLink') }}
           </BaseButton>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- Download ZIP Progress Modal -->
+    <BaseModal :show="showDownloadProgress" :title="$t('album.downloadAlbum')" @close="() => {}">
+      <div class="space-y-4 text-center">
+        <div class="flex justify-center">
+          <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          {{ $t('album.downloadZipProgress', { current: downloadBatchCurrent, total: downloadBatchTotal }) }}
+        </p>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div
+            class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+            :style="{ width: `${downloadBatchTotal > 0 ? (downloadBatchCurrent / downloadBatchTotal) * 100 : 0}%` }"
+          ></div>
         </div>
       </div>
     </BaseModal>

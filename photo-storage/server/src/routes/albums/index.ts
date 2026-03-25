@@ -1,13 +1,15 @@
 import { Router } from 'express'
 import { ulid } from 'ulid'
 import crypto from 'crypto'
+import archiver from 'archiver'
 import { db } from '../../utils/db.js'
 import { albums, images, users, userPlans, plans, albumShareTokens } from '../../database/schema.js'
 import { eq, and, desc, sql, lt } from 'drizzle-orm'
-import { requireAuth } from '../../middleware/auth.js'
+import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { feedCache } from '../../utils/redis.js'
 import { storage } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid, clampInt } from '../../utils/validate.js'
+import { logger } from '../../utils/logger.js'
 
 const router = Router()
 
@@ -250,6 +252,142 @@ router.get('/:id/share', async (req, res) => {
     .where(eq(albumShareTokens.albumId, id)).limit(1)
 
   res.json({ token: token?.token ?? null, expiresAt: token?.expiresAt ?? null })
+})
+
+// POST /:id/download-zip — batch download album as ZIP
+const MAX_BATCH_SIZE = 100
+
+router.post('/:id/download-zip', async (req, res) => {
+  const user = requirePlan(req, 'basic')
+  const { id } = req.params
+  if (!isValidUlid(id)) return res.status(400).json({ message: 'ID album không hợp lệ' })
+
+  // Verify album exists and user has access (owner or public)
+  const [album] = await db.select().from(albums)
+    .where(and(eq(albums.id, id), eq(albums.isActive, true))).limit(1)
+  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+
+  if (album.userId !== user.sub && !album.isPublic) {
+    return res.status(403).json({ message: 'Không có quyền tải album này' })
+  }
+
+  // Get all ready images in the album
+  const readyImages = await db.select({
+    id: images.id,
+    originalKey: images.originalKey,
+    originalName: images.originalName,
+    originalSize: images.originalSize,
+  }).from(images)
+    .where(and(eq(images.albumId, id), eq(images.status, 'ready')))
+    .orderBy(desc(images.createdAt))
+
+  if (readyImages.length === 0) {
+    return res.status(400).json({ message: 'Không có ảnh nào sẵn sàng để tải' })
+  }
+
+  // Optional: client can request a specific batch
+  const batchIndex = parseInt(req.body.batch as string) || 0
+
+  // If > MAX_BATCH_SIZE and no batch specified, return batch info
+  if (readyImages.length > MAX_BATCH_SIZE && req.body.batch === undefined) {
+    const totalBatches = Math.ceil(readyImages.length / MAX_BATCH_SIZE)
+    const batches = []
+    for (let i = 0; i < totalBatches; i++) {
+      const start = i * MAX_BATCH_SIZE
+      const end = Math.min(start + MAX_BATCH_SIZE, readyImages.length)
+      batches.push({
+        batch: i,
+        count: end - start,
+        url: `/api/albums/${id}/download-zip`,
+      })
+    }
+    return res.json({
+      mode: 'multi-batch',
+      totalImages: readyImages.length,
+      totalBatches,
+      batches,
+    })
+  }
+
+  // Determine which images to include in this batch
+  const start = batchIndex * MAX_BATCH_SIZE
+  const batchImages = readyImages.slice(start, start + MAX_BATCH_SIZE)
+
+  if (batchImages.length === 0) {
+    return res.status(400).json({ message: 'Batch không hợp lệ' })
+  }
+
+  const safeTitle = (album.title || 'album').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF _-]/g, '_')
+  const batchSuffix = readyImages.length > MAX_BATCH_SIZE ? `_part${batchIndex + 1}` : ''
+  const zipFilename = `${safeTitle}${batchSuffix}.zip`
+
+  logger.info(`[Download ZIP] Starting`, {
+    userId: user.sub,
+    albumId: id,
+    batch: batchIndex,
+    imageCount: batchImages.length,
+    totalImages: readyImages.length,
+  })
+
+  // Set response headers for ZIP stream
+  res.setHeader('Content-Type', 'application/zip')
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFilename)}"`)
+
+  const archive = archiver('zip', { zlib: { level: 1 } }) // level 1 for speed (images are already compressed)
+
+  archive.on('error', (err) => {
+    logger.error(`[Download ZIP] Archive error`, { albumId: id, error: err.message })
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Lỗi tạo file ZIP' })
+    } else {
+      res.end()
+    }
+  })
+
+  archive.on('warning', (err) => {
+    logger.warn(`[Download ZIP] Archive warning`, { albumId: id, error: err.message })
+  })
+
+  // Pipe archive to response
+  archive.pipe(res)
+
+  // Track filenames to avoid duplicates
+  const usedNames = new Map<string, number>()
+
+  for (const img of batchImages) {
+    try {
+      const stream = await storage().getStream(img.originalKey)
+
+      // Generate unique filename within ZIP
+      let filename = img.originalName || `${img.id}.raw`
+      const baseCount = usedNames.get(filename) || 0
+      if (baseCount > 0) {
+        const ext = filename.lastIndexOf('.')
+        const name = ext > 0 ? filename.slice(0, ext) : filename
+        const extStr = ext > 0 ? filename.slice(ext) : ''
+        filename = `${name}_${baseCount}${extStr}`
+      }
+      usedNames.set(img.originalName || `${img.id}.raw`, baseCount + 1)
+
+      archive.append(stream, { name: filename })
+    } catch (err) {
+      logger.warn(`[Download ZIP] Failed to stream image`, {
+        imageId: img.id,
+        key: img.originalKey,
+        error: (err as Error).message,
+      })
+      // Skip failed images, continue with the rest
+    }
+  }
+
+  await archive.finalize()
+
+  logger.info(`[Download ZIP] Completed`, {
+    userId: user.sub,
+    albumId: id,
+    batch: batchIndex,
+    imageCount: batchImages.length,
+  })
 })
 
 export default router
