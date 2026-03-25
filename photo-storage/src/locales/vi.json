@@ -321,5 +321,25 @@
     "markAllRead": "Đánh dấu đã đọc",
     "justNow": "vừa xong",
     "noNotifications": "Không có thông báo mới"
+  },
+  "drive": {
+    "importFromDrive": "Import từ Google Drive",
+    "folderLink": "Link Google Drive Folder",
+    "folderPlaceholder": "https://drive.google.com/drive/folders/...",
+    "folderHint": "Dán link thư mục Google Drive chứa ảnh cần import",
+    "optionalAutoDetect": "tự động lấy từ tên folder",
+    "includeSubfolders": "Bao gồm thư mục con",
+    "includeSubfoldersHint": "Import ảnh từ tất cả thư mục con bên trong",
+    "importButton": "Import từ Drive",
+    "importing": "Đang import ảnh từ Drive...",
+    "importSuccess": "Import thành công {count} ảnh từ Drive",
+    "importFailed": "Import từ Drive thất bại",
+    "invalidLink": "Link Google Drive không hợp lệ",
+    "syncBadge": "Synced from Drive",
+    "resync": "Đồng bộ lại",
+    "resyncStarted": "Đang đồng bộ, phát hiện {count} ảnh mới",
+    "resyncFailed": "Đồng bộ lại thất bại",
+    "lastSync": "Đồng bộ lần cuối",
+    "subfolders": "Thư mục con"
   }
 }

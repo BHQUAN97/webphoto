@@ -1,13 +1,16 @@
 import { Router } from 'express'
 import { db } from '../../utils/db.js'
-import { images, payments, users, appLogs } from '../../database/schema.js'
-import { and, lt, lte, ne, eq, gt, gte, inArray, sql } from 'drizzle-orm'
+import { images, payments, users, albums, appLogs } from '../../database/schema.js'
+import { and, lt, lte, ne, eq, gt, gte, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
 import { storage } from '../../utils/storage/index.js'
 import { getSetting } from '../../utils/settings-cache.js'
 import { logger } from '../../utils/logger.js'
 import { quotaUtils } from '../../utils/quota.js'
 import { quotaRedis, redis } from '../../utils/redis.js'
 import { mailService } from '../../utils/mailService.js'
+import { listFiles } from '../../utils/googleDrive.js'
+import { driveImportQueue } from '../../plugins/bullmq.js'
+import { ulid } from 'ulid'
 
 const router = Router()
 
@@ -149,6 +152,107 @@ router.get('/cleanup-logs', async (req, res) => {
 
   logger.info(`Cleanup logs: ${deletedRows} DB rows, ${deletedFiles} files deleted`, { source: 'cron' })
   res.json({ deletedRows, deletedFiles })
+})
+
+// POST /sync-drive — sync albums linked to Google Drive folders
+router.post('/sync-drive', async (req, res) => {
+  if (!verifyCron(req, res)) return
+
+  // Find all albums with a driveFolderId
+  const driveAlbums = await db.select({
+    id: albums.id,
+    userId: albums.userId,
+    driveFolderId: albums.driveFolderId,
+  }).from(albums).where(
+    and(eq(albums.isActive, true), isNotNull(albums.driveFolderId))
+  )
+
+  let totalNewFiles = 0
+  let albumsSynced = 0
+  const errors: string[] = []
+
+  for (const album of driveAlbums) {
+    if (!album.driveFolderId) continue
+
+    try {
+      // List current files on Drive
+      const driveFiles = await listFiles(album.driveFolderId)
+
+      // Get existing driveFileIds for this album
+      const existingImages = await db.select({ driveFileId: images.driveFileId })
+        .from(images)
+        .where(and(eq(images.albumId, album.id), isNotNull(images.driveFileId)))
+
+      const existingDriveIds = new Set(existingImages.map(i => i.driveFileId).filter(Boolean))
+
+      // Find new files not yet imported
+      const newFiles = driveFiles.filter(f => !existingDriveIds.has(f.id))
+
+      if (newFiles.length === 0) {
+        albumsSynced++
+        continue
+      }
+
+      const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
+
+      for (const file of newFiles) {
+        const imageId = ulid()
+        const originalKey = `${album.userId}/${imageId}/${file.name}`
+
+        await db.insert(images).values({
+          id: imageId,
+          albumId: album.id,
+          userId: album.userId,
+          originalKey,
+          driveFileId: file.id,
+          originalName: file.name,
+          mimeType: file.mimeType,
+          originalSize: BigInt(file.size || 0),
+          status: 'syncing',
+          expiresAt,
+        })
+
+        await driveImportQueue.add('import', {
+          imageId,
+          userId: album.userId,
+          albumId: album.id,
+          driveFileId: file.id,
+          originalKey,
+          mimeType: file.mimeType,
+          originalName: file.name,
+          fileSize: file.size,
+        })
+      }
+
+      // Update album imageCount
+      await db.update(albums).set({
+        imageCount: sql`image_count + ${newFiles.length}`,
+        updatedAt: new Date(),
+      }).where(eq(albums.id, album.id))
+
+      totalNewFiles += newFiles.length
+      albumsSynced++
+
+      logger.info(`[Cron:SyncDrive] Album ${album.id}: ${newFiles.length} new files`, {
+        source: 'cron', albumId: album.id, newFiles: newFiles.length,
+      })
+    } catch (err) {
+      const msg = `Album ${album.id}: ${(err as Error).message}`
+      errors.push(msg)
+      logger.error(`[Cron:SyncDrive] ${msg}`, { source: 'cron', albumId: album.id })
+    }
+  }
+
+  logger.info(`[Cron:SyncDrive] Completed`, {
+    source: 'cron', albumsSynced, totalNewFiles, errors: errors.length,
+  })
+
+  res.json({
+    albumsSynced,
+    totalNewFiles,
+    totalAlbums: driveAlbums.length,
+    errors: errors.length > 0 ? errors : undefined,
+  })
 })
 
 export default router

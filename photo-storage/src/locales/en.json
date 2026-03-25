@@ -321,5 +321,25 @@
     "markAllRead": "Mark all read",
     "justNow": "just now",
     "noNotifications": "No new notifications"
+  },
+  "drive": {
+    "importFromDrive": "Import from Google Drive",
+    "folderLink": "Google Drive Folder Link",
+    "folderPlaceholder": "https://drive.google.com/drive/folders/...",
+    "folderHint": "Paste the Google Drive folder link containing photos to import",
+    "optionalAutoDetect": "auto-detect from folder name",
+    "includeSubfolders": "Include subfolders",
+    "includeSubfoldersHint": "Import photos from all subfolders inside",
+    "importButton": "Import from Drive",
+    "importing": "Importing photos from Drive...",
+    "importSuccess": "Successfully imported {count} photos from Drive",
+    "importFailed": "Failed to import from Drive",
+    "invalidLink": "Invalid Google Drive link",
+    "syncBadge": "Synced from Drive",
+    "resync": "Re-sync",
+    "resyncStarted": "Syncing, found {count} new photos",
+    "resyncFailed": "Re-sync failed",
+    "lastSync": "Last synced",
+    "subfolders": "Subfolders"
   }
 }

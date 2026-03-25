@@ -6,6 +6,7 @@ export const imageQueue = new Queue('image-process', { connection })
 export const emailQueue = new Queue('email-send', { connection })
 export const storageMonitorQueue = new Queue('storage-monitor', { connection })
 export const imageExpiryQueue = new Queue('image-expiry', { connection })
+export const driveImportQueue = new Queue('drive-import', { connection })
 
 // Schedule recurring jobs
 export async function setupRecurringJobs() {

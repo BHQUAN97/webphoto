@@ -8,6 +8,7 @@ export interface StorageProvider {
   abortMultipart(key: string, uploadId: string): Promise<void>
   downloadUrl(key: string, filename: string, expiresIn?: number): Promise<string>
   getStream(key: string): Promise<Readable>
+  uploadPrivateBuffer(key: string, buffer: Buffer, contentType: string): Promise<void>
   deletePrivate(keys: string[]): Promise<void>
 
   // ── Public bucket (thumbs/previews/avatars/QR) ──

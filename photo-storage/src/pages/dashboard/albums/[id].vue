@@ -15,7 +15,7 @@ import ImageLightbox from '@/components/image/ImageLightbox.vue'
 import ImageFilterBar from '@/components/image/ImageFilterBar.vue'
 import AlbumForm from '@/components/album/AlbumForm.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
-import { formatBytes, formatDate } from '@/utils/format'
+import { formatBytes, formatDate, formatDateTime } from '@/utils/format'
 import BackButton from '@/components/ui/BackButton.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -49,6 +49,9 @@ const lightboxIndex = ref(0)
 const showDeleteImage = ref(false)
 const deleteImageTarget = ref<ImageItem | null>(null)
 const deleteImageLoading = ref(false)
+
+// Drive sync state
+const driveSyncing = ref(false)
 
 // Download ZIP state
 const downloadLoading = ref(false)
@@ -341,6 +344,21 @@ function triggerBlobDownload(blob: Blob, headers: Record<string, unknown>) {
   window.URL.revokeObjectURL(url)
 }
 
+async function handleDriveResync() {
+  if (!album.value?.driveFolderId) return
+  driveSyncing.value = true
+  try {
+    const res = await api.post(`/albums/${albumId.value}/drive-sync`)
+    toast.success(t('drive.resyncStarted', { count: res.data.newImages || 0 }))
+    await fetchAlbum()
+    startPolling()
+  } catch {
+    toast.error(t('drive.resyncFailed'))
+  } finally {
+    driveSyncing.value = false
+  }
+}
+
 onMounted(fetchAlbum)
 onUnmounted(stopPolling)
 </script>
@@ -358,8 +376,24 @@ onUnmounted(stopPolling)
           <BaseBadge :variant="album.isPublic ? 'success' : 'default'">
             {{ album.isPublic ? 'Public' : 'Private' }}
           </BaseBadge>
+          <!-- Drive Sync Badge -->
+          <BaseBadge v-if="album.driveFolderId" variant="default">
+            <span class="flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
+              </svg>
+              {{ $t('drive.syncBadge') }}
+            </span>
+          </BaseBadge>
         </div>
         <p v-if="album.description" class="text-sm text-gray-500 mt-1">{{ album.description }}</p>
+        <!-- Drive Sync Info -->
+        <div v-if="album.driveFolderId" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 dark:text-gray-500 mt-1">
+          <span v-if="album.driveLastSyncAt">{{ $t('drive.lastSync') }}: {{ formatDateTime(album.driveLastSyncAt) }}</span>
+          <span v-if="album.driveSubfolders && album.driveSubfolders.length > 0">
+            {{ $t('drive.subfolders') }}: {{ album.driveSubfolders.length }}
+          </span>
+        </div>
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
           <span>{{ album.imageCount }} {{ $t('album.images') }}</span>
           <span>{{ formatBytes(album.totalBytes) }}</span>
@@ -367,6 +401,12 @@ onUnmounted(stopPolling)
         </div>
       </div>
       <div class="flex gap-2 shrink-0 flex-wrap">
+        <BaseButton v-if="album.driveFolderId" variant="secondary" size="sm" :loading="driveSyncing" @click="handleDriveResync">
+          <svg class="w-4 h-4 mr-1 inline" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ $t('drive.resync') }}
+        </BaseButton>
         <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" @click="handleDownloadZip">
           <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

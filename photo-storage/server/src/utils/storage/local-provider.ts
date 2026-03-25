@@ -73,6 +73,12 @@ export class LocalStorageProvider implements StorageProvider {
     await fs.rm(path.join(this.tmpDir, uploadId), { recursive: true, force: true })
   }
 
+  async uploadPrivateBuffer(key: string, buffer: Buffer, _contentType: string): Promise<void> {
+    const filePath = path.join(this.privateDir, key)
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, buffer)
+  }
+
   async downloadUrl(key: string, filename: string, expiresIn = 900): Promise<string> {
     // Create a signed token for download
     const { SignJWT } = await import('jose')

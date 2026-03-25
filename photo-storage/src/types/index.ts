@@ -49,6 +49,9 @@ export interface Album {
   updatedAt: string
   ownerName?: string
   expiresAt?: string
+  driveFolderId?: string | null
+  driveLastSyncAt?: string | null
+  driveSubfolders?: string[] | null
 }
 
 // ─── Image ───────────────────────────────────────────────────────────────

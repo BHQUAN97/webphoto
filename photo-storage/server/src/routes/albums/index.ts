@@ -4,12 +4,14 @@ import crypto from 'crypto'
 import archiver from 'archiver'
 import { db } from '../../utils/db.js'
 import { albums, images, users, userPlans, plans, albumShareTokens } from '../../database/schema.js'
-import { eq, and, desc, sql, lt } from 'drizzle-orm'
+import { eq, and, desc, sql, lt, isNotNull } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { feedCache } from '../../utils/redis.js'
 import { storage } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid, clampInt } from '../../utils/validate.js'
 import { logger } from '../../utils/logger.js'
+import { listFiles, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
+import { driveImportQueue } from '../../plugins/bullmq.js'
 
 const router = Router()
 
@@ -101,6 +103,142 @@ router.post('/', async (req, res) => {
   })
 
   res.json({ id: albumId, title, description, isPublic: isPublic ?? true })
+})
+
+// POST /from-drive — create album from Google Drive folder
+router.post('/from-drive', async (req, res) => {
+  const user = requireAuth(req)
+  const { folderId: rawFolderId, title, includeSubfolders } = req.body
+
+  if (!rawFolderId) {
+    return res.status(400).json({ message: 'folderId là bắt buộc' })
+  }
+
+  // Extract folder ID from URL or raw ID
+  let folderId: string
+  try {
+    folderId = extractFolderId(rawFolderId)
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message })
+  }
+
+  // Check album limit
+  const [activePlan] = await db
+    .select({ maxAlbums: plans.maxAlbums })
+    .from(userPlans)
+    .innerJoin(plans, eq(userPlans.planId, plans.id))
+    .where(and(eq(userPlans.userId, user.sub), eq(userPlans.isActive, true)))
+    .limit(1)
+
+  if (activePlan?.maxAlbums !== null && activePlan?.maxAlbums !== undefined) {
+    const [{ count }] = await db.select({ count: sql<number>`COUNT(*)` })
+      .from(albums).where(eq(albums.userId, user.sub))
+    if (count >= activePlan.maxAlbums) {
+      return res.status(403).json({ message: `Đã đạt giới hạn ${activePlan.maxAlbums} album. Nâng cấp gói để tạo thêm.` })
+    }
+  }
+
+  // List files from Google Drive
+  let driveFiles
+  try {
+    driveFiles = await listFiles(folderId)
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message })
+  }
+
+  if (driveFiles.length === 0) {
+    return res.status(400).json({ message: 'Không tìm thấy ảnh nào trong folder Google Drive' })
+  }
+
+  // List subfolders if requested
+  let subfolders: { id: string; name: string }[] = []
+  if (includeSubfolders) {
+    try {
+      subfolders = await listSubfolders(folderId)
+    } catch {
+      // Non-critical — just skip
+    }
+  }
+
+  // Create album record
+  const albumId = ulid()
+  const albumTitle = title ? sanitizeText(title, 200) : `Google Drive Import`
+
+  await db.insert(albums).values({
+    id: albumId,
+    userId: user.sub,
+    title: albumTitle || 'Google Drive Import',
+    driveFolderId: folderId,
+    isPublic: false,
+    isActive: true,
+    imageCount: driveFiles.length,
+    totalBytes: BigInt(0),
+  })
+
+  // Default expiry: 365 days from now
+  const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
+
+  // Create image records and queue import jobs
+  for (const file of driveFiles) {
+    const imageId = ulid()
+    const originalKey = `${user.sub}/${imageId}/${file.name}`
+
+    await db.insert(images).values({
+      id: imageId,
+      albumId,
+      userId: user.sub,
+      originalKey,
+      driveFileId: file.id,
+      originalName: file.name,
+      mimeType: file.mimeType,
+      originalSize: BigInt(file.size || 0),
+      status: 'syncing',
+      expiresAt,
+    })
+
+    await driveImportQueue.add('import', {
+      imageId,
+      userId: user.sub,
+      albumId,
+      driveFileId: file.id,
+      originalKey,
+      mimeType: file.mimeType,
+      originalName: file.name,
+      fileSize: file.size,
+    })
+  }
+
+  logger.info(`[DriveImport] Album created from Drive folder`, {
+    userId: user.sub, albumId, folderId, imageCount: driveFiles.length,
+  })
+
+  res.json({
+    albumId,
+    imageCount: driveFiles.length,
+    subfolders,
+  })
+})
+
+// GET /:id/subfolders — list subfolders if album has driveFolderId
+router.get('/:id/subfolders', async (req, res) => {
+  const user = requireAuth(req)
+  const { id } = req.params
+
+  const [album] = await db.select().from(albums)
+    .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
+
+  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+
+  if (!album.driveFolderId) {
+    return res.status(400).json({ message: 'Album này không liên kết với Google Drive' })
+  }
+
+  try {
+    const subfolders = await listSubfolders(album.driveFolderId)
+    res.json({ subfolders })
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message })
+  }
 })
 
 // GET /:id — album detail with images

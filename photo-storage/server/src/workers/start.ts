@@ -5,6 +5,7 @@ import { createImageWorker } from './imageProcessor.js'
 import { createImageExpiryWorker } from './imageExpiry.js'
 import { createStorageMonitorWorker } from './storageMonitor.js'
 import { createEmailWorker } from './emailSender.js'
+import { createDriveImportWorker } from './driveImportWorker.js'
 import { setupRecurringJobs } from '../plugins/bullmq.js'
 import { logger } from '../utils/logger.js'
 
@@ -18,10 +19,11 @@ async function start() {
   const expiryWorker = createImageExpiryWorker()
   const storageWorker = createStorageMonitorWorker()
   const emailWorker = createEmailWorker()
+  const driveImportWorker = createDriveImportWorker()
 
   await setupRecurringJobs()
 
-  logger.info('[Worker] All workers started: image-process(3), image-expiry, storage-monitor, email-send(5)', { source: 'worker' })
+  logger.info('[Worker] All workers started: image-process(3), image-expiry, storage-monitor, email-send(5), drive-import(2)', { source: 'worker' })
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -31,6 +33,7 @@ async function start() {
       expiryWorker.close(),
       storageWorker.close(),
       emailWorker.close(),
+      driveImportWorker.close(),
     ])
     process.exit(0)
   }

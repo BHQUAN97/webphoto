@@ -67,6 +67,13 @@ export class R2StorageProvider implements StorageProvider {
     }))
   }
 
+  async uploadPrivateBuffer(key: string, buffer: Buffer, contentType: string): Promise<void> {
+    await this.r2Private.send(new PutObjectCommand({
+      Bucket: this.privateBucket, Key: key, Body: buffer,
+      ContentType: contentType,
+    }))
+  }
+
   async downloadUrl(key: string, filename: string, expiresIn = 900): Promise<string> {
     return getSignedUrl(this.r2Private,
       new GetObjectCommand({
