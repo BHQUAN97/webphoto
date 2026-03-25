@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { requireAdmin } from '../../../middleware/auth.js'
 import { adminStats } from '../../../utils/admin-stats.js'
 import { invalidateSettingsCache } from '../../../utils/settings-cache.js'
-import { storage, refreshStorage } from '../../../utils/storage/index.js'
+import { storage, refreshStorage, validateBackend } from '../../../utils/storage/index.js'
 
 const router = Router()
 
@@ -25,6 +25,17 @@ router.get('/', async (req, res) => {
 router.patch('/', async (req, res) => {
   const admin = requireAdmin(req)
   const updates = req.body as Record<string, string>
+
+  // Validate storage backend before saving
+  if (updates.storage_backend) {
+    const err = await validateBackend(
+      updates.storage_backend,
+      updates.local_storage_dir,
+    )
+    if (err) {
+      return res.status(400).json({ message: err })
+    }
+  }
 
   for (const [key, value] of Object.entries(updates)) {
     await db.update(systemSettings).set({
