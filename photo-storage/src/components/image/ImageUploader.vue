@@ -33,37 +33,25 @@ function onDrop(e: DragEvent) {
 }
 
 const ALLOWED_EXTENSIONS = new Set(['.cr2', '.arw', '.nef', '.dng', '.jpg', '.jpeg', '.png', '.tiff', '.tif'])
-const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
-}
 
 async function handleFiles(files: File[]) {
-  // Client-side validation before uploading
+  // Client-side extension validation (size validated in useUpload)
   const validFiles = files.filter(f => {
     const ext = f.name.lastIndexOf('.') >= 0 ? f.name.slice(f.name.lastIndexOf('.')).toLowerCase() : ''
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       toast.error(`"${f.name}" — định dạng không được hỗ trợ`)
       return false
     }
-    if (f.size > MAX_FILE_SIZE) {
-      toast.error(`"${f.name}" (${formatSize(f.size)}) vượt quá giới hạn 200MB`)
-      return false
-    }
-    if (f.size === 0) {
-      toast.error(`"${f.name}" — file rỗng`)
-      return false
-    }
     return true
   })
   if (!validFiles.length) return
 
+  toast.info(`Bắt đầu upload ${validFiles.length} ảnh...`)
+
   const { useUpload } = await import('@/composables/useUpload')
   const { uploadFiles } = useUpload()
-  await uploadFiles(validFiles, props.albumId)
-  emit('uploaded')
+  const successCount = await uploadFiles(validFiles, props.albumId)
+  if (successCount > 0) emit('uploaded')
 }
 
 const statusLabel: Record<string, string> = {

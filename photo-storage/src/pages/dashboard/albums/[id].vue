@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUploadStore } from '@/stores/upload'
 import api from '@/utils/api'
 import type { Album, ImageItem } from '@/types'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -20,6 +21,7 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const uploadStore = useUploadStore()
 const albumId = computed(() => route.params.id as string)
 
 const album = ref<Album | null>(null)
@@ -171,7 +173,49 @@ async function handleLike(image: ImageItem) {
   }
 }
 
+// Poll for processing images to update when ready (fallback if socket fails)
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    const hasProcessing = images.value.some(i => i.status === 'processing') ||
+      uploadStore.files.some(f => f.status === 'processing')
+    if (!hasProcessing) {
+      stopPolling()
+      return
+    }
+    try {
+      const res = await api.get('/images', { params: { albumId: albumId.value, limit: 100 } })
+      const newImages = res.data.items ?? res.data.data ?? res.data
+      // Check if any image transitioned to ready
+      for (const img of newImages) {
+        const old = images.value.find(i => i.id === img.id)
+        if (old?.status === 'processing' && img.status === 'ready') {
+          // Update upload store status too
+          const uploadFile = uploadStore.files.find(f => f.imageId === img.id)
+          if (uploadFile) uploadStore.setStatus(uploadFile.id, 'ready')
+        }
+      }
+      images.value = newImages
+    } catch { /* ignore */ }
+  }, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+async function onUploaded() {
+  await fetchAlbum()
+  startPolling()
+}
+
 onMounted(fetchAlbum)
+onUnmounted(stopPolling)
 </script>
 
 <template>
@@ -208,7 +252,7 @@ onMounted(fetchAlbum)
 
     <!-- Uploader -->
     <div class="mb-6">
-      <ImageUploader :album-id="albumId" @uploaded="fetchAlbum" />
+      <ImageUploader :album-id="albumId" @uploaded="onUploaded" />
     </div>
 
     <!-- Filter -->
