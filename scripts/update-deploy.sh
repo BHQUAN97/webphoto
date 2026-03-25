@@ -47,11 +47,15 @@ scp "$ROOT_DIR/photo-storage/server/package.json" "${VPS_HOST}:${APP_DIR}/photo-
 scp "$ROOT_DIR/photo-storage/server/package-lock.json" "${VPS_HOST}:${APP_DIR}/photo-storage/server/"
 log "Upload OK"
 
-# 3. Update Nginx config
+# 3. Update Nginx config (BT Panel path)
 step "3/5 — Update Nginx config"
-scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:/etc/nginx/conf.d/bhquan.site.conf"
-ssh "${VPS_HOST}" "nginx -t && nginx -s reload"
-log "Nginx config updated + reloaded"
+NGINX_CONF="/www/server/panel/vhost/nginx/bhquan.site.conf"
+scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${NGINX_CONF}" 2>/dev/null && {
+  ssh "${VPS_HOST}" "nginx -t && nginx -s reload"
+  log "Nginx config updated + reloaded"
+} || {
+  log "Nginx config unchanged (skip)"
+}
 
 # 4. Rebuild + Restart
 step "4/5 — Rebuild Docker + Restart"
