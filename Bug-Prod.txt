@@ -3,3 +3,6 @@
 - Lỗi chưa comment được ảnh
 - Khi copy link 1 ảnh: https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev/01KMHHHGMFA8EN2PG9FGYW8491/01KMMQ819497V96DX5WJSNXST4/preview.webp
 - Lỗi thêm album bằng driver sau khi thêm song load về màn hình danh sách k có ảnh nguyên nhân do đưa đồng bộ ảnh xong => cần sửa lại khi đồng bộ được ảnh nào nên load luôn theo giá trị paging
+- Người dùng có thể tạo nhiều albumn từ cùng 1 file drive nên validate trùng đường dẫn là không hợp lý
+- Mode sửa albumn cũng cần bổ sung sửa link drive ngày ngoài UI chi tiết
+- Thiết lập album cần có mật khẩu và lưu mật khẩu cần mã hóa
