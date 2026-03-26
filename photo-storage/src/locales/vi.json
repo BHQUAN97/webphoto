@@ -69,7 +69,9 @@
     "hasAccount": "Đã có tài khoản?",
     "passwordMismatch": "Mật khẩu không khớp",
     "passwordTooShort": "Mật khẩu tối thiểu 8 ký tự",
-    "passwordWeak": "Mật khẩu cần có chữ hoa, chữ thường và số"
+    "passwordWeak": "Mật khẩu cần có chữ hoa, chữ thường và số",
+    "referralCode": "Mã giới thiệu",
+    "referralCodePlaceholder": "Nhập mã giới thiệu (nếu có)"
   },
   "landing": {
     "heroTitle": "Lưu trữ ảnh chuyên nghiệp",

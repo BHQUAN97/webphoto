@@ -69,7 +69,9 @@
     "hasAccount": "Already have an account?",
     "passwordMismatch": "Passwords don't match",
     "passwordTooShort": "Password must be at least 8 characters",
-    "passwordWeak": "Password must contain uppercase, lowercase and number"
+    "passwordWeak": "Password must contain uppercase, lowercase and number",
+    "referralCode": "Referral code",
+    "referralCodePlaceholder": "Enter referral code (optional)"
   },
   "landing": {
     "heroTitle": "Professional Photo Storage",

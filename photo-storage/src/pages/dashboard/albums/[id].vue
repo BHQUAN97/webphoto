@@ -195,6 +195,11 @@ async function fetchAlbum() {
     ])
     album.value = albumRes.data
     images.value = imagesRes.data.items ?? imagesRes.data.data ?? imagesRes.data
+    // Auto-poll if album has Drive sync and images are still processing
+    const hasProcessing = images.value.some(i => i.status === 'processing')
+    if (hasProcessing || (album.value?.driveFolderId && images.value.length === 0 && album.value.imageCount > 0)) {
+      startPolling()
+    }
   } catch {
     router.push('/dashboard/albums')
   } finally {

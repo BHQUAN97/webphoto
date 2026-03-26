@@ -30,7 +30,7 @@ const form = ref({
   isPublic: true,
   password: '',
   expiresAt: '',
-  maxFavorites: null as number | null,
+  maxFavorites: 20 as number | null,
 })
 
 const driveLink = ref('')

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { asyncHandler } from '../../utils/asyncHandler.js'
 import { ulid } from 'ulid'
 import path from 'path'
 import archiver from 'archiver'
@@ -352,8 +353,8 @@ router.delete('/:id/like', async (req, res) => {
 })
 
 // GET /:id/comments
-router.get('/:id/comments', async (req, res) => {
-  const { id } = req.params
+router.get('/:id/comments', asyncHandler(async (req, res) => {
+  const id = req.params.id as string
 
   if (!isValidUlid(id)) return res.status(400).json({ message: 'ID ảnh không hợp lệ' })
 
@@ -378,12 +379,12 @@ router.get('/:id/comments', async (req, res) => {
       avatarKey: c.avatarKey,
     })),
   })
-})
+}))
 
 // POST /:id/comments
-router.post('/:id/comments', async (req, res) => {
+router.post('/:id/comments', asyncHandler(async (req, res) => {
   const user = requireAuth(req)
-  const { id } = req.params
+  const id = req.params.id as string
   const { content } = req.body
 
   // Validate image ID
@@ -418,7 +419,7 @@ router.post('/:id/comments', async (req, res) => {
     id: commentId, content: safeContent, createdAt: new Date(),
     userId: user.sub, displayName: author?.displayName, avatarKey: author?.avatarKey,
   })
-})
+}))
 
 // GET /:id/download-url
 router.get('/:id/download-url', async (req, res) => {
@@ -568,5 +569,19 @@ router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
     return res.status(400).json({ message: 'Action không hợp lệ (rename | delete | download)' })
   }
 })
+
+// GET /p/:id — public image proxy (hides CDN path)
+router.get('/p/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id as string
+  if (!isValidUlid(id)) return res.status(404).send('Not found')
+
+  const [image] = await db.select({ previewKey: images.previewKey })
+    .from(images).where(eq(images.id, id)).limit(1)
+
+  if (!image?.previewKey) return res.status(404).send('Not found')
+
+  const url = storage().publicUrl(image.previewKey)
+  res.redirect(302, url)
+}))
 
 export default router

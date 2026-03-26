@@ -167,7 +167,7 @@ export const albums = mysqlTable('albums', {
   updatedAt:   datetime('updated_at').default(sql`NOW()`).notNull(),
   passwordHash: varchar('password_hash', { length: 255 }),
   expiresAt:    datetime('expires_at'),
-  maxFavorites: int('max_favorites'),
+  maxFavorites: int('max_favorites').default(20),
 }, (t) => ({
   userIdx:   index('albums_user_idx').on(t.userId, t.createdAt),
   publicIdx: index('albums_public_idx').on(t.isPublic, t.isActive, t.createdAt),

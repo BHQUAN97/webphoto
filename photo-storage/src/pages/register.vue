@@ -9,9 +9,9 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
-const referralCode = (route.query.ref as string) ?? ''
+const referralCodeFromUrl = (route.query.ref as string) ?? ''
 
-const form = ref({ email: '', password: '', displayName: '', confirmPassword: '' })
+const form = ref({ email: '', password: '', displayName: '', confirmPassword: '', referralCode: referralCodeFromUrl })
 const error = ref('')
 
 async function handleSubmit() {
@@ -33,7 +33,7 @@ async function handleSubmit() {
       email: form.value.email,
       password: form.value.password,
       displayName: form.value.displayName,
-      referralCode: referralCode || undefined,
+      referralCode: form.value.referralCode?.trim() || undefined,
     } as any)
     router.push('/dashboard')
   } catch (e: any) {
@@ -100,6 +100,15 @@ async function handleSubmit() {
               required
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
               :placeholder="$t('auth.passwordPlaceholder')"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('auth.referralCode') }}</label>
+            <input
+              v-model="form.referralCode"
+              type="text"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+              :placeholder="$t('auth.referralCodePlaceholder')"
             />
           </div>
           <BaseButton type="submit" :loading="auth.loading" class="w-full">

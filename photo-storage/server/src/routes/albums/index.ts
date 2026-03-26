@@ -152,19 +152,6 @@ router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) 
     return res.status(400).json({ message: (err as Error).message })
   }
 
-  // Dedup: check if album with same driveFolderId already exists for this user
-  const [existingAlbum] = await db.select({ id: albums.id })
-    .from(albums)
-    .where(and(eq(albums.userId, user.sub), eq(albums.driveFolderId, folderId), eq(albums.isActive, true)))
-    .limit(1)
-
-  if (existingAlbum) {
-    return res.status(409).json({
-      message: 'Folder Google Drive này đã được import trước đó',
-      existingAlbumId: existingAlbum.id,
-    })
-  }
-
   // Check album limit
   const [activePlan] = await db
     .select({ maxAlbums: plans.maxAlbums })

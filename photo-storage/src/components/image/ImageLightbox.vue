@@ -2,7 +2,7 @@
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/plugins/i18n'
 import type { ImageItem } from '@/types'
-import { formatBytes, cdnUrl } from '@/utils/format'
+import { formatBytes } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import api from '@/utils/api'
@@ -39,10 +39,8 @@ const linkCopied = ref(false)
 
 async function copyPublicLink() {
   if (!props.image) return
-  // Prefer previewUrl (full public URL) over previewKey (internal storage path)
-  const url = props.image.previewUrl || (props.image.previewKey ? cdnUrl(props.image.previewKey) : '')
-  if (!url) return
-  const fullUrl = url
+  // Use proxy URL to hide CDN path
+  const fullUrl = `${window.location.origin}/api/images/p/${props.image.id}`
   try {
     await navigator.clipboard.writeText(fullUrl)
   } catch {

@@ -316,20 +316,20 @@ async function activateVoucher() {
     <!-- Payment Modal -->
     <BaseModal :show="showPayment" :title="$t('pricing.payment')" max-width="lg" @close="showPayment = false">
       <template v-if="!paymentResult">
-        <p class="text-sm text-gray-600 mb-4">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
           {{ $t('profile.plan') }}: <strong>{{ selectedPlan?.name }}</strong> — <strong>{{ formatVnd(selectedPlan?.priceVnd ?? 0) }}</strong>
         </p>
         <div v-if="methods.length > 0" class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('pricing.paymentMethod') }}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ $t('pricing.paymentMethod') }}</label>
           <div class="space-y-2">
             <label
               v-for="m in methods"
               :key="m.id"
-              class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
-              :class="selectedMethodId === m.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200'"
+              class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+              :class="selectedMethodId === m.id ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-200 dark:border-gray-600'"
             >
               <input v-model="selectedMethodId" :value="m.id" type="radio" class="text-orange-500" />
-              <span class="text-sm text-gray-700">{{ m.name }}</span>
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ m.name }}</span>
             </label>
           </div>
         </div>
@@ -337,19 +337,19 @@ async function activateVoucher() {
       </template>
 
       <template v-else>
-        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-          <p class="text-sm text-green-800 font-medium">{{ $t('pricing.orderCreated') }}</p>
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+          <p class="text-sm text-green-800 dark:text-green-400 font-medium">{{ $t('pricing.orderCreated') }}</p>
         </div>
         <div class="space-y-3 text-sm">
           <p><strong>{{ $t('pricing.orderAmount') }}</strong> {{ formatVnd(paymentResult.amount) }}</p>
-          <p><strong>{{ $t('pricing.transferContent') }}</strong> <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ paymentResult.referenceCode }}</span></p>
-          <div v-if="paymentResult.method?.config" class="bg-gray-50 rounded-lg p-4">
+          <p><strong>{{ $t('pricing.transferContent') }}</strong> <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{{ paymentResult.referenceCode }}</span></p>
+          <div v-if="paymentResult.method?.config" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
             <p v-if="paymentResult.method.config.bankName"><strong>{{ $t('pricing.bankName') }}</strong> {{ paymentResult.method.config.bankName }}</p>
             <p v-if="paymentResult.method.config.accountNo"><strong>{{ $t('pricing.accountNo') }}</strong> {{ paymentResult.method.config.accountNo }}</p>
             <p v-if="paymentResult.method.config.accountName"><strong>{{ $t('pricing.accountHolder') }}</strong> {{ paymentResult.method.config.accountName }}</p>
             <p v-if="paymentResult.method.config.phone"><strong>{{ $t('pricing.phone') }}</strong> {{ paymentResult.method.config.phone }}</p>
             <div v-if="paymentResult.method.config.qrImageKey" class="mt-3">
-              <p class="text-sm font-medium text-gray-700 mb-2">{{ $t('pricing.scanQr') }}</p>
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ $t('pricing.scanQr') }}</p>
               <img :src="cdnUrl(paymentResult.method.config.qrImageKey)" class="w-48 h-48 object-contain border rounded-lg" alt="QR Code" />
             </div>
           </div>
