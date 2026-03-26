@@ -1,64 +1,24 @@
-Bug 1: Vẫn lỗi UI i18n => Hãy thiết lập chỉ sử dụng tiếng việt
-Ví dụ màn login:
-auth.login
-auth.email
-auth.password
-auth.login
-auth.noAccount auth.register
-
-Bug 2: copy link ảnh khi xem chi tiết từng ảnh chưa chưa copy vào chipboad
-Bug 3: Thực hiện hàng loạt màn danh sách chưa có chức năng tải file được select
-Bug 4: Bố cục phần top các thành phần khi xem chi tiết 1 albumn chiếm quá nhiều diện tích và chưa được đẹp
-
-=> Hãy thực hiện sửa và test lại sau đó push code và deploy
-
-Sau đó hãy hiết lập MCP sau để test:
-
-Tốt nhất: Claude Code + Playwright MCP
-Claude đóng vai QC Agent — truy cập bhquan.site, đăng nhập, test từng flow như user thật
-Screenshot + bug report tự động. Miễn phí. Tích hợp trực tiếp vào workflow hiện có.
-Bước 1
-Cài Playwright MCP
-vào Claude Code
-Bước 2
-Thêm vào CLAUDE.md
-Agent_QC_UI dùng MCP
-Bước 3
-Prompt Claude test
-theo flow từ SRS
-Quick wins — làm ngay không cần setup
-PageSpeed Insights
-pagespeed.web.dev — paste URL là xong
-wave.webaim.org
-Accessibility — paste bhquan.site là xong
+Bug 1: Error: Failed query: insert into `comments` (`id`, `image_id`, `user_id`, `guest_name`, `content`, `created_at`) values (?, ?, ?, ?, ?, ?)
+params: 01KMMMBZP1DCMGQKW57NJREHFN,01KMM9HSX3NTCR3B7679716XTK,01KMHHHGMFA8EN2PG9FGYW8491,,1,2026-03-26 08:32:26.305
+    at MySql2PreparedQuery.queryWithCache (file:///app/node_modules/drizzle-orm/mysql-core/session.js:25:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async MySql2PreparedQuery.execute (file:///app/node_modules/drizzle-orm/mysql2/session.js:52:19)
+    at async file:///app/dist/routes/images/index.js:354:5
 
 
-Setup Playwright MCP cho Claude Code (5 phút)
-Thêm vào file .claude/mcp.json trong repo:
-json{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    }
-  }
-}
-Thêm vào .claude/settings.json phần allow:
-json"mcp__playwright__browser_navigate",
-"mcp__playwright__browser_click",
-"mcp__playwright__browser_fill",
-"mcp__playwright__browser_take_screenshot",
-"mcp__playwright__browser_close"
-```
+    Bug 2:
+"requestId": "01KMMM2JPCRZG1G3FZ2HZ0FFFR",
+  "method": "GET",
+  "url": "/api/images/01KMM9EPBB4B4YSXHPE08D75JK/comments",
+  "statusCode": 500,
+  "durationMs": 8,
+  "resBody": "{\"message\":\"Lỗi hệ thống, vui lòng thử lại sau\",\"requestId\":\"01KMMM2JPCRZG1G3FZ2HZ0FFFR\"}",
+  "ip": "210.245.52.125",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
 
-Sau đó nói với Claude Code:
-```
-Mày là Agent_QC_UI. Dùng Playwright MCP vào https://bhquan.site.
-Ví dụ Test các flow sau và chụp screenshot từng bước:
-1. Đăng ký tài khoản mới
-2. Đăng nhập → tạo album → upload ảnh JPEG
-3. Like + comment ảnh
-4. Xem profile → kiểm tra storage usage
-5. Resize về 375px — báo cáo bất kỳ UI bị vỡ
-
-Viết bug report theo format: [QC_UI_BUG] - Screen - Issue - Screenshot
+Bug 3: Error: Failed query: select `id`, `album_id`, `token`, `allow_like`, `allow_comment`, `allow_download`, `expires_at`, `created_at` from `album_share_tokens` where `album_share_tokens`.`album_id` = ? limit ?
+params: 01KMM60GZ436KMYJX2K23BYX2Y,1
+    at MySql2PreparedQuery.queryWithCache (file:///app/node_modules/drizzle-orm/mysql-core/session.js:25:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async MySql2PreparedQuery.execute (file:///app/node_modules/drizzle-orm/mysql2/session.js:78:20)
+    at async file:///app/dist/routes/albums/index.js:455:21
