@@ -22,3 +22,8 @@ params: 01KMM60GZ436KMYJX2K23BYX2Y,1
     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
     at async MySql2PreparedQuery.execute (file:///app/node_modules/drizzle-orm/mysql2/session.js:78:20)
     at async file:///app/dist/routes/albums/index.js:455:21
+
+Bug 4: Link copy 1 ảnh chi tiết vẫn hiển thị đường dẫn nhạy cảm => Hãy sửa lại
+Bug 5: Khi tải các file select hay hỏi KH muốn zip hay không hoặc tải lần lượt
+Bug 6: Khi tải file, hay zip file cần toat thông báo góc màn hình là đang xử lý để người dùng đợi
+
