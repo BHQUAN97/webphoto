@@ -6,3 +6,4 @@
 - Người dùng có thể tạo nhiều albumn từ cùng 1 file drive nên validate trùng đường dẫn là không hợp lý
 - Mode sửa albumn cũng cần bổ sung sửa link drive ngày ngoài UI chi tiết
 - Thiết lập album cần có mật khẩu và lưu mật khẩu cần mã hóa
+- gia tri mac dinh max like la 20
