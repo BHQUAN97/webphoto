@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import type { ImageItem } from '@/types'
-import { formatBytes } from '@/utils/format'
+import { formatBytes, cdnUrl } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/utils/api'
 import CommentList from './CommentList.vue'
@@ -37,23 +37,24 @@ const linkCopied = ref(false)
 
 async function copyPublicLink() {
   if (!props.image) return
-  const url = props.image.previewUrl || props.image.previewKey || ''
-  if (!url) return
+  const key = props.image.previewKey || props.image.previewUrl || ''
+  if (!key) return
+  const fullUrl = key.startsWith('http') ? key : cdnUrl(key)
   try {
-    await navigator.clipboard.writeText(url)
-    linkCopied.value = true
-    setTimeout(() => { linkCopied.value = false }, 2000)
+    await navigator.clipboard.writeText(fullUrl)
   } catch {
-    // Fallback for older browsers
+    // Fallback for older browsers or non-HTTPS context
     const ta = document.createElement('textarea')
-    ta.value = url
+    ta.value = fullUrl
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
     document.body.appendChild(ta)
     ta.select()
     document.execCommand('copy')
     document.body.removeChild(ta)
-    linkCopied.value = true
-    setTimeout(() => { linkCopied.value = false }, 2000)
   }
+  linkCopied.value = true
+  setTimeout(() => { linkCopied.value = false }, 2000)
 }
 
 const canGoPrev = computed(() => props.currentIndex > 0)

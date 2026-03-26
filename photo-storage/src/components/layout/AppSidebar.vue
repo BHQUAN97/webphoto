@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import BaseBadge from '@/components/ui/BaseBadge.vue'
 
 const emit = defineEmits<{ navigate: [] }>()

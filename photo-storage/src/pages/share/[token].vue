@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import { useRoute } from 'vue-router'
 import api from '@/utils/api'
 import { cdnUrl, formatBytes, timeAgo } from '@/utils/format'

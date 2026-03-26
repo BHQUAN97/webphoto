@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import BaseModal from './BaseModal.vue'
 import BaseButton from './BaseButton.vue'
 

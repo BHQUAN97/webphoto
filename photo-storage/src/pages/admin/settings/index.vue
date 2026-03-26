@@ -5,7 +5,7 @@ import type { SystemSettings } from '@/types'
 import { formatBytes } from '@/utils/format'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useToast } from '@/composables/useToast'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 
 const { t } = useI18n()
 const toast = useToast()

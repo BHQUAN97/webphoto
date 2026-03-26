@@ -1,27 +1,48 @@
-import { createI18n } from 'vue-i18n'
+/**
+ * Lightweight i18n plugin — Vietnamese only.
+ * Replaces vue-i18n (alpha was unreliable).
+ * Keeps the same API: $t() in templates, useI18n() in scripts.
+ */
+import { type App, inject } from 'vue'
 import vi from '@/locales/vi.json'
-import en from '@/locales/en.json'
 
-const savedLocale = localStorage.getItem('locale') || 'vi'
+type Messages = Record<string, unknown>
 
-const i18n = createI18n({
-  legacy: false,
-  locale: savedLocale,
-  fallbackLocale: 'vi',
-  globalInjection: true,
-  missingWarn: false,
-  fallbackWarn: false,
-  messages: { vi, en },
-})
-
-export function setLocale(locale: 'vi' | 'en') {
-  i18n.global.locale.value = locale
-  localStorage.setItem('locale', locale)
-  document.documentElement.lang = locale
+function resolve(key: string, messages: Messages): string {
+  const parts = key.split('.')
+  let cur: unknown = messages
+  for (const p of parts) {
+    if (cur == null || typeof cur !== 'object') return key
+    cur = (cur as Record<string, unknown>)[p]
+  }
+  return typeof cur === 'string' ? cur : key
 }
 
-export function getLocale(): string {
-  return i18n.global.locale.value
+function interpolate(template: string, params?: Record<string, unknown>): string {
+  if (!params) return template
+  return template.replace(/\{(\w+)\}/g, (_, k) =>
+    params[k] != null ? String(params[k]) : `{${k}}`,
+  )
 }
 
-export default i18n
+/** Translate a key with optional interpolation params */
+export function t(key: string, params?: Record<string, unknown>): string {
+  return interpolate(resolve(key, vi as unknown as Messages), params)
+}
+
+/** Drop-in replacement for `useI18n()` from vue-i18n */
+export function useI18n() {
+  return { t, locale: 'vi' as const }
+}
+
+const I18N_KEY = Symbol('i18n')
+
+/** Vue plugin */
+const i18nPlugin = {
+  install(app: App) {
+    app.config.globalProperties.$t = t
+    app.provide(I18N_KEY, { t })
+  },
+}
+
+export default i18nPlugin

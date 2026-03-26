@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import { useRouter, useRoute } from 'vue-router'
 import api from '@/utils/api'
 import BackButton from '@/components/ui/BackButton.vue'

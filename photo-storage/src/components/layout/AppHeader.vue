@@ -1,20 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { cdnUrl } from '@/utils/format'
 import { useTheme } from '@/composables/useTheme'
-import { setLocale, getLocale } from '@/plugins/i18n'
 import NotificationBell from './NotificationBell.vue'
 
 useI18n()
-const currentLocale = ref(getLocale())
-function toggleLocale() {
-  const next = currentLocale.value === 'vi' ? 'en' : 'vi'
-  setLocale(next as 'vi' | 'en')
-  currentLocale.value = next
-}
 const props = defineProps<{ hasSidebar?: boolean }>()
 const emit = defineEmits<{ 'toggle-sidebar': [] }>()
 const auth = useAuthStore()
@@ -74,15 +67,6 @@ function handleHamburger() {
             <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
-          </button>
-
-          <!-- Language toggle (hidden on mobile, shown in mobile nav) -->
-          <button
-            class="hidden sm:flex px-2 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
-            title="Chuyển ngôn ngữ / Switch language"
-            @click="toggleLocale"
-          >
-            {{ currentLocale === 'vi' ? 'EN' : 'VI' }}
           </button>
 
           <template v-if="auth.isAuthenticated">
@@ -210,12 +194,6 @@ function handleHamburger() {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
               {{ isDark ? 'Light' : 'Dark' }}
-            </button>
-            <button
-              class="flex items-center gap-1 text-sm font-medium text-gray-600 dark:text-gray-300"
-              @click="toggleLocale"
-            >
-              {{ currentLocale === 'vi' ? '🇬🇧 English' : '🇻🇳 Tiếng Việt' }}
             </button>
           </div>
         </div>

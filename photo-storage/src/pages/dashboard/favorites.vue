@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import api from '@/utils/api'
 import type { ImageItem } from '@/types'
 import ImageCard from '@/components/image/ImageCard.vue'

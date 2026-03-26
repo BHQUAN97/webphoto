@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { useI18n } from '@/plugins/i18n'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/utils/api'
 import { formatBytes } from '@/utils/format'

@@ -1,9 +1,7 @@
 import { useUploadStore } from '@/stores/upload'
 import { useToast } from '@/composables/useToast'
-import i18n from '@/plugins/i18n'
+import { t } from '@/plugins/i18n'
 import api from '@/utils/api'
-
-const t = i18n.global.t
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB

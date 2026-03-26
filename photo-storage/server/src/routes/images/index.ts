@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { ulid } from 'ulid'
 import path from 'path'
+import archiver from 'archiver'
 import { db } from '../../utils/db.js'
 import { images, albums, likes, comments, users } from '../../database/schema.js'
 import { eq, and, desc, asc, sql, lt, gte, lte, like as sqlLike, inArray } from 'drizzle-orm'
@@ -516,8 +517,53 @@ router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
 
     return res.json({ ok: true, action: 'delete', affected: toDelete.length })
 
+  } else if (action === 'download') {
+    // Stream selected images as ZIP
+    const toDownload = await db.select({
+      id: images.id,
+      originalKey: images.originalKey,
+      originalName: images.originalName,
+    }).from(images)
+      .innerJoin(albums, eq(images.albumId, albums.id))
+      .where(and(inArray(images.id, imageIds), eq(albums.userId, user.sub), eq(images.status, 'ready')))
+
+    if (toDownload.length === 0) {
+      return res.status(400).json({ message: 'Không có ảnh nào sẵn sàng để tải' })
+    }
+
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="selected_${toDownload.length}_photos.zip"`)
+
+    const archive = archiver('zip', { zlib: { level: 1 } })
+    archive.on('error', (err) => {
+      logger.error(`[Batch Download] Archive error`, { error: err.message })
+      if (!res.headersSent) res.status(500).json({ message: 'Lỗi tạo file ZIP' })
+      else res.end()
+    })
+    archive.pipe(res)
+
+    const usedNames = new Map<string, number>()
+    for (const img of toDownload) {
+      try {
+        const stream = await storage().getStream(img.originalKey)
+        let filename = img.originalName || `${img.id}.raw`
+        const baseCount = usedNames.get(filename) || 0
+        if (baseCount > 0) {
+          const ext = filename.lastIndexOf('.')
+          const name = ext > 0 ? filename.slice(0, ext) : filename
+          const extStr = ext > 0 ? filename.slice(ext) : ''
+          filename = `${name}_${baseCount}${extStr}`
+        }
+        usedNames.set(img.originalName || `${img.id}.raw`, baseCount + 1)
+        archive.append(stream, { name: filename })
+      } catch (err) {
+        logger.warn(`[Batch Download] Failed to stream`, { imageId: img.id, error: (err as Error).message })
+      }
+    }
+    await archive.finalize()
+
   } else {
-    return res.status(400).json({ message: 'Action không hợp lệ (rename | delete)' })
+    return res.status(400).json({ message: 'Action không hợp lệ (rename | delete | download)' })
   }
 })
 
