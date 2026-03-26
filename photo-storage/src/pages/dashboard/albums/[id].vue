@@ -180,6 +180,7 @@ async function batchRename() {
 const driveSyncing = ref(false)
 
 // Download ZIP state
+const showDownloadOptions = ref(false)
 const downloadLoading = ref(false)
 const showDownloadProgress = ref(false)
 const downloadBatchTotal = ref(0)
@@ -407,7 +408,105 @@ async function onUploaded() {
   startPolling()
 }
 
-async function handleDownloadZip() {
+function openDownloadOptions() {
+  if (!auth.canDownload) {
+    toast.error(t('album.downloadRequirePlan'))
+    return
+  }
+  showDownloadOptions.value = true
+}
+
+async function downloadFavorites() {
+  showDownloadOptions.value = false
+  const favImages = images.value.filter(i => i.liked)
+  if (favImages.length === 0) {
+    toast.error(t('album.noFavorites'))
+    return
+  }
+  downloadLoading.value = true
+  toast.info(t('album.downloadStarted'))
+  try {
+    const res = await fetch('/api/images/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'download', imageIds: favImages.map(i => i.id) }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${album.value?.title || 'album'}_favorites.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(t('album.downloadSuccess'))
+  } catch { toast.error(t('album.downloadFailed')) }
+  finally { downloadLoading.value = false }
+}
+
+async function downloadWithComments() {
+  showDownloadOptions.value = false
+  const commentedImages = images.value.filter(i => i.commentCount > 0)
+  if (commentedImages.length === 0) {
+    toast.error(t('album.noCommentedImages'))
+    return
+  }
+  downloadLoading.value = true
+  toast.info(t('album.downloadStarted'))
+  try {
+    const res = await fetch('/api/images/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'download', imageIds: commentedImages.map(i => i.id) }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${album.value?.title || 'album'}_commented.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(t('album.downloadSuccess'))
+  } catch { toast.error(t('album.downloadFailed')) }
+  finally { downloadLoading.value = false }
+}
+
+function downloadEditList() {
+  showDownloadOptions.value = false
+  const commentedImages = images.value.filter(i => i.commentCount > 0)
+  if (commentedImages.length === 0) {
+    toast.error(t('album.noCommentedImages'))
+    return
+  }
+  const text = commentedImages
+    .map((img, idx) => `${idx + 1}. ${img.originalName}`)
+    .join('\n')
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${album.value?.title || 'album'}_edit_list.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+async function downloadFullAlbum() {
+  showDownloadOptions.value = false
   if (!auth.canDownload) {
     toast.error(t('album.downloadRequirePlan'))
     return
@@ -523,28 +622,28 @@ onUnmounted(stopPolling)
           </BaseBadge>
         </div>
         <div class="flex gap-1 shrink-0">
-          <button v-if="album.driveFolderId" class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('drive.resync')" @click="handleDriveResync">
-            <svg class="w-4 h-4" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button v-if="album.driveFolderId" class="p-1 lg:p-2 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('drive.resync')" @click="handleDriveResync">
+            <svg class="w-4 h-4 lg:w-6 lg:h-6" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <button v-if="auth.canDownload" class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.downloadAlbum')" @click="handleDownloadZip">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button v-if="auth.canDownload" class="p-1 lg:p-2 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.downloadAlbum')" @click="openDownloadOptions">
+            <svg class="w-4 h-4 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </button>
-          <button class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.share')" @click="openShareDialog">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="p-1 lg:p-2 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.share')" @click="openShareDialog">
+            <svg class="w-4 h-4 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
             </svg>
           </button>
-          <button class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('common.edit')" @click="showEdit = true">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="p-1 lg:p-2 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('common.edit')" @click="showEdit = true">
+            <svg class="w-4 h-4 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
-          <button class="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" :title="$t('common.delete')" @click="showDelete = true">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="p-1 lg:p-2 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" :title="$t('common.delete')" @click="showDelete = true">
+            <svg class="w-4 h-4 lg:w-6 lg:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
@@ -796,6 +895,81 @@ onUnmounted(stopPolling)
             {{ $t('album.createShareLink') }}
           </BaseButton>
         </div>
+      </div>
+    </BaseModal>
+
+    <!-- Download Options Modal -->
+    <BaseModal :show="showDownloadOptions" :title="$t('album.downloadOptions')" @close="showDownloadOptions = false">
+      <div class="space-y-3">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('album.downloadOptionsDesc') }}</p>
+
+        <!-- Favorites -->
+        <button
+          class="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left"
+          :disabled="downloadLoading"
+          @click="downloadFavorites"
+        >
+          <div class="shrink-0 w-9 h-9 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+            <svg class="w-5 h-5 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $t('album.downloadFavorites') }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $t('album.downloadFavoritesDesc') }}</div>
+          </div>
+        </button>
+
+        <!-- With comments -->
+        <button
+          class="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left"
+          :disabled="downloadLoading"
+          @click="downloadWithComments"
+        >
+          <div class="shrink-0 w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $t('album.downloadWithComments') }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $t('album.downloadWithCommentsDesc') }}</div>
+          </div>
+        </button>
+
+        <!-- Edit list TXT -->
+        <button
+          class="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left"
+          :disabled="downloadLoading"
+          @click="downloadEditList"
+        >
+          <div class="shrink-0 w-9 h-9 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $t('album.downloadEditList') }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $t('album.downloadEditListDesc') }}</div>
+          </div>
+        </button>
+
+        <!-- Full album -->
+        <button
+          class="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors text-left"
+          :disabled="downloadLoading"
+          @click="downloadFullAlbum"
+        >
+          <div class="shrink-0 w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+            <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $t('album.downloadFullAlbum') }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">{{ $t('album.downloadFullAlbumDesc') }}</div>
+          </div>
+        </button>
       </div>
     </BaseModal>
 

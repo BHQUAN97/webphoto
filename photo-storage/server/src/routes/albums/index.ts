@@ -15,6 +15,7 @@ import { quotaUtils } from '../../utils/quota.js'
 import { listFiles, listFilesRecursive, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
 import { driveImportQueue } from '../../plugins/bullmq.js'
 import { asyncHandler, fail } from '../../utils/asyncHandler.js'
+import bcrypt from 'bcryptjs'
 
 const router = Router()
 
@@ -69,13 +70,13 @@ router.get('/', async (req, res) => {
 })
 
 // POST / — create album
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const user = requireAuth(req)
-  const { title, description, isPublic } = req.body
+  const { title, description, isPublic, password, expiresAt, maxFavorites } = req.body
 
-  if (!title) return res.status(400).json({ message: 'Tiêu đề album không được để trống' })
+  if (!title) return fail(res, 'Tiêu đề album không được để trống')
   const safeTitle = sanitizeText(title, 200)
-  if (!safeTitle) return res.status(400).json({ message: 'Tiêu đề album không hợp lệ' })
+  if (!safeTitle) return fail(res, 'Tiêu đề album không hợp lệ')
 
   // Check album limit
   const [activePlan] = await db
@@ -89,8 +90,28 @@ router.post('/', async (req, res) => {
     const [{ count }] = await db.select({ count: sql<number>`COUNT(*)` })
       .from(albums).where(eq(albums.userId, user.sub))
     if (count >= activePlan.maxAlbums) {
-      return res.status(403).json({ message: `Đã đạt giới hạn ${activePlan.maxAlbums} album. Nâng cấp gói để tạo thêm.` })
+      return fail(res, `Đã đạt giới hạn ${activePlan.maxAlbums} album. Nâng cấp gói để tạo thêm.`, 403)
     }
+  }
+
+  // Hash password if provided
+  let passwordHash: string | null = null
+  if (password && typeof password === 'string' && password.trim()) {
+    passwordHash = await bcrypt.hash(password.trim(), 10)
+  }
+
+  // Validate expiresAt if provided
+  let parsedExpiresAt: Date | null = null
+  if (expiresAt) {
+    parsedExpiresAt = new Date(expiresAt)
+    if (isNaN(parsedExpiresAt.getTime())) return fail(res, 'Ngày hết hạn không hợp lệ')
+  }
+
+  // Validate maxFavorites if provided
+  let parsedMaxFavorites: number | null = null
+  if (maxFavorites !== undefined && maxFavorites !== null && maxFavorites !== '') {
+    parsedMaxFavorites = parseInt(String(maxFavorites), 10)
+    if (isNaN(parsedMaxFavorites) || parsedMaxFavorites < 0) return fail(res, 'Giới hạn yêu thích không hợp lệ')
   }
 
   const albumId = ulid()
@@ -103,10 +124,16 @@ router.post('/', async (req, res) => {
     isActive: true,
     imageCount: 0,
     totalBytes: BigInt(0),
+    passwordHash,
+    expiresAt: parsedExpiresAt,
+    maxFavorites: parsedMaxFavorites,
   })
 
-  res.json({ id: albumId, title, description, isPublic: isPublic ?? true })
-})
+  res.json({
+    id: albumId, title: safeTitle, description, isPublic: isPublic ?? true,
+    hasPassword: !!passwordHash, expiresAt: parsedExpiresAt, maxFavorites: parsedMaxFavorites,
+  })
+}))
 
 // POST /from-drive — create album from Google Drive folder
 router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) => {
@@ -350,9 +377,12 @@ router.get('/:id', async (req, res) => {
     displayName: users.displayName, avatarKey: users.avatarKey,
   }).from(users).where(eq(users.id, album.userId)).limit(1)
 
+  // Don't expose passwordHash — return hasPassword boolean instead
+  const { passwordHash, ...albumData } = album
   res.json({
-    ...album,
+    ...albumData,
     totalBytes: album.totalBytes.toString(),
+    hasPassword: !!passwordHash,
     owner,
   })
 })
@@ -361,7 +391,7 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', asyncHandler(async (req, res) => {
   const user = requireAuth(req)
   const id = req.params.id as string
-  const { title, description, isPublic, coverKey, driveFolderId } = req.body
+  const { title, description, isPublic, coverKey, driveFolderId, password, expiresAt, maxFavorites } = req.body
 
   const [album] = await db.select().from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
@@ -383,6 +413,37 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  // Handle password update
+  if (password !== undefined) {
+    if (password === null || password === '') {
+      updates.passwordHash = null
+    } else if (typeof password === 'string' && password.trim()) {
+      updates.passwordHash = await bcrypt.hash(password.trim(), 10)
+    }
+  }
+
+  // Handle expiresAt update
+  if (expiresAt !== undefined) {
+    if (expiresAt === null) {
+      updates.expiresAt = null
+    } else {
+      const parsed = new Date(expiresAt)
+      if (isNaN(parsed.getTime())) return fail(res, 'Ngày hết hạn không hợp lệ')
+      updates.expiresAt = parsed
+    }
+  }
+
+  // Handle maxFavorites update
+  if (maxFavorites !== undefined) {
+    if (maxFavorites === null || maxFavorites === '') {
+      updates.maxFavorites = null
+    } else {
+      const parsed = parseInt(String(maxFavorites), 10)
+      if (isNaN(parsed) || parsed < 0) return fail(res, 'Giới hạn yêu thích không hợp lệ')
+      updates.maxFavorites = parsed
+    }
+  }
+
   await db.update(albums).set(updates).where(eq(albums.id, id))
 
   // Invalidate feed cache
@@ -399,9 +460,35 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     imageCount: albums.imageCount,
     createdAt: albums.createdAt,
     updatedAt: albums.updatedAt,
+    expiresAt: albums.expiresAt,
+    maxFavorites: albums.maxFavorites,
+    passwordHash: albums.passwordHash,
   }).from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
-  res.json(updated)
+
+  const { passwordHash: pwHash, ...updatedData } = updated!
+  res.json({ ...updatedData, hasPassword: !!pwHash })
+}))
+
+// POST /:id/verify-password — verify album password for shared view
+router.post('/:id/verify-password', asyncHandler(async (req, res) => {
+  const id = req.params.id as string
+  const { password } = req.body
+
+  if (!password || typeof password !== 'string') return fail(res, 'Mật khẩu không được để trống')
+
+  const [album] = await db.select({ passwordHash: albums.passwordHash })
+    .from(albums)
+    .where(and(eq(albums.id, id), eq(albums.isActive, true)))
+    .limit(1)
+
+  if (!album) return fail(res, 'Album không tồn tại', 404)
+  if (!album.passwordHash) return fail(res, 'Album không yêu cầu mật khẩu')
+
+  const match = await bcrypt.compare(password, album.passwordHash)
+  if (!match) return fail(res, 'Mật khẩu không đúng', 403)
+
+  res.json({ success: true, message: 'Xác thực thành công' })
 }))
 
 // DELETE /:id — delete album + cascade images

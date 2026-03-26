@@ -17,7 +17,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  submit: [data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null }]
+  submit: [data: {
+    title: string; description: string; isPublic: boolean; driveFolderId?: string | null;
+    password?: string | null; expiresAt?: string | null; maxFavorites?: number | null;
+  }]
   cancel: []
 }>()
 
@@ -25,6 +28,9 @@ const form = ref({
   title: '',
   description: '',
   isPublic: true,
+  password: '',
+  expiresAt: '',
+  maxFavorites: null as number | null,
 })
 
 const driveLink = ref('')
@@ -45,6 +51,9 @@ watch(
         title: a.title,
         description: a.description || '',
         isPublic: a.isPublic,
+        password: '',
+        expiresAt: a.expiresAt ? new Date(a.expiresAt).toISOString().slice(0, 10) : '',
+        maxFavorites: a.maxFavorites ?? null,
       }
       if (a.driveFolderId) {
         driveLink.value = `https://drive.google.com/drive/folders/${a.driveFolderId}`
@@ -57,7 +66,10 @@ watch(
 
 function handleSubmit() {
   if (!form.value.title.trim()) return
-  const data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null } = { ...form.value }
+  const data: {
+    title: string; description: string; isPublic: boolean; driveFolderId?: string | null;
+    password?: string | null; expiresAt?: string | null; maxFavorites?: number | null;
+  } = { title: form.value.title, description: form.value.description, isPublic: form.value.isPublic }
   // Send driveFolderId if Drive input is shown (either existing or newly added)
   if (showDriveInput.value && driveLink.value.trim()) {
     const newId = extractFolderId(driveLink.value)
@@ -68,6 +80,17 @@ function handleSubmit() {
     // User disabled Drive link — clear it
     data.driveFolderId = null
   }
+  // Password: send value if typed, null to clear (edit mode only)
+  if (form.value.password.trim()) {
+    data.password = form.value.password.trim()
+  } else if (isEditMode.value) {
+    // Don't send password field if empty in edit mode (keep existing)
+  }
+  // Expiry date
+  data.expiresAt = form.value.expiresAt ? form.value.expiresAt : null
+  // Max favorites
+  data.maxFavorites = form.value.maxFavorites !== null && form.value.maxFavorites !== undefined
+    ? form.value.maxFavorites : null
   emit('submit', data)
 }
 </script>
@@ -96,6 +119,41 @@ function handleSubmit() {
     <div class="flex items-center gap-2">
       <input id="isPublic" v-model="form.isPublic" type="checkbox" class="rounded border-gray-300 dark:border-gray-600 text-orange-500 focus:ring-orange-500" />
       <label for="isPublic" class="text-sm text-gray-700 dark:text-gray-300">{{ $t('album.isPublic') }}</label>
+    </div>
+
+    <!-- Password protection -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.password') }}</label>
+      <input
+        v-model="form.password"
+        type="password"
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+        :placeholder="$t('album.passwordPlaceholder')"
+        autocomplete="new-password"
+      />
+      <p v-if="isEditMode && (album as any)?.hasPassword" class="mt-1 text-xs text-gray-400">{{ $t('album.hasPassword') }}</p>
+    </div>
+
+    <!-- Expiry date -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.expiresAt') }}</label>
+      <input
+        v-model="form.expiresAt"
+        type="date"
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+      />
+    </div>
+
+    <!-- Max favorites -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.maxFavorites') }}</label>
+      <input
+        v-model.number="form.maxFavorites"
+        type="number"
+        min="0"
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+      />
+      <p class="mt-1 text-xs text-gray-400">{{ $t('album.maxFavoritesHint') }}</p>
     </div>
 
     <!-- Google Drive folder — always available in edit mode -->

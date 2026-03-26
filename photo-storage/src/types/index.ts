@@ -48,7 +48,9 @@ export interface Album {
   createdAt: string
   updatedAt: string
   ownerName?: string
-  expiresAt?: string
+  expiresAt?: string | null
+  maxFavorites?: number | null
+  hasPassword?: boolean
   driveFolderId?: string | null
   driveLastSyncAt?: string | null
   driveSubfolders?: string[] | null

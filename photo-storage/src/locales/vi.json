@@ -166,7 +166,25 @@
     "allowComment": "Cho phép nhận xét",
     "allowDownload": "Cho phép tải ảnh",
     "permissionsUpdated": "Đã cập nhật quyền chia sẻ",
-    "permissionsUpdateFailed": "Không thể cập nhật quyền chia sẻ"
+    "permissionsUpdateFailed": "Không thể cập nhật quyền chia sẻ",
+    "password": "Mật khẩu album",
+    "passwordPlaceholder": "Để trống nếu không cần mật khẩu",
+    "expiresAt": "Ngày hết hạn",
+    "maxFavorites": "Giới hạn lượt yêu thích",
+    "maxFavoritesHint": "Để trống = không giới hạn",
+    "hasPassword": "Album đang được bảo vệ bằng mật khẩu. Nhập mật khẩu mới để thay đổi.",
+    "downloadOptions": "Tùy chọn tải về",
+    "downloadOptionsDesc": "Chọn nội dung muốn tải",
+    "downloadFavorites": "Ảnh yêu thích",
+    "downloadFavoritesDesc": "Chỉ tải ảnh đã thả tim",
+    "downloadWithComments": "Ảnh có nhận xét",
+    "downloadWithCommentsDesc": "Ảnh đã được bình luận",
+    "downloadEditList": "Danh sách chỉnh sửa (.txt)",
+    "downloadEditListDesc": "Danh sách tên file ảnh có nhận xét",
+    "downloadFullAlbum": "Toàn bộ album",
+    "downloadFullAlbumDesc": "Tải tất cả ảnh trong album",
+    "noFavorites": "Không có ảnh yêu thích",
+    "noCommentedImages": "Không có ảnh có nhận xét"
   },
   "image": {
     "deleteImage": "Xóa ảnh",
@@ -275,7 +293,12 @@
     "downloadTxt": "Tải về TXT",
     "totalCount": "Tổng: {count} ảnh",
     "copied": "Đã sao chép danh sách",
-    "copyFailed": "Không thể sao chép"
+    "copyFailed": "Không thể sao chép",
+    "downloadCsv": "Tải file CSV",
+    "csvExported": "Đã xuất file CSV",
+    "copyLightroom": "Copy cho Lightroom",
+    "lightroomCopied": "Đã copy chuỗi lọc Lightroom",
+    "lightroomHint": "Paste vào ô tìm kiếm Library Filter của Lightroom"
   },
   "pricing": {
     "title": "Bảng giá",

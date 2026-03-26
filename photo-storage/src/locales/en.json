@@ -166,7 +166,25 @@
     "allowComment": "Allow comments",
     "allowDownload": "Allow downloading photos",
     "permissionsUpdated": "Share permissions updated",
-    "permissionsUpdateFailed": "Cannot update share permissions"
+    "permissionsUpdateFailed": "Cannot update share permissions",
+    "password": "Album password",
+    "passwordPlaceholder": "Leave empty for no password",
+    "expiresAt": "Expiry date",
+    "maxFavorites": "Max favorites limit",
+    "maxFavoritesHint": "Leave empty = unlimited",
+    "hasPassword": "Album is password-protected. Enter a new password to change it.",
+    "downloadOptions": "Download Options",
+    "downloadOptionsDesc": "Choose what to download",
+    "downloadFavorites": "Favorite photos",
+    "downloadFavoritesDesc": "Only liked photos",
+    "downloadWithComments": "Photos with comments",
+    "downloadWithCommentsDesc": "Photos that have comments",
+    "downloadEditList": "Edit list (.txt)",
+    "downloadEditListDesc": "List of filenames with comments",
+    "downloadFullAlbum": "Full album",
+    "downloadFullAlbumDesc": "Download all photos",
+    "noFavorites": "No favorite photos",
+    "noCommentedImages": "No commented photos"
   },
   "image": {
     "deleteImage": "Delete photo",
@@ -275,7 +293,12 @@
     "downloadTxt": "Download TXT",
     "totalCount": "Total: {count} photos",
     "copied": "List copied",
-    "copyFailed": "Cannot copy"
+    "copyFailed": "Cannot copy",
+    "downloadCsv": "Download CSV",
+    "csvExported": "CSV exported",
+    "copyLightroom": "Copy for Lightroom",
+    "lightroomCopied": "Lightroom filter string copied",
+    "lightroomHint": "Paste into Lightroom Library Filter search"
   },
   "pricing": {
     "title": "Pricing",

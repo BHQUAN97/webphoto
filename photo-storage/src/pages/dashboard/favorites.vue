@@ -65,6 +65,42 @@ function downloadTxt() {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+function downloadCsv() {
+  if (images.value.length === 0) return
+  const header = 'No,Filename,Extension'
+  const rows = images.value.map((img, i) => {
+    const name = img.originalName || 'unknown'
+    const ext = name.split('.').pop() || ''
+    const base = name.replace(/\.[^.]+$/, '')
+    return `${i + 1},"${base}","${ext}"`
+  })
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'favorites.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  toast.success(t('favorites.csvExported'))
+}
+
+function copyLightroomFilter() {
+  if (images.value.length === 0) return
+  // Lightroom Library Filter format: filenames without extension, separated by ", "
+  const names = images.value.map(img => {
+    const name = img.originalName || ''
+    return name.replace(/\.[^.]+$/, '') // remove extension
+  })
+  const filterStr = names.join(', ')
+  navigator.clipboard.writeText(filterStr).catch(() => {
+    // fallback
+  })
+  toast.success(t('favorites.lightroomCopied'))
+}
 </script>
 
 <template>
@@ -133,6 +169,21 @@ function downloadTxt() {
             </svg>
             {{ $t('favorites.downloadTxt') }}
           </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="downloadCsv">
+            <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {{ $t('favorites.downloadCsv') }}
+          </BaseButton>
+        </div>
+        <div class="flex gap-2 items-start">
+          <BaseButton variant="secondary" size="sm" @click="copyLightroomFilter">
+            <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            {{ $t('favorites.copyLightroom') }}
+          </BaseButton>
+          <span class="text-xs text-gray-400 dark:text-gray-500 mt-1">{{ $t('favorites.lightroomHint') }}</span>
         </div>
       </div>
     </BaseModal>
