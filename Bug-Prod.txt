@@ -1,5 +1,5 @@
 Hay dung agent team phân tích bổ sung các tính năng sau
-
+Các icon ở mode xem bằng PC hay màn hình lớn cần tăng kích thước lên kích thước icon 32x32px với xem bằng PC từ màn hình 1366*768
 1️⃣ TÍNH NĂNG 5: QUẢN LÝ ALBUM
 📋 Mô tả tổng quan
 Đây là tính năng trung tâm, cho phép studio tạo, cấu hình và chia sẻ các album ảnh với khách hàng. Mỗi album là một không gian làm việc riêng biệt với các quyền truy cập và tương tác linh hoạt.
