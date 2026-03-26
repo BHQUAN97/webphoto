@@ -61,10 +61,10 @@ function handleHamburger() {
         </nav>
 
         <!-- Right -->
-        <div class="flex items-center gap-2 sm:gap-3">
-          <!-- Theme toggle -->
+        <div class="flex items-center gap-1.5 sm:gap-3">
+          <!-- Theme toggle (hidden on mobile, shown in mobile nav) -->
           <button
-            class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+            class="hidden sm:flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
             title="Đổi giao diện sáng/tối"
             @click="toggleTheme"
           >
@@ -76,9 +76,9 @@ function handleHamburger() {
             </svg>
           </button>
 
-          <!-- Language toggle -->
+          <!-- Language toggle (hidden on mobile, shown in mobile nav) -->
           <button
-            class="px-2 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+            class="hidden sm:flex px-2 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
             title="Chuyển ngôn ngữ / Switch language"
             @click="toggleLocale"
           >
@@ -89,7 +89,7 @@ function handleHamburger() {
             <NotificationBell />
             <div class="relative">
               <button
-                class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/30 hover:bg-orange-100 dark:hover:bg-orange-900/50 rounded-full pl-1 pr-3 py-1 border border-orange-200 dark:border-orange-700 transition-colors"
+                class="flex items-center gap-1 sm:gap-2 bg-orange-50 dark:bg-orange-900/30 hover:bg-orange-100 dark:hover:bg-orange-900/50 rounded-full p-0.5 sm:pl-1 sm:pr-3 sm:py-1 border border-orange-200 dark:border-orange-700 transition-colors"
                 @click="menuOpen = !menuOpen"
               >
                 <img
@@ -181,21 +181,43 @@ function handleHamburger() {
         enter-from-class="opacity-0 -translate-y-2"
         leave-to-class="opacity-0 -translate-y-2"
       >
-        <div v-if="mobileNavOpen && !hasSidebar" class="md:hidden pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-1" @click="mobileNavOpen = false">
-          <router-link to="/" class="block py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">{{ $t('nav.home') }}</router-link>
+        <div v-if="mobileNavOpen && !hasSidebar" class="md:hidden pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 space-y-1">
+          <router-link to="/" class="block py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" @click="mobileNavOpen = false">{{ $t('nav.home') }}</router-link>
           <template v-if="auth.isAuthenticated">
-            <router-link to="/dashboard" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.dashboard') }}</router-link>
-            <router-link to="/dashboard/albums" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.album') }}</router-link>
-            <router-link to="/dashboard/profile" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.profile') }}</router-link>
-            <router-link to="/dashboard/settings" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('nav.settings') }}</router-link>
-            <router-link v-if="auth.isAdmin" to="/admin" class="block py-2 text-sm text-orange-500 font-medium">{{ $t('nav.admin') }}</router-link>
+            <router-link to="/dashboard" class="block py-2 text-sm text-gray-600 dark:text-gray-300" @click="mobileNavOpen = false">{{ $t('nav.dashboard') }}</router-link>
+            <router-link to="/dashboard/albums" class="block py-2 text-sm text-gray-600 dark:text-gray-300" @click="mobileNavOpen = false">{{ $t('nav.album') }}</router-link>
+            <router-link to="/dashboard/profile" class="block py-2 text-sm text-gray-600 dark:text-gray-300" @click="mobileNavOpen = false">{{ $t('nav.profile') }}</router-link>
+            <router-link to="/dashboard/settings" class="block py-2 text-sm text-gray-600 dark:text-gray-300" @click="mobileNavOpen = false">{{ $t('nav.settings') }}</router-link>
+            <router-link v-if="auth.isAdmin" to="/admin" class="block py-2 text-sm text-orange-500 font-medium" @click="mobileNavOpen = false">{{ $t('nav.admin') }}</router-link>
             <hr class="my-1 border-gray-200 dark:border-gray-600" />
             <button class="block w-full text-left py-2 text-sm text-red-600 dark:text-red-400" @click="handleLogout">{{ $t('nav.logout') }}</button>
           </template>
           <template v-else>
-            <router-link to="/login" class="block py-2 text-sm text-gray-600 dark:text-gray-300">{{ $t('auth.login') }}</router-link>
-            <router-link to="/register" class="block py-2 text-sm text-orange-500 font-medium">{{ $t('auth.register') }}</router-link>
+            <router-link to="/login" class="block py-2 text-sm text-gray-600 dark:text-gray-300" @click="mobileNavOpen = false">{{ $t('auth.login') }}</router-link>
+            <router-link to="/register" class="block py-2 text-sm text-orange-500 font-medium" @click="mobileNavOpen = false">{{ $t('auth.register') }}</router-link>
           </template>
+          <!-- Mobile-only: theme + language toggles -->
+          <hr class="my-1 border-gray-200 dark:border-gray-600 sm:hidden" />
+          <div class="flex items-center gap-4 sm:hidden py-2">
+            <button
+              class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+              @click="toggleTheme"
+            >
+              <svg v-if="isDark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+              {{ isDark ? 'Light' : 'Dark' }}
+            </button>
+            <button
+              class="flex items-center gap-1 text-sm font-medium text-gray-600 dark:text-gray-300"
+              @click="toggleLocale"
+            >
+              {{ currentLocale === 'vi' ? '🇬🇧 English' : '🇻🇳 Tiếng Việt' }}
+            </button>
+          </div>
         </div>
       </Transition>
     </div>

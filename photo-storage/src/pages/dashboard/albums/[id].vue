@@ -457,25 +457,35 @@ onUnmounted(stopPolling)
       </div>
       <div class="flex gap-2 shrink-0 flex-wrap">
         <BaseButton v-if="album.driveFolderId" variant="secondary" size="sm" :loading="driveSyncing" @click="handleDriveResync">
-          <svg class="w-4 h-4 mr-1 inline" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 sm:mr-1 inline" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          {{ $t('drive.resync') }}
+          <span class="hidden sm:inline">{{ $t('drive.resync') }}</span>
         </BaseButton>
-        <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" @click="handleDownloadZip">
-          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" @click="handleDownloadZip" :title="$t('album.downloadAlbum')">
+          <svg class="w-4 h-4 sm:mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          {{ $t('album.downloadAlbum') }}
+          <span class="hidden sm:inline">{{ $t('album.downloadAlbum') }}</span>
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="openShareDialog">
-          <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <BaseButton variant="secondary" size="sm" @click="openShareDialog" :title="$t('album.share')">
+          <svg class="w-4 h-4 sm:mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
           </svg>
-          {{ $t('album.share') }}
+          <span class="hidden sm:inline">{{ $t('album.share') }}</span>
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="showEdit = true">{{ $t('common.edit') }}</BaseButton>
-        <BaseButton variant="danger" size="sm" @click="showDelete = true">{{ $t('common.delete') }}</BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="showEdit = true" :title="$t('common.edit')">
+          <svg class="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          <span class="hidden sm:inline">{{ $t('common.edit') }}</span>
+        </BaseButton>
+        <BaseButton variant="danger" size="sm" @click="showDelete = true" :title="$t('common.delete')">
+          <svg class="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          <span class="hidden sm:inline">{{ $t('common.delete') }}</span>
+        </BaseButton>
       </div>
     </div>
 

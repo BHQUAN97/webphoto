@@ -397,7 +397,7 @@ router.post('/:id/comments', async (req, res) => {
 
   const commentId = ulid()
   await db.insert(comments).values({
-    id: commentId, imageId: id, userId: user.sub, guestName: null, content: safeContent,
+    id: commentId, imageId: id, userId: user.sub, content: safeContent, createdAt: new Date(),
   })
   await db.update(images).set({ commentCount: sql`comment_count + 1` }).where(eq(images.id, id))
 

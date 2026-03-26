@@ -42,18 +42,18 @@ function reset() {
 </script>
 
 <template>
-  <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-4">
+    <div class="flex flex-wrap gap-2 sm:gap-3">
       <input
         v-model="filters.search"
         type="text"
         :placeholder="t('filter.searchPlaceholder')"
-        class="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+        class="w-full sm:w-auto sm:flex-1 sm:min-w-[160px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
         @input="applyDebounced"
       />
       <select
         v-model="filters.status"
-        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+        class="flex-1 min-w-[100px] sm:min-w-[120px] sm:flex-none px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
         <option value="">{{ $t('filter.allStatus') }}</option>
@@ -63,7 +63,7 @@ function reset() {
       </select>
       <select
         v-model="filters.sortBy"
-        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+        class="flex-1 min-w-[100px] sm:min-w-[120px] sm:flex-none px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
         <option value="newest">{{ $t('filter.newest') }}</option>
@@ -71,14 +71,14 @@ function reset() {
         <option value="most_liked">{{ $t('filter.mostLiked') }}</option>
         <option value="largest">{{ $t('filter.largestSize') }}</option>
       </select>
-      <input v-model="filters.dateFrom" type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="apply" />
-      <input v-model="filters.dateTo" type="date" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="apply" />
+      <input v-model="filters.dateFrom" type="date" class="hidden sm:block px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
+      <input v-model="filters.dateTo" type="date" class="hidden sm:block px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
       <div class="flex items-center gap-3">
-        <label class="flex items-center gap-1.5 text-sm text-gray-600 whitespace-nowrap">
+        <label class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
           <input v-model="filters.liked" type="checkbox" class="rounded border-gray-300 text-orange-500" @change="apply" />
           {{ $t('filter.favorite') }}
         </label>
-        <button class="text-xs text-gray-400 hover:text-gray-600 whitespace-nowrap" @click="reset">{{ $t('filter.clearFilter') }}</button>
+        <button class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 whitespace-nowrap" @click="reset">{{ $t('filter.clearFilter') }}</button>
       </div>
     </div>
   </div>

@@ -7,6 +7,23 @@
   body {
     @apply bg-gray-50 text-gray-900 antialiased dark:bg-gray-900 dark:text-gray-100;
   }
+
+  /* Dark mode: ensure form elements have visible text + proper color scheme */
+  .dark {
+    color-scheme: dark;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    @apply dark:text-white dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400;
+  }
+
+  /* Fix select option text in dark mode (browser native dropdowns) */
+  .dark select option {
+    background-color: theme(--color-gray-700);
+    color: white;
+  }
 }
 
 /* Custom utilities */

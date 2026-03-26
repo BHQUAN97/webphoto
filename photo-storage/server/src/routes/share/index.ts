@@ -202,9 +202,9 @@ router.post('/:token/images/:imageId/comments', async (req, res) => {
   await db.insert(comments).values({
     id: commentId,
     imageId,
-    userId: null,
     guestName: safeGuestName,
     content: safeContent,
+    createdAt: new Date(),
   })
 
   // Update comment count
