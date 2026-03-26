@@ -346,12 +346,7 @@ async function handleDownloadZip() {
       for (let i = 0; i < batches.length; i++) {
         downloadBatchCurrent.value = i + 1
         try {
-          const res = await api.post(
-            `/albums/${albumId.value}/download-zip`,
-            { batch: i },
-            { responseType: 'blob', timeout: 0 }
-          )
-          triggerBlobDownload(res.data, res.headers)
+          await streamDownloadZip(i)
         } catch (batchErr) {
           console.error(`[Download] Batch ${i} failed`, batchErr)
           toast.warning(`Batch ${i + 1}/${batches.length} thất bại, tiếp tục...`)
@@ -360,13 +355,8 @@ async function handleDownloadZip() {
       showDownloadProgress.value = false
       toast.success(t('album.downloadSuccess'))
     } else {
-      // Single batch — download directly as blob
-      const res = await api.post(
-        `/albums/${albumId.value}/download-zip`,
-        {},
-        { responseType: 'blob', timeout: 0 }
-      )
-      triggerBlobDownload(res.data, res.headers)
+      // Single batch — stream download (non-blocking)
+      await streamDownloadZip()
       toast.success(t('album.downloadSuccess'))
     }
   } catch (err: unknown) {
@@ -384,19 +374,30 @@ async function handleDownloadZip() {
   }
 }
 
-function triggerBlobDownload(blob: Blob, headers: Record<string, unknown>) {
-  const disposition = String(headers['content-disposition'] || '')
+async function streamDownloadZip(batch?: number) {
+  // Use fetch with streaming — browser downloads progressively without loading all into memory
+  const body = batch !== undefined ? JSON.stringify({ batch }) : '{}'
+  const res = await fetch(`/api/albums/${albumId.value}/download-zip`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(auth.accessToken ? { Authorization: `Bearer ${auth.accessToken}` } : {}) },
+    credentials: 'include',
+    body,
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const disposition = res.headers.get('content-disposition') || ''
   const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/)
   const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `${album.value?.title || 'album'}.zip`
 
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.URL.revokeObjectURL(url)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 async function handleDriveResync() {

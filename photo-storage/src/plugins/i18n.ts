@@ -8,6 +8,9 @@ const i18n = createI18n({
   legacy: false,
   locale: savedLocale,
   fallbackLocale: 'vi',
+  globalInjection: true,
+  missingWarn: false,
+  fallbackWarn: false,
   messages: { vi, en },
 })
 

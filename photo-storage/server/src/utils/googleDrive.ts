@@ -58,17 +58,22 @@ async function getDriveAsync(): Promise<drive_v3.Drive> {
 
   let credentials: Record<string, unknown>
 
-  // Try env var first, then DB setting
+  // Try env var first, then DB setting (may be encrypted)
   let jsonEnv = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
   if (!jsonEnv) {
     try {
       const dbValue = await getSetting('google_service_account')
       if (dbValue) {
-        jsonEnv = dbValue
-        // Also set env so subsequent calls use cached value
-        process.env.GOOGLE_SERVICE_ACCOUNT_JSON = dbValue
+        // Decrypt if encrypted (enc: prefix), otherwise use as-is
+        if (dbValue.startsWith('enc:')) {
+          const { decryptSensitive } = await import('../routes/admin/settings/index.js')
+          jsonEnv = decryptSensitive(dbValue)
+        } else {
+          jsonEnv = dbValue
+        }
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON = jsonEnv
       }
-    } catch { /* DB not ready */ }
+    } catch { /* DB not ready or decryption failed */ }
   }
 
   if (jsonEnv) {
@@ -167,6 +172,25 @@ export async function listFiles(folderId: string): Promise<DriveFile[]> {
     const safeMessage = e.message?.replace(/key[=:]\s*\S+/gi, 'key=[REDACTED]') ?? 'Unknown error'
     logger.error('[GoogleDrive] listFiles error', { folderId, error: safeMessage })
     throw new Error(`Lỗi khi đọc folder Google Drive`)
+  }
+
+  return files
+}
+
+// ─── List all image files recursively (includes subfolders) ──────────────
+export async function listFilesRecursive(folderId: string, maxDepth = 5): Promise<DriveFile[]> {
+  const files = await listFiles(folderId)
+
+  if (maxDepth <= 0) return files
+
+  try {
+    const subfolders = await listSubfolders(folderId)
+    for (const sub of subfolders) {
+      const subFiles = await listFilesRecursive(sub.id, maxDepth - 1)
+      files.push(...subFiles)
+    }
+  } catch (err) {
+    logger.warn('[GoogleDrive] Failed to list subfolder files, skipping', { folderId, error: (err as Error).message })
   }
 
   return files

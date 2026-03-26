@@ -28,7 +28,9 @@ const form = ref({
 })
 
 const driveLink = ref('')
+const isEditMode = computed(() => !!props.album)
 const hasDrive = computed(() => !!props.album?.driveFolderId)
+const showDriveInput = ref(false)
 
 function extractFolderId(link: string): string | null {
   const match = link.match(/\/folders\/([a-zA-Z0-9_-]+)/)
@@ -46,6 +48,7 @@ watch(
       }
       if (a.driveFolderId) {
         driveLink.value = `https://drive.google.com/drive/folders/${a.driveFolderId}`
+        showDriveInput.value = true
       }
     }
   },
@@ -55,11 +58,15 @@ watch(
 function handleSubmit() {
   if (!form.value.title.trim()) return
   const data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null } = { ...form.value }
-  if (hasDrive.value) {
+  // Send driveFolderId if Drive input is shown (either existing or newly added)
+  if (showDriveInput.value && driveLink.value.trim()) {
     const newId = extractFolderId(driveLink.value)
     if (newId !== props.album?.driveFolderId) {
       data.driveFolderId = newId
     }
+  } else if (hasDrive.value && !showDriveInput.value) {
+    // User disabled Drive link — clear it
+    data.driveFolderId = null
   }
   emit('submit', data)
 }
@@ -91,23 +98,31 @@ function handleSubmit() {
       <label for="isPublic" class="text-sm text-gray-700 dark:text-gray-300">{{ $t('album.isPublic') }}</label>
     </div>
 
-    <!-- Google Drive folder (only for Drive-linked albums) -->
-    <div v-if="hasDrive" class="pt-4 border-t border-gray-200 dark:border-gray-700">
-      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Google Drive Folder</label>
-      <div class="flex items-center gap-2">
-        <svg class="w-5 h-5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
-        </svg>
+    <!-- Google Drive folder — always available in edit mode -->
+    <div v-if="isEditMode" class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div class="flex items-center justify-between mb-2">
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
+          </svg>
+          Google Drive Folder
+        </label>
+        <label v-if="!hasDrive" class="relative inline-flex cursor-pointer items-center">
+          <input v-model="showDriveInput" type="checkbox" class="sr-only peer" />
+          <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 peer-checked:bg-blue-500 rounded-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+        </label>
+      </div>
+      <div v-if="showDriveInput || hasDrive">
         <input
           v-model="driveLink"
           type="url"
-          class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
           placeholder="https://drive.google.com/drive/folders/..."
         />
+        <p class="mt-1 text-xs text-gray-400">
+          {{ hasDrive ? 'Thay đổi folder sẽ cập nhật nguồn đồng bộ Drive' : 'Dán link Google Drive folder để liên kết album' }}
+        </p>
       </div>
-      <p class="mt-1 text-xs text-gray-400">
-        Thay đổi folder sẽ cập nhật nguồn đồng bộ Drive
-      </p>
     </div>
 
     <div class="flex justify-end gap-3 pt-2">

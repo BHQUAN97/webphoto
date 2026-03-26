@@ -175,6 +175,7 @@
     "deleteFailed": "Failed to delete photo",
     "download": "Download original",
     "downloadFailed": "Cannot download photo",
+    "copyLink": "Copy image link",
     "status": {
       "uploading": "Uploading",
       "processing": "Processing",

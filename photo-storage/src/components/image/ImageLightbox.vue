@@ -33,6 +33,28 @@ const auth = useAuthStore()
 const downloading = ref(false)
 const zoomLevel = ref(1)
 const showComments = ref(false)
+const linkCopied = ref(false)
+
+async function copyPublicLink() {
+  if (!props.image) return
+  const url = props.image.previewUrl || props.image.previewKey || ''
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+    linkCopied.value = true
+    setTimeout(() => { linkCopied.value = false }, 2000)
+  } catch {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea')
+    ta.value = url
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    linkCopied.value = true
+    setTimeout(() => { linkCopied.value = false }, 2000)
+  }
+}
 
 const canGoPrev = computed(() => props.currentIndex > 0)
 const canGoNext = computed(() => props.currentIndex < props.images.length - 1)
@@ -81,7 +103,16 @@ async function handleDownload() {
   downloading.value = true
   try {
     const res = await api.get(`/images/${props.image.id}/download-url`)
-    window.open(res.data.url, '_blank')
+    // Use fetch+blob to trigger download on same page (no new tab on mobile)
+    const blob = await fetch(res.data.url).then(r => r.blob())
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = props.image.originalName || 'image'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   } catch {
     alert(t('image.downloadFailed'))
   } finally {
@@ -271,6 +302,22 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </button>
+
+          <!-- Copy public link -->
+          <button
+            v-if="image.previewUrl || image.previewKey"
+            class="w-10 h-10 flex items-center justify-center rounded-full transition-colors"
+            :class="linkCopied ? 'text-green-400 bg-green-500/20' : 'text-white/70 hover:text-white hover:bg-white/10'"
+            :title="t('image.copyLink')"
+            @click="copyPublicLink"
+          >
+            <svg v-if="linkCopied" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
           </button>
 

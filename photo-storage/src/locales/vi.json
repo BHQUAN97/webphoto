@@ -175,6 +175,7 @@
     "deleteFailed": "Xóa ảnh thất bại",
     "download": "Tải ảnh gốc",
     "downloadFailed": "Không thể tải ảnh",
+    "copyLink": "Sao chép link ảnh",
     "status": {
       "uploading": "Uploading",
       "processing": "Đang xử lý",

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import { db } from '../../../utils/db.js'
 import { systemSettings } from '../../../database/schema.js'
 import { eq } from 'drizzle-orm'
@@ -10,14 +11,49 @@ import { mailService, type MailTemplate } from '../../../utils/mailService.js'
 
 const router = Router()
 
+// ── Encryption helpers for sensitive data ──
+const ENC_ALGO = 'aes-256-gcm'
+const ENC_KEY = crypto.createHash('sha256').update(process.env.JWT_SECRET || 'fallback-key-change-me').digest()
+
+function encryptSensitive(plaintext: string): string {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv(ENC_ALGO, ENC_KEY, iv)
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  // Format: enc:iv:tag:ciphertext (all base64)
+  return `enc:${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`
+}
+
+function decryptSensitive(stored: string): string {
+  if (!stored.startsWith('enc:')) {
+    // Not encrypted (legacy) — return as-is
+    return stored
+  }
+  const parts = stored.split(':')
+  if (parts.length !== 4) throw new Error('Invalid encrypted format')
+  const iv = Buffer.from(parts[1], 'base64')
+  const tag = Buffer.from(parts[2], 'base64')
+  const encrypted = Buffer.from(parts[3], 'base64')
+  const decipher = crypto.createDecipheriv(ENC_ALGO, ENC_KEY, iv)
+  decipher.setAuthTag(tag)
+  return decipher.update(encrypted) + decipher.final('utf8')
+}
+
+// Export for use by googleDrive.ts
+export { decryptSensitive }
+
 // GET / — all system settings
 router.get('/', async (req, res) => {
   requireAdmin(req)
   const settings = await db.select().from(systemSettings)
 
+  // Filter out sensitive keys — never send encrypted credentials to client
+  const SENSITIVE_KEYS = new Set(['google_service_account'])
   const result: Record<string, string> = {}
   for (const s of settings) {
-    result[s.key] = s.value
+    if (!SENSITIVE_KEYS.has(s.key)) {
+      result[s.key] = s.value
+    }
   }
   res.json(result)
 })
@@ -149,14 +185,15 @@ router.post('/drive-config', async (req, res) => {
     return res.status(400).json({ message: 'Loại key phải là "service_account"' })
   }
 
-  // Save to system_settings (stored encrypted/obfuscated — only admin can read)
+  // Encrypt service account JSON before storing in DB
   const jsonStr = JSON.stringify(parsed)
+  const encryptedValue = encryptSensitive(jsonStr)
   const [existing] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'google_service_account')).limit(1)
   if (existing) {
-    await db.update(systemSettings).set({ value: jsonStr, updatedAt: new Date(), updatedBy: admin.sub })
+    await db.update(systemSettings).set({ value: encryptedValue, updatedAt: new Date(), updatedBy: admin.sub })
       .where(eq(systemSettings.key, 'google_service_account'))
   } else {
-    await db.insert(systemSettings).values({ key: 'google_service_account', value: jsonStr, updatedBy: admin.sub })
+    await db.insert(systemSettings).values({ key: 'google_service_account', value: encryptedValue, updatedBy: admin.sub })
   }
 
   invalidateSettingsCache()
@@ -184,7 +221,9 @@ router.get('/drive-config', async (req, res) => {
   }
 
   try {
-    const parsed = JSON.parse(setting.value)
+    const decrypted = decryptSensitive(setting.value)
+    const parsed = JSON.parse(decrypted)
+    // Never return private_key or full JSON to client
     res.json({
       configured: true,
       clientEmail: parsed.client_email,
@@ -192,7 +231,13 @@ router.get('/drive-config', async (req, res) => {
       updatedAt: setting.updatedAt,
     })
   } catch {
-    res.json({ configured: false })
+    // Fallback: try reading unencrypted (migration from old format)
+    try {
+      const parsed = JSON.parse(setting.value)
+      res.json({ configured: true, clientEmail: parsed.client_email, projectId: parsed.project_id, updatedAt: setting.updatedAt })
+    } catch {
+      res.json({ configured: false })
+    }
   }
 })
 

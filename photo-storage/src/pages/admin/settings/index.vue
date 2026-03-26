@@ -191,7 +191,7 @@ function toggleMime(mime: string) {
 </script>
 
 <template>
-  <div class="max-w-3xl">
+  <div class="max-w-3xl overflow-x-hidden">
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">{{ $t('adminSettings.title') }}</h1>
 
     <div v-if="loading" class="text-center py-12 text-gray-400">Đang tải...</div>
@@ -278,28 +278,28 @@ function toggleMime(mime: string) {
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $t('adminSettings.storageBackend') }}</h2>
 
-          <div class="flex gap-4">
+          <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <label
-              class="flex-1 flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors"
+              class="flex-1 flex items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-colors"
               :class="settings.storage_backend === 'r2'
                 ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
                 : 'border-gray-200 dark:border-gray-600'"
             >
-              <input v-model="settings.storage_backend" type="radio" value="r2" class="text-orange-500" />
-              <div>
-                <p class="font-medium text-gray-900 dark:text-white">{{ $t('adminSettings.cloudflareR2') }}</p>
+              <input v-model="settings.storage_backend" type="radio" value="r2" class="text-orange-500 shrink-0" />
+              <div class="min-w-0">
+                <p class="font-medium text-gray-900 dark:text-white text-sm sm:text-base">{{ $t('adminSettings.cloudflareR2') }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">{{ $t('adminSettings.cloudflareR2Desc') }}</p>
               </div>
             </label>
             <label
-              class="flex-1 flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors"
+              class="flex-1 flex items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-colors"
               :class="settings.storage_backend === 'local'
                 ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
                 : 'border-gray-200 dark:border-gray-600'"
             >
-              <input v-model="settings.storage_backend" type="radio" value="local" class="text-orange-500" />
-              <div>
-                <p class="font-medium text-gray-900 dark:text-white">{{ $t('adminSettings.localFilesystem') }}</p>
+              <input v-model="settings.storage_backend" type="radio" value="local" class="text-orange-500 shrink-0" />
+              <div class="min-w-0">
+                <p class="font-medium text-gray-900 dark:text-white text-sm sm:text-base">{{ $t('adminSettings.localFilesystem') }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">{{ $t('adminSettings.localFilesystemDesc') }}</p>
               </div>
             </label>
@@ -312,23 +312,23 @@ function toggleMime(mime: string) {
           </div>
 
           <!-- Storage Info Panel -->
-          <div v-if="storageInfo" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-500 dark:text-gray-400">{{ $t('adminSettings.currentBackend') }}</span>
+          <div v-if="storageInfo" class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 sm:p-4 space-y-2 overflow-hidden">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0">{{ $t('adminSettings.currentBackend') }}</span>
               <span class="text-sm font-medium" :class="storageInfo.backend === 'r2' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'">
                 {{ storageInfo.backend === 'r2' ? $t('adminSettings.cloudflareR2') : $t('adminSettings.localFilesystem') }}
               </span>
             </div>
-            <div v-if="storageInfo.directory" class="flex items-center gap-2">
-              <span class="text-sm text-gray-500 dark:text-gray-400">{{ $t('adminSettings.directory') }}</span>
-              <span class="text-sm font-mono text-gray-700 dark:text-gray-300">{{ storageInfo.directory }}</span>
+            <div v-if="storageInfo.directory" class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0">{{ $t('adminSettings.directory') }}</span>
+              <span class="text-sm font-mono text-gray-700 dark:text-gray-300 break-all">{{ storageInfo.directory }}</span>
             </div>
-            <div v-if="storageInfo.usedBytesPrivate != null" class="flex items-center gap-2">
-              <span class="text-sm text-gray-500 dark:text-gray-400">Private (originals):</span>
+            <div v-if="storageInfo.usedBytesPrivate != null" class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0">Private (originals):</span>
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ formatBytes(storageInfo.usedBytesPrivate) }}</span>
             </div>
-            <div v-if="storageInfo.usedBytesPublic != null" class="flex items-center gap-2">
-              <span class="text-sm text-gray-500 dark:text-gray-400">Public (thumbs/previews):</span>
+            <div v-if="storageInfo.usedBytesPublic != null" class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0">Public (thumbs/previews):</span>
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ formatBytes(storageInfo.usedBytesPublic) }}</span>
             </div>
           </div>

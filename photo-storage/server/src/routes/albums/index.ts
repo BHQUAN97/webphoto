@@ -12,7 +12,7 @@ import { storage } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid, clampInt } from '../../utils/validate.js'
 import { logger } from '../../utils/logger.js'
 import { quotaUtils } from '../../utils/quota.js'
-import { listFiles, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
+import { listFiles, listFilesRecursive, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
 import { driveImportQueue } from '../../plugins/bullmq.js'
 
 const router = Router()
@@ -153,10 +153,12 @@ router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) 
     }
   }
 
-  // List files from Google Drive
+  // List files from Google Drive (recursive if includeSubfolders)
   let driveFiles
   try {
-    driveFiles = await listFiles(folderId)
+    driveFiles = includeSubfolders
+      ? await listFilesRecursive(folderId)
+      : await listFiles(folderId)
   } catch (err) {
     return res.status(400).json({ message: (err as Error).message })
   }
@@ -280,10 +282,10 @@ router.post('/:id/drive-sync', rateLimit('drive-sync', 5, 3600), async (req, res
   if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
   if (!album.driveFolderId) return res.status(400).json({ message: 'Album không liên kết với Google Drive' })
 
-  // List current Drive files
+  // List current Drive files (recursive to include subfolders)
   let driveFiles
   try {
-    driveFiles = await listFiles(album.driveFolderId)
+    driveFiles = await listFilesRecursive(album.driveFolderId)
   } catch (err) {
     return res.status(400).json({ message: (err as Error).message })
   }

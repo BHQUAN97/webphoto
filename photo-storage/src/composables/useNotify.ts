@@ -19,32 +19,38 @@ export function useNotify() {
     // Remove previous listener to prevent leak on reconnect
     socket.off('notification')
 
-    socket.on('notification', (payload: { type: UserEventType | AdminEventType; data: Record<string, unknown>; message: string }) => {
+    socket.on('notification', (payload: Record<string, unknown>) => {
+      // Server emits flat objects: { type, imageId, message, ... }
+      // Extract nested data or use flat payload as data
+      const eventType = payload.type as UserEventType | AdminEventType
+      const eventData = (payload.data as Record<string, unknown>) ?? payload
+      const imageId = (eventData.imageId ?? payload.imageId) as string | undefined
+
       notifStore.add({
         id: crypto.randomUUID(),
-        type: payload.type,
-        message: payload.message,
-        data: payload.data,
+        type: eventType,
+        message: (payload.message as string) || '',
+        data: eventData,
         read: false,
         createdAt: new Date().toISOString(),
       })
 
-      if (payload.type === 'image:ready' && payload.data?.imageId) {
-        const file = uploadStore.files.find((f) => f.imageId === payload.data.imageId)
+      if (eventType === 'image:ready' && imageId) {
+        const file = uploadStore.files.find((f) => f.imageId === imageId)
         if (file) uploadStore.setStatus(file.id, 'ready')
       }
 
-      if (payload.type === 'image:failed' && payload.data?.imageId) {
-        const file = uploadStore.files.find((f) => f.imageId === payload.data.imageId)
+      if (eventType === 'image:failed' && imageId) {
+        const file = uploadStore.files.find((f) => f.imageId === imageId)
         if (file) uploadStore.setStatus(file.id, 'failed')
       }
 
-      if ((payload.type as string).startsWith('admin:')) {
+      if ((eventType as string).startsWith('admin:')) {
         adminStore.addAlert({
           id: crypto.randomUUID(),
-          level: payload.type === 'admin:storage:alert' || payload.type === 'admin:image:error:spike' ? 'error' : 'warning',
-          message: payload.message,
-          type: payload.type as AdminEventType,
+          level: eventType === 'admin:storage:alert' || eventType === 'admin:image:error:spike' ? 'error' : 'warning',
+          message: String(payload.message || ''),
+          type: eventType as AdminEventType,
         })
       }
     })
