@@ -109,8 +109,8 @@ async function batchDownload() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    toast.success(`Đã tải ${selectedIds.value.size} ảnh`)
-  } catch { toast.error('Tải ảnh thất bại') }
+    toast.success(t('batch.downloadSuccess', { count: selectedIds.value.size }))
+  } catch { toast.error(t('batch.downloadFailed')) }
   finally { batchLoading.value = false }
 }
 
@@ -252,10 +252,21 @@ async function revokeShareLink() {
   }
 }
 
-function copyShareLink() {
+async function copyShareLink() {
   if (!shareToken.value) return
   const url = `${location.origin}/share/${shareToken.value}`
-  navigator.clipboard.writeText(url)
+  try {
+    await navigator.clipboard.writeText(url)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = url
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   toast.success(t('album.linkCopied'))
 }
 
@@ -453,70 +464,72 @@ onUnmounted(stopPolling)
 
   <div v-else-if="album">
     <!-- Header — compact layout -->
-    <div class="mb-4">
-      <!-- Title row -->
-      <div class="flex items-center gap-2 flex-wrap mb-1">
-        <h1 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">{{ album.title }}</h1>
-        <BaseBadge :variant="album.isPublic ? 'success' : 'default'" class="text-xs">
-          {{ album.isPublic ? 'Public' : 'Private' }}
-        </BaseBadge>
-        <BaseBadge v-if="album.driveFolderId" variant="default" class="text-xs">
-          <svg class="w-3 h-3 inline mr-0.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
-          </svg>
-          Drive
-        </BaseBadge>
-      </div>
-
-      <!-- Meta + Actions row -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400 dark:text-gray-500">
-          <span>{{ album.imageCount }} {{ $t('album.images') }}</span>
-          <span>{{ formatBytes(album.totalBytes) }}</span>
-          <span>{{ formatDate(album.createdAt) }}</span>
-          <span v-if="album.description" class="text-gray-500 dark:text-gray-400 hidden sm:inline">— {{ album.description }}</span>
-          <template v-if="album.driveFolderId && album.driveLastSyncAt">
-            <span>{{ $t('drive.lastSync') }}: {{ formatDateTime(album.driveLastSyncAt) }}</span>
-          </template>
+    <div class="mb-2">
+      <!-- Title + Actions — single row -->
+      <div class="flex items-center justify-between gap-2 mb-0.5">
+        <div class="flex items-center gap-2 min-w-0">
+          <h1 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{{ album.title }}</h1>
+          <BaseBadge :variant="album.isPublic ? 'success' : 'default'" class="text-[10px] leading-tight">
+            {{ album.isPublic ? 'Public' : 'Private' }}
+          </BaseBadge>
+          <BaseBadge v-if="album.driveFolderId" variant="default" class="text-[10px] leading-tight">
+            <svg class="w-3 h-3 inline mr-0.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
+            </svg>
+            Drive
+          </BaseBadge>
         </div>
-        <div class="flex gap-1.5 shrink-0 flex-wrap">
-          <button v-if="album.driveFolderId" class="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('drive.resync')" @click="handleDriveResync">
+        <div class="flex gap-1 shrink-0">
+          <button v-if="album.driveFolderId" class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('drive.resync')" @click="handleDriveResync">
             <svg class="w-4 h-4" :class="{ 'animate-spin': driveSyncing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-          <button v-if="auth.canDownload" class="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.downloadAlbum')" @click="handleDownloadZip">
+          <button v-if="auth.canDownload" class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.downloadAlbum')" @click="handleDownloadZip">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </button>
-          <button class="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.share')" @click="openShareDialog">
+          <button class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('album.share')" @click="openShareDialog">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
             </svg>
           </button>
-          <button class="p-1.5 rounded-lg text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('common.edit')" @click="showEdit = true">
+          <button class="p-1 rounded-md text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" :title="$t('common.edit')" @click="showEdit = true">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </button>
-          <button class="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" :title="$t('common.delete')" @click="showDelete = true">
+          <button class="p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" :title="$t('common.delete')" @click="showDelete = true">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
         </div>
       </div>
-      <p v-if="album.description" class="text-xs text-gray-500 dark:text-gray-400 mt-1 sm:hidden">{{ album.description }}</p>
+
+      <!-- Meta row -->
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-0 text-[11px] text-gray-400 dark:text-gray-500">
+        <span>{{ album.imageCount }} {{ $t('album.images') }}</span>
+        <span>&middot;</span>
+        <span>{{ formatBytes(album.totalBytes) }}</span>
+        <span>&middot;</span>
+        <span>{{ formatDate(album.createdAt) }}</span>
+        <span v-if="album.description" class="text-gray-500 dark:text-gray-400 hidden sm:inline">&middot; {{ album.description }}</span>
+        <template v-if="album.driveFolderId && album.driveLastSyncAt">
+          <span>&middot;</span>
+          <span>{{ $t('drive.lastSync') }}: {{ formatDateTime(album.driveLastSyncAt) }}</span>
+        </template>
+      </div>
     </div>
 
     <!-- Uploader -->
-    <div class="mb-6">
+    <div class="mb-3">
       <ImageUploader :album-id="albumId" @uploaded="onUploaded" />
     </div>
 
     <!-- Filter + Batch Toggle -->
-    <div class="flex flex-wrap items-center gap-3 mb-4">
+    <div class="flex flex-wrap items-center gap-2 mb-3">
       <ImageFilterBar v-if="auth.canFilter" class="flex-1 min-w-0" @filter="handleFilter" />
       <BaseButton v-if="album?.userId === auth.user?.id && images.length > 0" variant="secondary" size="sm" @click="batchMode ? exitBatchMode() : (batchMode = true)">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -527,7 +540,7 @@ onUnmounted(stopPolling)
     </div>
 
     <!-- Batch Toolbar -->
-    <div v-if="batchMode" class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+    <div v-if="batchMode" class="flex flex-wrap items-center gap-2 mb-3 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
       <button class="text-sm text-orange-600 dark:text-orange-400 hover:underline" @click="selectAll">
         {{ selectedIds.size === images.length ? $t('batch.deselectAll') : $t('batch.selectAll') }}
       </button>
@@ -537,7 +550,7 @@ onUnmounted(stopPolling)
         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        Tải ({{ selectedIds.size }})
+        {{ $t('batch.download') }} ({{ selectedIds.size }})
       </BaseButton>
       <BaseButton size="sm" variant="secondary" :disabled="selectedIds.size === 0" @click="showBatchRename = true">
         {{ $t('batch.rename') }}

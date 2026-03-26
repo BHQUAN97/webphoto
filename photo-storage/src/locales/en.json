@@ -58,7 +58,7 @@
     "loginFailed": "Sign in failed",
     "registerFailed": "Sign up failed",
     "email": "Email",
-    "emailPlaceholder": "email{'@'}example.com",
+    "emailPlaceholder": "email@example.com",
     "password": "Password",
     "passwordPlaceholder": "••••••••",
     "displayName": "Display name",
@@ -452,7 +452,10 @@
     "deleteSuccess": "Deleted {count} photos",
     "deleteFailed": "Delete failed",
     "renameSuccess": "Renamed {count} photos",
-    "renameFailed": "Rename failed"
+    "renameFailed": "Rename failed",
+    "download": "Download",
+    "downloadSuccess": "Downloaded {count} photos",
+    "downloadFailed": "Download failed"
   },
   "adminSettings": {
     "title": "System Settings",

@@ -58,7 +58,7 @@
     "loginFailed": "Đăng nhập thất bại",
     "registerFailed": "Đăng ký thất bại",
     "email": "Email",
-    "emailPlaceholder": "email{'@'}example.com",
+    "emailPlaceholder": "email@example.com",
     "password": "Mật khẩu",
     "passwordPlaceholder": "••••••••",
     "displayName": "Tên hiển thị",
@@ -452,7 +452,10 @@
     "deleteSuccess": "Đã xóa {count} ảnh",
     "deleteFailed": "Xóa thất bại",
     "renameSuccess": "Đã đổi tên {count} ảnh",
-    "renameFailed": "Đổi tên thất bại"
+    "renameFailed": "Đổi tên thất bại",
+    "download": "Tải",
+    "downloadSuccess": "Đã tải {count} ảnh",
+    "downloadFailed": "Tải ảnh thất bại"
   },
   "adminSettings": {
     "title": "Cài đặt hệ thống",

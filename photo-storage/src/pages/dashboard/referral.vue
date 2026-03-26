@@ -17,13 +17,35 @@ const referrals = ref<{ id: string; refereeDisplayName: string; rewardDays: numb
 
 const shareUrl = computed(() => referralCode.value ? `${window.location.origin}/register?ref=${referralCode.value}` : '')
 
-function copyLink() {
-  navigator.clipboard.writeText(shareUrl.value)
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = shareUrl.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   toast.success(t('referral.linkCopied'))
 }
 
-function copyCode() {
-  navigator.clipboard.writeText(referralCode.value)
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(referralCode.value)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = referralCode.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   toast.success(t('referral.codeCopied'))
 }
 
