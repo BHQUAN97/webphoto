@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { ulid } from 'ulid'
 import { db } from '../../../utils/db.js'
 import { users, userPlans, plans, albums, images, payments, likes, comments, refreshTokens } from '../../../database/schema.js'
-import { eq, and, or, sql, desc, asc, lt, like as sqlLike } from 'drizzle-orm'
+import { eq, and, or, desc, asc, lt, like as sqlLike } from 'drizzle-orm'
 import { requireAdmin } from '../../../middleware/auth.js'
 import { quotaRedis } from '../../../utils/redis.js'
 import { quotaUtils } from '../../../utils/quota.js'
@@ -13,8 +13,8 @@ const router = Router()
 
 // GET / — list users with search, filter, pagination
 router.get('/', async (req, res) => {
-  const admin = requireAdmin(req)
-  const { search, planCode, status, sortBy, cursor } = req.query
+  requireAdmin(req)
+  const { search, status, sortBy, cursor } = req.query
   const limit = clampInt(req.query.limit, 1, 50, 20)
 
   const conditions: unknown[] = []
@@ -84,7 +84,7 @@ router.get('/', async (req, res) => {
 
 // GET /:id — user detail
 router.get('/:id', async (req, res) => {
-  const admin = requireAdmin(req)
+  requireAdmin(req)
   const { id } = req.params
 
   const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1)

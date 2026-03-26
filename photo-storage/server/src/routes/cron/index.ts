@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db } from '../../utils/db.js'
 import { images, payments, users, albums, appLogs } from '../../database/schema.js'
-import { and, lt, lte, ne, eq, gt, gte, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
+import { and, lt, lte, ne, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm'
 import { storage } from '../../utils/storage/index.js'
 import { getSetting } from '../../utils/settings-cache.js'
 import { logger } from '../../utils/logger.js'

@@ -3,6 +3,7 @@ import { ulid } from 'ulid'
 import { logger } from '../utils/logger.js'
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       requestId?: string

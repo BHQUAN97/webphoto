@@ -202,16 +202,16 @@ function toggleMime(mime: string) {
         <button
           v-for="tab in tabs"
           :key="tab.key"
-          @click="activeTab = tab.key"
           class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px"
           :class="activeTab === tab.key
             ? 'border-orange-500 text-orange-600 dark:text-orange-400'
             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'"
+          @click="activeTab = tab.key"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" v-if="tab.key !== 'drive'">
+          <svg v-if="tab.key !== 'drive'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tab.icon" />
           </svg>
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" v-else>
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
             <path :d="tab.icon" />
           </svg>
           {{ $t(tab.i18nKey) }}
@@ -219,7 +219,7 @@ function toggleMime(mime: string) {
       </div>
 
       <!-- Tab: General Settings -->
-      <form v-if="activeTab === 'general'" @submit.prevent="save" class="space-y-6">
+      <form v-if="activeTab === 'general'" class="space-y-6" @submit.prevent="save">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6">
           <div class="flex items-center justify-between">
             <div>
@@ -274,7 +274,7 @@ function toggleMime(mime: string) {
       </form>
 
       <!-- Tab: Storage Backend -->
-      <form v-if="activeTab === 'storage'" @submit.prevent="save" class="space-y-6">
+      <form v-if="activeTab === 'storage'" class="space-y-6" @submit.prevent="save">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $t('adminSettings.storageBackend') }}</h2>
 

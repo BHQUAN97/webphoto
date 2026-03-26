@@ -143,7 +143,7 @@ onMounted(fetchMethods)
     </div>
 
     <BaseModal :show="showForm" :title="editing ? 'Sửa phương thức' : 'Thêm phương thức'" max-width="lg" @close="showForm = false">
-      <form @submit.prevent="save" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="save">
         <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Loại</label>
           <select v-model="form.type" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white">
             <option value="bank_transfer">Chuyển khoản</option>

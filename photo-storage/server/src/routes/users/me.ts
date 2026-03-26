@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { db } from '../../utils/db.js'
-import { users, userPlans, plans, albums, images, likes, comments, payments } from '../../database/schema.js'
+import { users, userPlans, plans, albums, images, payments } from '../../database/schema.js'
 import { eq, and, sql, desc } from 'drizzle-orm'
 import { requireAuth } from '../../middleware/auth.js'
 import { hashPassword, verifyPassword } from '../../utils/hash.js'

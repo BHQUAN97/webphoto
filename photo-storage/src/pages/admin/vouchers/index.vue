@@ -166,7 +166,7 @@ onMounted(async () => {
 
     <!-- Create Modal -->
     <BaseModal :show="showCreate" :title="$t('voucher.createNew')" @close="showCreate = false">
-      <form @submit.prevent="createVoucher" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="createVoucher">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('voucher.code') }}</label>
           <input v-model="form.code" type="text" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm uppercase" placeholder="VD: WELCOME2024" />

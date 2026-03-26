@@ -88,7 +88,7 @@ async function handleCreate() {
   <div class="max-w-xl">
     <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">{{ $t('album.createNew') }}</h1>
 
-    <form @submit.prevent="handleCreate" class="space-y-6">
+    <form class="space-y-6" @submit.prevent="handleCreate">
       <!-- Album Info Card -->
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide">Thông tin album</h2>

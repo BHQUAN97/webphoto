@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import router from './router'
 import i18n from './plugins/i18n'
 import App from './App.vue'
+import './assets/tokens.css'
 import './assets/main.css'
 
 const app = createApp(App)

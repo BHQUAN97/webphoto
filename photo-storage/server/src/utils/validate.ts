@@ -41,6 +41,7 @@ export function sanitizeFilename(filename: string): string {
   let safe = filename
     .replace(/\.\./g, '')
     .replace(/[/\\]/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, '') // control chars
     .trim()
   // Limit length
@@ -66,6 +67,7 @@ export function sanitizeSearch(query: string): string {
   if (typeof query !== 'string') return ''
   return query
     .replace(/[%_\\]/g, '\\$&') // escape LIKE wildcards
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f\x7f]/g, '') // control chars
     .trim()
     .slice(0, 200) // limit length
@@ -87,6 +89,7 @@ export function sanitizeText(text: string, maxLength = 5000): string {
   if (typeof text !== 'string') return ''
   return text
     .replace(/<[^>]*>/g, '') // strip HTML tags
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '') // control chars (keep \n \r \t)
     .trim()
     .slice(0, maxLength)

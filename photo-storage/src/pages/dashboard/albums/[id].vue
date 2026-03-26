@@ -463,25 +463,25 @@ onUnmounted(stopPolling)
           </svg>
           <span class="hidden sm:inline">{{ $t('drive.resync') }}</span>
         </BaseButton>
-        <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" @click="handleDownloadZip" :title="$t('album.downloadAlbum')">
+        <BaseButton v-if="auth.canDownload" variant="secondary" size="sm" :loading="downloadLoading" :title="$t('album.downloadAlbum')" @click="handleDownloadZip">
           <svg class="w-4 h-4 sm:mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <span class="hidden sm:inline">{{ $t('album.downloadAlbum') }}</span>
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="openShareDialog" :title="$t('album.share')">
+        <BaseButton variant="secondary" size="sm" :title="$t('album.share')" @click="openShareDialog">
           <svg class="w-4 h-4 sm:mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
           </svg>
           <span class="hidden sm:inline">{{ $t('album.share') }}</span>
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="showEdit = true" :title="$t('common.edit')">
+        <BaseButton variant="secondary" size="sm" :title="$t('common.edit')" @click="showEdit = true">
           <svg class="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
           <span class="hidden sm:inline">{{ $t('common.edit') }}</span>
         </BaseButton>
-        <BaseButton variant="danger" size="sm" @click="showDelete = true" :title="$t('common.delete')">
+        <BaseButton variant="danger" size="sm" :title="$t('common.delete')" @click="showDelete = true">
           <svg class="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
@@ -497,7 +497,7 @@ onUnmounted(stopPolling)
 
     <!-- Filter + Batch Toggle -->
     <div class="flex flex-wrap items-center gap-3 mb-4">
-      <ImageFilterBar v-if="auth.canFilter" @filter="handleFilter" class="flex-1 min-w-0" />
+      <ImageFilterBar v-if="auth.canFilter" class="flex-1 min-w-0" @filter="handleFilter" />
       <BaseButton v-if="album?.userId === auth.user?.id && images.length > 0" variant="secondary" size="sm" @click="batchMode ? exitBatchMode() : (batchMode = true)">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -508,7 +508,7 @@ onUnmounted(stopPolling)
 
     <!-- Batch Toolbar -->
     <div v-if="batchMode" class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
-      <button @click="selectAll" class="text-sm text-orange-600 dark:text-orange-400 hover:underline">
+      <button class="text-sm text-orange-600 dark:text-orange-400 hover:underline" @click="selectAll">
         {{ selectedIds.size === images.length ? $t('batch.deselectAll') : $t('batch.selectAll') }}
       </button>
       <span class="text-sm text-gray-500 dark:text-gray-400">{{ selectedIds.size }} / {{ images.length }} {{ $t('batch.selected') }}</span>
@@ -527,9 +527,9 @@ onUnmounted(stopPolling)
         <!-- Batch checkbox overlay -->
         <div v-if="batchMode" class="absolute top-2 left-2 z-10">
           <button
-            @click.stop="toggleSelect(img.id)"
             class="w-6 h-6 rounded border-2 flex items-center justify-center transition-colors"
             :class="selectedIds.has(img.id) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white/80 border-gray-300 hover:border-orange-400'"
+            @click.stop="toggleSelect(img.id)"
           >
             <svg v-if="selectedIds.has(img.id)" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -568,7 +568,7 @@ onUnmounted(stopPolling)
 
     <!-- Batch Rename Modal -->
     <BaseModal :show="showBatchRename" :title="$t('batch.renameTitle')" @close="showBatchRename = false">
-      <form @submit.prevent="batchRename" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="batchRename">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('batch.renameDesc', { count: selectedIds.size }) }}</p>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('batch.findPatternLabel') }}</label>

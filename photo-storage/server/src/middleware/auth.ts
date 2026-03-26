@@ -3,6 +3,7 @@ import { jwtUtils, type JWTPayload } from '../utils/jwt.js'
 import { incrVisit } from '../utils/redis.js'
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: JWTPayload

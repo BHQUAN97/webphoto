@@ -73,7 +73,7 @@ function handleSubmit() {
 </script>
 
 <template>
-  <form @submit.prevent="handleSubmit" class="space-y-4">
+  <form class="space-y-4" @submit.prevent="handleSubmit">
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.albumName') }}</label>
       <input
@@ -94,7 +94,7 @@ function handleSubmit() {
       />
     </div>
     <div class="flex items-center gap-2">
-      <input v-model="form.isPublic" type="checkbox" id="isPublic" class="rounded border-gray-300 dark:border-gray-600 text-orange-500 focus:ring-orange-500" />
+      <input id="isPublic" v-model="form.isPublic" type="checkbox" class="rounded border-gray-300 dark:border-gray-600 text-orange-500 focus:ring-orange-500" />
       <label for="isPublic" class="text-sm text-gray-700 dark:text-gray-300">{{ $t('album.isPublic') }}</label>
     </div>
 

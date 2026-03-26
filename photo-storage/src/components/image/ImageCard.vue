@@ -6,7 +6,7 @@ import BaseBadge from '@/components/ui/BaseBadge.vue'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   image: ImageItem
   showLike?: boolean
   showDelete?: boolean

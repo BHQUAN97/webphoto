@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db } from '../../../utils/db.js'
 import { albums, images, users } from '../../../database/schema.js'
-import { eq, and, or, desc, sql, lt, like as sqlLike } from 'drizzle-orm'
+import { eq, and, or, desc, lt, like as sqlLike } from 'drizzle-orm'
 import { requireAdmin } from '../../../middleware/auth.js'
 import { storage } from '../../../utils/storage/index.js'
 import { adminStats } from '../../../utils/admin-stats.js'

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { adminStats } from '../../../utils/admin-stats.js'
-import { feedCache, redis } from '../../../utils/redis.js'
+import { feedCache } from '../../../utils/redis.js'
 
 const router = Router()
 

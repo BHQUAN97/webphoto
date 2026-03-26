@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { ulid } from 'ulid'
 import { db } from '../../../utils/db.js'
 import { vouchers, voucherUsages, users } from '../../../database/schema.js'
-import { eq, desc, sql } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { requireAdmin } from '../../../middleware/auth.js'
 import { adminStats } from '../../../utils/admin-stats.js'
 

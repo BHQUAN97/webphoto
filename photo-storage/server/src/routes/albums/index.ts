@@ -4,16 +4,17 @@ import crypto from 'crypto'
 import archiver from 'archiver'
 import { db } from '../../utils/db.js'
 import { albums, images, users, userPlans, plans, albumShareTokens } from '../../database/schema.js'
-import { eq, and, desc, sql, lt, isNotNull } from 'drizzle-orm'
+import { eq, and, desc, sql, lt } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { rateLimit } from '../../middleware/rateLimit.js'
 import { feedCache } from '../../utils/redis.js'
 import { storage } from '../../utils/storage/index.js'
-import { sanitizeText, isValidUlid, clampInt } from '../../utils/validate.js'
+import { sanitizeText, isValidUlid } from '../../utils/validate.js'
 import { logger } from '../../utils/logger.js'
 import { quotaUtils } from '../../utils/quota.js'
 import { listFiles, listFilesRecursive, listSubfolders, extractFolderId } from '../../utils/googleDrive.js'
 import { driveImportQueue } from '../../plugins/bullmq.js'
+import { asyncHandler, fail } from '../../utils/asyncHandler.js'
 
 const router = Router()
 
@@ -250,26 +251,22 @@ router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) 
 })
 
 // GET /:id/subfolders — list subfolders if album has driveFolderId
-router.get('/:id/subfolders', async (req, res) => {
+router.get('/:id/subfolders', asyncHandler(async (req, res) => {
   const user = requireAuth(req)
-  const { id } = req.params
+  const id = req.params.id as string
 
   const [album] = await db.select().from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
 
-  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+  if (!album) return fail(res, 'Album không tồn tại', 404)
 
   if (!album.driveFolderId) {
-    return res.status(400).json({ message: 'Album này không liên kết với Google Drive' })
+    return fail(res, 'Album này không liên kết với Google Drive')
   }
 
-  try {
-    const subfolders = await listSubfolders(album.driveFolderId)
-    res.json({ subfolders })
-  } catch (err) {
-    return res.status(500).json({ message: (err as Error).message })
-  }
-})
+  const subfolders = await listSubfolders(album.driveFolderId)
+  res.json({ subfolders })
+}))
 
 // POST /:id/drive-sync — resync album from Google Drive (add new files only)
 router.post('/:id/drive-sync', rateLimit('drive-sync', 5, 3600), async (req, res) => {
@@ -361,15 +358,15 @@ router.get('/:id', async (req, res) => {
 })
 
 // PATCH /:id — update album
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', asyncHandler(async (req, res) => {
   const user = requireAuth(req)
-  const { id } = req.params
+  const id = req.params.id as string
   const { title, description, isPublic, coverKey, driveFolderId } = req.body
 
   const [album] = await db.select().from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
 
-  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+  if (!album) return fail(res, 'Album không tồn tại', 404)
 
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (title !== undefined) updates.title = String(title).slice(0, 200)
@@ -382,15 +379,11 @@ router.patch('/:id', async (req, res) => {
     } else if (typeof driveFolderId === 'string' && /^[a-zA-Z0-9_-]+$/.test(driveFolderId)) {
       updates.driveFolderId = driveFolderId
     } else {
-      return res.status(400).json({ message: 'Drive folder ID không hợp lệ' })
+      return fail(res, 'Drive folder ID không hợp lệ')
     }
   }
 
-  try {
-    await db.update(albums).set(updates).where(eq(albums.id, id))
-  } catch {
-    return res.status(500).json({ message: 'Cập nhật album thất bại' })
-  }
+  await db.update(albums).set(updates).where(eq(albums.id, id))
 
   // Invalidate feed cache
   await feedCache.invalidate(`feed:album:${id}*`)
@@ -409,7 +402,7 @@ router.patch('/:id', async (req, res) => {
   }).from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
   res.json(updated)
-})
+}))
 
 // DELETE /:id — delete album + cascade images
 router.delete('/:id', async (req, res) => {

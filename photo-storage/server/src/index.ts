@@ -12,6 +12,7 @@ import { logger } from './utils/logger.js'
 import { getSetting } from './utils/settings-cache.js'
 import { mailService } from './utils/mailService.js'
 import { validateDriveConfig } from './utils/googleDrive.js'
+import { globalErrorHandler } from './utils/asyncHandler.js'
 
 // Auth routes
 import registerRoute from './routes/auth/register.js'
@@ -215,6 +216,9 @@ app.use(async (err: Error & { statusCode?: number; code?: string }, req: express
     requestId: req.requestId,
   })
 })
+
+// Fallback error handler (catches anything missed above)
+app.use(globalErrorHandler)
 
 async function start() {
   await connectRedis()

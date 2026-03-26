@@ -85,7 +85,7 @@ onMounted(fetchPlans)
     </div>
 
     <BaseModal :show="showForm" :title="editingPlan ? 'Sửa gói' : 'Tạo gói'" max-width="lg" @close="showForm = false">
-      <form @submit.prevent="savePlan" class="grid grid-cols-2 gap-4">
+      <form class="grid grid-cols-2 gap-4" @submit.prevent="savePlan">
         <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Code</label><input v-model="form.code" :disabled="!!editingPlan" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
         <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Tên</label><input v-model="form.name" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
         <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Giá (VNĐ)</label><input v-model.number="form.priceVnd" type="number" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>

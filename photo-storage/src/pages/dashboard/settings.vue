@@ -61,7 +61,7 @@ async function changePassword() {
         {{ $t('settings.passwordChanged') }}
       </div>
 
-      <form @submit.prevent="changePassword" class="space-y-4">
+      <form class="space-y-4" @submit.prevent="changePassword">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('settings.currentPassword') }}</label>
           <input
