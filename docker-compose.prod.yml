@@ -67,7 +67,7 @@ services:
       R2_PRIVATE_BUCKET: webphoto
       R2_PUBLIC_BUCKET: webphoto-public
       R2_LIMIT_GB: 10
-      CDN_URL: https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev
+      CDN_URL: ${CDN_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
       FROM_EMAIL: noreply@bhquan.site
       APP_NAME: PhotoStorage
@@ -105,7 +105,7 @@ services:
       R2_PRIVATE_BUCKET: webphoto
       R2_PUBLIC_BUCKET: webphoto-public
       R2_LIMIT_GB: 10
-      CDN_URL: https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev
+      CDN_URL: ${CDN_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
       FROM_EMAIL: noreply@bhquan.site
       APP_NAME: PhotoStorage

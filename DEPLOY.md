@@ -1,6 +1,6 @@
 # PHOTO STORAGE — DEPLOYMENT GUIDE
 
-> Domain: bhquan.site | VPS: 213.163.199.176 | Cập nhật: 2026-03-25
+> Domain: bhquan.site | VPS: <your-vps-ip> | Cập nhật: 2026-03-25
 
 ---
 
@@ -13,7 +13,7 @@
   Cloudflare DNS (DNS only / grey cloud)
        │
        ▼
-  VPS Ubuntu (213.163.199.176)
+  VPS Ubuntu (<your-vps-ip>)
   ┌──────────────────────────────────────────────┐
   │  Nginx (BT Panel — host)                    │
   │  ├─ :80  → redirect HTTPS                   │
@@ -41,7 +41,7 @@
   Cloudflare R2 (Object Storage)
   ├─ webphoto        (private: originals/RAW)
   └─ webphoto-public (public: thumbnails/previews/avatars)
-      CDN: https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev
+      CDN: ${CDN_URL}
 ```
 
 ### Đặc điểm kiến trúc
@@ -98,7 +98,7 @@ Vào Cloudflare Dashboard → DNS:
 bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
 
 # Ví dụ:
-bash scripts/quick-deploy.sh 213.163.199.176 bhquan.site
+bash scripts/quick-deploy.sh <your-vps-ip> bhquan.site
 ```
 
 Script tự động thực hiện 8 bước:
@@ -121,7 +121,7 @@ Script tự động thực hiện 8 bước:
 bash scripts/update-deploy.sh <VPS_IP>
 
 # Ví dụ:
-bash scripts/update-deploy.sh 213.163.199.176
+bash scripts/update-deploy.sh <your-vps-ip>
 ```
 
 Script thực hiện 5 bước:
@@ -345,7 +345,7 @@ crontab -e
 
 ```bash
 # === KẾT NỐI VPS ===
-ssh root@213.163.199.176
+ssh root@<your-vps-ip>
 cd /opt/webphoto
 
 # === TRẠNG THÁI ===
@@ -368,7 +368,7 @@ docker exec photo-mysql mysqldump -u root -p"<ROOT_PASS>" photo_storage \
 gunzip < backup.sql.gz | docker exec -i photo-mysql mysql -u root -p"<ROOT_PASS>" photo_storage
 
 # === CẬP NHẬT CODE (từ máy local) ===
-bash scripts/update-deploy.sh 213.163.199.176
+bash scripts/update-deploy.sh <your-vps-ip>
 
 # === DEPLOY VPS MỚI (từ máy local) ===
 bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
@@ -524,7 +524,7 @@ dig +short <DOMAIN>  # Phải trả về VPS IP
 
 | Mục | Giá trị |
 |-----|---------|
-| **IP** | 213.163.199.176 |
+| **IP** | <your-vps-ip> |
 | **OS** | Ubuntu |
 | **Panel** | BT Panel (aaPanel) |
 | **Nginx config** | `/www/server/panel/vhost/nginx/bhquan.site.conf` |

@@ -110,7 +110,7 @@ Open http://localhost:3000 — Login: `admin@photostorage.com` / `admin123`
 bash scripts/quick-deploy.sh <vps-ip> <domain>
 
 # Example:
-bash scripts/quick-deploy.sh 213.163.199.176 bhquan.site
+bash scripts/quick-deploy.sh <your-vps-ip> bhquan.site
 ```
 
 What `quick-deploy.sh` does:
@@ -130,7 +130,7 @@ What `quick-deploy.sh` does:
 bash scripts/update-deploy.sh <vps-ip>
 
 # Example:
-bash scripts/update-deploy.sh 213.163.199.176
+bash scripts/update-deploy.sh <your-vps-ip>
 ```
 
 What `update-deploy.sh` does:
@@ -215,4 +215,4 @@ Copy `.env.example` to `.env` and configure:
 | Frontend | https://bhquan.site |
 | API | https://bhquan.site/api |
 | Admin | https://bhquan.site/admin |
-| CDN | https://pub-5bee544ff1d1411bb92b8acd71487437.r2.dev |
+| CDN | *(configured via CDN_URL env var)* |
