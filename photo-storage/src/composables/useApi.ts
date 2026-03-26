@@ -62,7 +62,7 @@ export function useApiList<T = unknown>() {
     loading.value = true
     try {
       const result = await fn()
-      items.value = [...items.value, ...(result.items ?? [])]
+      items.value = [...items.value, ...(result.items ?? [])] as T[]
       cursor.value = result.nextCursor ?? null
       hasMore.value = !!result.nextCursor
     } catch (e: any) {
