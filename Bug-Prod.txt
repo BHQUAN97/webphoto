@@ -1,0 +1,13 @@
+Bug 1: Vẫn lỗi UI i18n => Hãy thiết lập chỉ sử dụng tiếng việt
+Ví dụ màn login:
+auth.login
+auth.email
+auth.password
+auth.login
+auth.noAccount auth.register
+
+Bug 2: copy link ảnh khi xem chi tiết từng ảnh chưa chưa copy vào chipboad
+Bug 3: Thực hiện hàng loạt màn danh sách chưa có chức năng tải file được select
+Bug 4: Bố cục phần top các thành phần khi xem chi tiết 1 albumn chiếm quá nhiều diện tích và chưa được đẹp
+
+=> Hãy thực hiện sửa và test lại sau đó push code và deploy
