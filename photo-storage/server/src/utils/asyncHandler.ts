@@ -8,7 +8,7 @@ export const asyncHandler =
       logger.error(`[${req.method}] ${req.path} — ${err.message}`, {
         userId: (req as any).user?.id ?? 'anonymous',
         errorName: err.name,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+        stack: err.stack,
       })
       next(err)
     })

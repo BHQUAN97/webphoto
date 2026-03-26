@@ -175,6 +175,8 @@
     "deleteFailed": "Xóa ảnh thất bại",
     "download": "Tải ảnh gốc",
     "downloadFailed": "Không thể tải ảnh",
+    "downloadProcessing": "Đang chuẩn bị tải ảnh...",
+    "downloadDone": "Đã tải ảnh thành công",
     "copyLink": "Sao chép link ảnh",
     "status": {
       "uploading": "Uploading",
@@ -455,7 +457,12 @@
     "renameFailed": "Đổi tên thất bại",
     "download": "Tải",
     "downloadSuccess": "Đã tải {count} ảnh",
-    "downloadFailed": "Tải ảnh thất bại"
+    "downloadFailed": "Tải ảnh thất bại",
+    "downloadProcessing": "Đang chuẩn bị tải xuống, vui lòng đợi...",
+    "downloadChoiceTitle": "Chọn cách tải",
+    "downloadChoiceDesc": "Bạn đang chọn {count} ảnh. Tải theo cách nào?",
+    "downloadAsZip": "Tải file ZIP",
+    "downloadOneByOne": "Tải từng ảnh"
   },
   "adminSettings": {
     "title": "Cài đặt hệ thống",

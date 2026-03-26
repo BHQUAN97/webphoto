@@ -86,9 +86,23 @@ async function batchDelete() {
   finally { batchLoading.value = false }
 }
 
+const showBatchDownloadChoice = ref(false)
+
 async function batchDownload() {
   if (selectedIds.value.size === 0) return
+  if (selectedIds.value.size === 1) {
+    // Single file — download directly
+    await batchDownloadSequential()
+    return
+  }
+  // Multiple files — ask user
+  showBatchDownloadChoice.value = true
+}
+
+async function batchDownloadZip() {
+  showBatchDownloadChoice.value = false
   batchLoading.value = true
+  toast.info(t('batch.downloadProcessing'))
   try {
     const res = await fetch('/api/images/batch', {
       method: 'POST',
@@ -110,6 +124,35 @@ async function batchDownload() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     toast.success(t('batch.downloadSuccess', { count: selectedIds.value.size }))
+  } catch { toast.error(t('batch.downloadFailed')) }
+  finally { batchLoading.value = false }
+}
+
+async function batchDownloadSequential() {
+  showBatchDownloadChoice.value = false
+  batchLoading.value = true
+  toast.info(t('batch.downloadProcessing'))
+  let done = 0
+  try {
+    const ids = [...selectedIds.value]
+    for (const id of ids) {
+      const img = images.value.find(i => i.id === id)
+      if (!img) continue
+      try {
+        const res = await api.get(`/images/${id}/download-url`)
+        const blob = await fetch(res.data.url).then(r => r.blob())
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = img.originalName || 'image'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        done++
+      } catch { /* skip failed */ }
+    }
+    toast.success(t('batch.downloadSuccess', { count: done }))
   } catch { toast.error(t('batch.downloadFailed')) }
   finally { batchLoading.value = false }
 }
@@ -604,6 +647,27 @@ onUnmounted(stopPolling)
       @delete="confirmDeleteImage"
       @navigate="(idx: number) => { lightboxIndex = idx; lightboxImage = images[idx] }"
     />
+
+    <!-- Batch Download Choice Modal -->
+    <BaseModal :show="showBatchDownloadChoice" :title="$t('batch.downloadChoiceTitle')" @close="showBatchDownloadChoice = false">
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600 dark:text-gray-400">{{ $t('batch.downloadChoiceDesc', { count: selectedIds.size }) }}</p>
+        <div class="flex flex-col gap-2">
+          <BaseButton variant="primary" :loading="batchLoading" @click="batchDownloadZip">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {{ $t('batch.downloadAsZip') }}
+          </BaseButton>
+          <BaseButton variant="secondary" :loading="batchLoading" @click="batchDownloadSequential">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {{ $t('batch.downloadOneByOne') }}
+          </BaseButton>
+        </div>
+      </div>
+    </BaseModal>
 
     <!-- Batch Rename Modal -->
     <BaseModal :show="showBatchRename" :title="$t('batch.renameTitle')" @close="showBatchRename = false">

@@ -4,10 +4,12 @@ import { useI18n } from '@/plugins/i18n'
 import type { ImageItem } from '@/types'
 import { formatBytes, cdnUrl } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 import api from '@/utils/api'
 import CommentList from './CommentList.vue'
 
 const { t } = useI18n()
+const toast = useToast()
 
 interface Props {
   image: ImageItem | null
@@ -37,9 +39,10 @@ const linkCopied = ref(false)
 
 async function copyPublicLink() {
   if (!props.image) return
-  const key = props.image.previewKey || props.image.previewUrl || ''
-  if (!key) return
-  const fullUrl = key.startsWith('http') ? key : cdnUrl(key)
+  // Prefer previewUrl (full public URL) over previewKey (internal storage path)
+  const url = props.image.previewUrl || (props.image.previewKey ? cdnUrl(props.image.previewKey) : '')
+  if (!url) return
+  const fullUrl = url
   try {
     await navigator.clipboard.writeText(fullUrl)
   } catch {
@@ -102,9 +105,9 @@ function handleDoubleClick() {
 async function handleDownload() {
   if (!props.image || !auth.canDownload) return
   downloading.value = true
+  toast.info(t('image.downloadProcessing'))
   try {
     const res = await api.get(`/images/${props.image.id}/download-url`)
-    // Use fetch+blob to trigger download on same page (no new tab on mobile)
     const blob = await fetch(res.data.url).then(r => r.blob())
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -114,8 +117,9 @@ async function handleDownload() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    toast.success(t('image.downloadDone'))
   } catch {
-    alert(t('image.downloadFailed'))
+    toast.error(t('image.downloadFailed'))
   } finally {
     downloading.value = false
   }

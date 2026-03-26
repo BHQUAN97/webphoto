@@ -355,6 +355,8 @@ router.delete('/:id/like', async (req, res) => {
 router.get('/:id/comments', async (req, res) => {
   const { id } = req.params
 
+  if (!isValidUlid(id)) return res.status(400).json({ message: 'ID ảnh không hợp lệ' })
+
   const commentList = await db.select({
     id: comments.id, content: comments.content, createdAt: comments.createdAt,
     userId: comments.userId, guestName: comments.guestName,

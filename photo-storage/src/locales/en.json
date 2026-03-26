@@ -175,6 +175,8 @@
     "deleteFailed": "Failed to delete photo",
     "download": "Download original",
     "downloadFailed": "Cannot download photo",
+    "downloadProcessing": "Preparing download...",
+    "downloadDone": "Download complete",
     "copyLink": "Copy image link",
     "status": {
       "uploading": "Uploading",
@@ -455,7 +457,12 @@
     "renameFailed": "Rename failed",
     "download": "Download",
     "downloadSuccess": "Downloaded {count} photos",
-    "downloadFailed": "Download failed"
+    "downloadFailed": "Download failed",
+    "downloadProcessing": "Preparing download, please wait...",
+    "downloadChoiceTitle": "Download method",
+    "downloadChoiceDesc": "You selected {count} photos. How would you like to download?",
+    "downloadAsZip": "Download as ZIP",
+    "downloadOneByOne": "Download one by one"
   },
   "adminSettings": {
     "title": "System Settings",
