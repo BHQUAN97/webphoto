@@ -1,4 +1,4 @@
-Bug 1: Error: Failed query: insert into `comments` (`id`, `image_id`, `user_id`, `guest_name`, `content`, `created_at`) values (?, ?, ?, ?, ?, ?)
+Bug 1: Lỗi Khi comment ảnh Error: Failed query: insert into `comments` (`id`, `image_id`, `user_id`, `guest_name`, `content`, `created_at`) values (?, ?, ?, ?, ?, ?)
 params: 01KMMMBZP1DCMGQKW57NJREHFN,01KMM9HSX3NTCR3B7679716XTK,01KMHHHGMFA8EN2PG9FGYW8491,,1,2026-03-26 08:32:26.305
     at MySql2PreparedQuery.queryWithCache (file:///app/node_modules/drizzle-orm/mysql-core/session.js:25:15)
     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
