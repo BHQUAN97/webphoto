@@ -15,11 +15,14 @@ export const users = mysqlTable('users', {
   role:          mysqlEnum('role', ['user', 'admin']).default('user').notNull(),
   isActive:      boolean('is_active').default(true).notNull(),
   emailVerified: boolean('email_verified').default(false).notNull(),
+  referralCode:  varchar('referral_code', { length: 20 }),
+  referredBy:    varchar('referred_by', { length: 26 }),
   createdAt:     datetime('created_at').default(sql`NOW()`).notNull(),
   updatedAt:     datetime('updated_at').default(sql`NOW()`).notNull(),
 }, (t) => ({
   emailIdx: uniqueIndex('users_email_idx').on(t.email),
   roleIdx:  index('users_role_idx').on(t.role, t.isActive, t.createdAt),
+  referralCodeIdx: uniqueIndex('users_referral_code_idx').on(t.referralCode),
 }))
 
 // ─── PLANS ────────────────────────────────────────────────────────────────
@@ -50,6 +53,50 @@ export const userPlans = mysqlTable('user_plans', {
 }, (t) => ({
   userActiveIdx: index('user_plans_user_active_idx').on(t.userId, t.isActive),
   expiryIdx:     index('user_plans_expiry_idx').on(t.expiresAt, t.isActive),
+}))
+
+// ─── VOUCHERS ───────────────────────────────────────────────────────────
+export const vouchers = mysqlTable('vouchers', {
+  id:           varchar('id', { length: 26 }).primaryKey(),
+  code:         varchar('code', { length: 50 }).notNull().unique(),
+  type:         mysqlEnum('type', ['plan_activation', 'addon_storage', 'addon_days']).default('plan_activation').notNull(),
+  planId:       varchar('plan_id', { length: 26 }),
+  durationDays: int('duration_days').default(30).notNull(),
+  addonBytes:   bigint('addon_bytes', { mode: 'bigint' }),
+  maxUses:      int('max_uses'),
+  usedCount:    int('used_count').default(0).notNull(),
+  validFrom:    datetime('valid_from').default(sql`NOW()`).notNull(),
+  validUntil:   datetime('valid_until'),
+  isActive:     boolean('is_active').default(true).notNull(),
+  createdBy:    varchar('created_by', { length: 26 }),
+  createdAt:    datetime('created_at').default(sql`NOW()`).notNull(),
+}, (t) => ({
+  codeIdx: uniqueIndex('vouchers_code_idx').on(t.code),
+  activeIdx: index('vouchers_active_idx').on(t.isActive, t.validFrom),
+}))
+
+// ─── REFERRALS ──────────────────────────────────────────────────────────
+export const referrals = mysqlTable('referrals', {
+  id:          varchar('id', { length: 26 }).primaryKey(),
+  referrerId:  varchar('referrer_id', { length: 26 }).notNull(),
+  refereeId:   varchar('referee_id', { length: 26 }).notNull(),
+  rewardDays:  int('reward_days').default(7).notNull(),
+  rewarded:    boolean('rewarded').default(false).notNull(),
+  createdAt:   datetime('created_at').default(sql`NOW()`).notNull(),
+}, (t) => ({
+  referrerIdx: index('referrals_referrer_idx').on(t.referrerId),
+  refereeIdx:  uniqueIndex('referrals_referee_idx').on(t.refereeId),
+}))
+
+// ─── VOUCHER USAGE LOG ──────────────────────────────────────────────────
+export const voucherUsages = mysqlTable('voucher_usages', {
+  id:        varchar('id', { length: 26 }).primaryKey(),
+  voucherId: varchar('voucher_id', { length: 26 }).notNull(),
+  userId:    varchar('user_id', { length: 26 }).notNull(),
+  usedAt:    datetime('used_at').default(sql`NOW()`).notNull(),
+}, (t) => ({
+  voucherIdx: index('voucher_usages_voucher_idx').on(t.voucherId),
+  userIdx:    index('voucher_usages_user_idx').on(t.userId),
 }))
 
 // ─── STORAGE ADD-ONS ──────────────────────────────────────────────────────

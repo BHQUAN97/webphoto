@@ -62,17 +62,17 @@ onMounted(fetchPlans)
 <template>
   <div>
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Quản lý gói dịch vụ</h1>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Quản lý gói dịch vụ</h1>
       <BaseButton @click="openCreate">Tạo gói mới</BaseButton>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div v-for="p in plans" :key="p.id" class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <div v-for="p in plans" :key="p.id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold text-gray-900">{{ p.name }}</h3>
+          <h3 class="font-semibold text-gray-900 dark:text-white">{{ p.name }}</h3>
           <BaseBadge :variant="p.isActive ? 'success' : 'default'">{{ p.isActive ? 'Active' : 'Inactive' }}</BaseBadge>
         </div>
-        <p class="text-2xl font-bold text-gray-900">{{ p.priceVnd === 0 ? 'Miễn phí' : formatVnd(p.priceVnd) }}</p>
-        <ul class="mt-3 space-y-1 text-sm text-gray-600">
+        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ p.priceVnd === 0 ? 'Miễn phí' : formatVnd(p.priceVnd) }}</p>
+        <ul class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>{{ p.maxAlbums ?? '∞' }} album</li>
           <li>{{ p.durationDays }} ngày</li>
           <li>Quota: {{ formatBytes(p.quotaBytes) }}</li>
@@ -86,12 +86,12 @@ onMounted(fetchPlans)
 
     <BaseModal :show="showForm" :title="editingPlan ? 'Sửa gói' : 'Tạo gói'" max-width="lg" @close="showForm = false">
       <form @submit.prevent="savePlan" class="grid grid-cols-2 gap-4">
-        <div><label class="block text-sm font-medium mb-1">Code</label><input v-model="form.code" :disabled="!!editingPlan" class="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-        <div><label class="block text-sm font-medium mb-1">Tên</label><input v-model="form.name" class="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-        <div><label class="block text-sm font-medium mb-1">Giá (VNĐ)</label><input v-model.number="form.priceVnd" type="number" class="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-        <div><label class="block text-sm font-medium mb-1">Thời hạn (ngày)</label><input v-model.number="form.durationDays" type="number" class="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-        <div><label class="block text-sm font-medium mb-1">Quota (bytes)</label><input v-model="form.quotaBytes" class="w-full px-3 py-2 border rounded-lg text-sm" /></div>
-        <div><label class="block text-sm font-medium mb-1">Max album</label><input v-model.number="form.maxAlbums" type="number" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Để trống = unlimited" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Code</label><input v-model="form.code" :disabled="!!editingPlan" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Tên</label><input v-model="form.name" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Giá (VNĐ)</label><input v-model.number="form.priceVnd" type="number" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Thời hạn (ngày)</label><input v-model.number="form.durationDays" type="number" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Quota (bytes)</label><input v-model="form.quotaBytes" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" /></div>
+        <div><label class="block text-sm font-medium mb-1 dark:text-gray-300">Max album</label><input v-model.number="form.maxAlbums" type="number" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" placeholder="Để trống = unlimited" /></div>
         <div class="col-span-2 flex gap-6">
           <label class="flex items-center gap-2 text-sm"><input v-model="form.canDownload" type="checkbox" /> Download</label>
           <label class="flex items-center gap-2 text-sm"><input v-model="form.canFilter" type="checkbox" /> Bộ lọc</label>

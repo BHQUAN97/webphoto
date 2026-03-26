@@ -58,24 +58,24 @@ onMounted(fetchUsers)
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Quản lý người dùng</h1>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Quản lý người dùng</h1>
 
     <!-- Filters -->
-    <div class="flex gap-3 mb-4">
+    <div class="flex flex-wrap gap-3 mb-4">
       <input
         v-model="search"
         type="text"
         placeholder="Tìm tên / email..."
-        class="px-3 py-2 border border-gray-300 rounded-lg text-sm flex-1 max-w-xs"
+        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm w-full sm:max-w-xs dark:bg-gray-700 dark:text-white"
         @input="debouncedFetch"
       />
-      <select v-model="filterPlan" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="fetchUsers">
+      <select v-model="filterPlan" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" @change="fetchUsers">
         <option value="">Tất cả gói</option>
         <option value="free">Free</option>
         <option value="basic">Cơ bản</option>
         <option value="pro">Pro</option>
       </select>
-      <select v-model="filterStatus" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="fetchUsers">
+      <select v-model="filterStatus" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" @change="fetchUsers">
         <option value="">Tất cả</option>
         <option value="active">Active</option>
         <option value="banned">Banned</option>
@@ -83,38 +83,38 @@ onMounted(fetchUsers)
     </div>
 
     <!-- Table -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gói</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Storage</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày tạo</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Gói</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Storage</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trạng thái</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Ngày tạo</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           <tr v-if="loading">
             <td colspan="7" class="px-4 py-8 text-center text-gray-400">Đang tải...</td>
           </tr>
-          <tr v-for="u in users" :key="u.id" class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ u.displayName }}</td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ u.email }}</td>
+          <tr v-for="u in users" :key="u.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ u.displayName }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ u.email }}</td>
             <td class="px-4 py-3">
               <BaseBadge :variant="u.planCode === 'pro' ? 'orange' : u.planCode === 'basic' ? 'info' : 'default'">
                 {{ u.planCode ?? 'free' }}
               </BaseBadge>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatBytes(u.storageUsed ?? 0) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatBytes(u.storageUsed ?? 0) }}</td>
             <td class="px-4 py-3">
               <BaseBadge :variant="u.isActive ? 'success' : 'danger'">
                 {{ u.isActive ? 'Active' : 'Banned' }}
               </BaseBadge>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(u.createdAt) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(u.createdAt) }}</td>
             <td class="px-4 py-3">
               <div class="flex gap-2">
                 <router-link :to="`/admin/users/${u.id}`">

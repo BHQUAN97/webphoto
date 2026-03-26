@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { ulid } from 'ulid'
 import { db } from '../../utils/db.js'
-import { users, plans, userPlans, systemSettings } from '../../database/schema.js'
-import { eq } from 'drizzle-orm'
+import { users, plans, userPlans, systemSettings, referrals } from '../../database/schema.js'
+import { eq, and } from 'drizzle-orm'
 import { hashPassword } from '../../utils/hash.js'
 import { jwtUtils } from '../../utils/jwt.js'
 import { quotaRedis } from '../../utils/redis.js'
@@ -13,8 +13,15 @@ import { accessTokenCookie, refreshTokenCookie } from '../../utils/cookie.js'
 
 const router = Router()
 
+function generateReferralCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return code
+}
+
 router.post('/register', async (req, res) => {
-  const { email, password, displayName } = req.body
+  const { email, password, displayName, referralCode } = req.body
 
   if (!email || !password || !displayName) {
     return res.status(400).json({ message: 'Thiếu thông tin đăng ký' })
@@ -55,6 +62,14 @@ router.post('/register', async (req, res) => {
   const userId = ulid()
   const passwordHash = await hashPassword(password)
 
+  // Look up referrer if referral code provided
+  let referrerId: string | null = null
+  if (referralCode?.trim()) {
+    const [referrer] = await db.select({ id: users.id }).from(users)
+      .where(eq(users.referralCode, referralCode.trim().toUpperCase())).limit(1)
+    if (referrer) referrerId = referrer.id
+  }
+
   await db.insert(users).values({
     id: userId,
     email: email.toLowerCase().trim(),
@@ -63,6 +78,8 @@ router.post('/register', async (req, res) => {
     role: 'user',
     isActive: true,
     emailVerified: false,
+    referralCode: generateReferralCode(),
+    referredBy: referrerId,
   })
 
   // Assign free plan
@@ -79,6 +96,24 @@ router.post('/register', async (req, res) => {
       isActive: true,
     })
     await quotaRedis.setLimit(userId, freePlan.quotaBytes)
+  }
+
+  // Process referral reward (extend referrer's plan by 7 days)
+  if (referrerId) {
+    try {
+      await db.insert(referrals).values({
+        id: ulid(), referrerId, refereeId: userId, rewardDays: 7, rewarded: false,
+      })
+      // Extend referrer's active plan
+      const [referrerPlan] = await db.select().from(userPlans)
+        .where(and(eq(userPlans.userId, referrerId), eq(userPlans.isActive, true))).limit(1)
+      if (referrerPlan) {
+        const newExpiry = new Date(referrerPlan.expiresAt.getTime() + 7 * 86400_000)
+        await db.update(userPlans).set({ expiresAt: newExpiry }).where(eq(userPlans.id, referrerPlan.id))
+        await db.update(referrals).set({ rewarded: true })
+          .where(and(eq(referrals.referrerId, referrerId), eq(referrals.refereeId, userId)))
+      }
+    } catch { /* referral reward failure should not block registration */ }
   }
 
   // Generate tokens

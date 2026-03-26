@@ -80,16 +80,16 @@ onMounted(fetchPayments)
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Quản lý thanh toán</h1>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Quản lý thanh toán</h1>
       <div class="flex gap-2">
-        <span class="text-sm text-gray-500 self-center">Tổng: <strong>{{ formatVnd(totalRevenue) }}</strong></span>
+        <span class="text-sm text-gray-500 dark:text-gray-400 self-center">Tổng: <strong>{{ formatVnd(totalRevenue) }}</strong></span>
         <BaseButton variant="secondary" size="sm" @click="exportCSV">Export CSV</BaseButton>
       </div>
     </div>
-    <div class="flex gap-3 mb-4">
-      <input v-model="search" type="text" placeholder="Mã tham chiếu / email..." class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64" @input="debouncedFetch" />
-      <select v-model="filterStatus" class="px-3 py-2 border border-gray-300 rounded-lg text-sm" @change="fetchPayments">
+    <div class="flex flex-wrap gap-3 mb-4">
+      <input v-model="search" type="text" placeholder="Mã tham chiếu / email..." class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm w-full sm:w-64 dark:bg-gray-700 dark:text-white" @input="debouncedFetch" />
+      <select v-model="filterStatus" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-white" @change="fetchPayments">
         <option value="">Tất cả</option>
         <option value="pending">Chờ TT</option>
         <option value="awaiting_confirm">Chờ duyệt</option>
@@ -97,28 +97,28 @@ onMounted(fetchPayments)
         <option value="failed">Thất bại</option>
       </select>
     </div>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mã</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Số tiền</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Mã</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">User</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Số tiền</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trạng thái</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Ngày</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           <tr v-if="loading"><td colspan="6" class="px-4 py-8 text-center text-gray-400">Đang tải...</td></tr>
-          <tr v-for="p in payments" :key="p.id" class="hover:bg-gray-50">
+          <tr v-for="p in payments" :key="p.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
             <td class="px-4 py-3 text-sm font-mono">{{ p.referenceCode }}</td>
             <td class="px-4 py-3 text-sm">{{ p.userName ?? p.userId }}</td>
             <td class="px-4 py-3 text-sm font-medium">{{ formatVnd(p.amountVnd) }}</td>
             <td class="px-4 py-3">
               <BaseBadge :variant="statusBadge[p.status]?.variant ?? 'default'">{{ statusBadge[p.status]?.label ?? p.status }}</BaseBadge>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(p.createdAt) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ formatDate(p.createdAt) }}</td>
             <td class="px-4 py-3">
               <div v-if="p.status === 'awaiting_confirm'" class="flex gap-2">
                 <BaseButton size="sm" variant="primary" @click="showApprove = p">Duyệt</BaseButton>
@@ -133,15 +133,15 @@ onMounted(fetchPayments)
 
     <!-- Approve Modal -->
     <BaseModal :show="!!showApprove" title="Duyệt thanh toán" max-width="sm" @close="showApprove = null">
-      <p class="text-sm text-gray-600 mb-3">Đơn #{{ showApprove?.referenceCode }} — {{ formatVnd(showApprove?.amountVnd ?? 0) }}</p>
-      <textarea v-model="approveNote" rows="2" placeholder="Ghi chú (tuỳ chọn)..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4" />
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Đơn #{{ showApprove?.referenceCode }} — {{ formatVnd(showApprove?.amountVnd ?? 0) }}</p>
+      <textarea v-model="approveNote" rows="2" placeholder="Ghi chú (tuỳ chọn)..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm mb-4 dark:bg-gray-700 dark:text-white" />
       <BaseButton :loading="approving" class="w-full" @click="approve">Xác nhận đã thanh toán</BaseButton>
     </BaseModal>
 
     <!-- Reject Modal -->
     <BaseModal :show="!!showReject" title="Từ chối thanh toán" max-width="sm" @close="showReject = null">
-      <p class="text-sm text-gray-600 mb-3">Đơn #{{ showReject?.referenceCode }}</p>
-      <textarea v-model="rejectNote" rows="2" placeholder="Lý do từ chối..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4" />
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Đơn #{{ showReject?.referenceCode }}</p>
+      <textarea v-model="rejectNote" rows="2" placeholder="Lý do từ chối..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm mb-4 dark:bg-gray-700 dark:text-white" />
       <BaseButton variant="danger" :loading="rejecting" class="w-full" @click="reject">Từ chối</BaseButton>
     </BaseModal>
   </div>

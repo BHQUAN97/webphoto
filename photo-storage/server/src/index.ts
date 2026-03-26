@@ -45,6 +45,13 @@ import adminPaymentMethodRoutes from './routes/admin/payment-methods/index.js'
 import adminSettingsRoutes from './routes/admin/settings/index.js'
 import adminLogRoutes from './routes/admin/logs/index.js'
 
+// Referral routes
+import referralRoutes from './routes/referrals/index.js'
+
+// Voucher routes
+import voucherRoutes from './routes/vouchers/index.js'
+import adminVoucherRoutes from './routes/admin/vouchers/index.js'
+
 // Share routes (public, no auth)
 import shareRoutes from './routes/share/index.js'
 
@@ -129,6 +136,13 @@ app.use('/api/admin/plans', adminGuard, adminPlanRoutes)
 app.use('/api/admin/payment-methods', adminGuard, adminPaymentMethodRoutes)
 app.use('/api/admin/settings', adminGuard, adminSettingsRoutes)
 app.use('/api/admin/logs', adminGuard, adminLogRoutes)
+app.use('/api/admin/vouchers', adminGuard, adminVoucherRoutes)
+
+// Voucher routes (user-facing, requires auth)
+app.use('/api/vouchers', voucherRoutes)
+
+// Referral routes
+app.use('/api/referrals', referralRoutes)
 
 // Share routes (public album sharing, no auth)
 app.use('/api/share', shareRoutes)

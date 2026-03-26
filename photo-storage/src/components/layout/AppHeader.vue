@@ -5,9 +5,16 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { cdnUrl } from '@/utils/format'
 import { useTheme } from '@/composables/useTheme'
+import { setLocale, getLocale } from '@/plugins/i18n'
 import NotificationBell from './NotificationBell.vue'
 
 useI18n()
+const currentLocale = ref(getLocale())
+function toggleLocale() {
+  const next = currentLocale.value === 'vi' ? 'en' : 'vi'
+  setLocale(next as 'vi' | 'en')
+  currentLocale.value = next
+}
 const props = defineProps<{ hasSidebar?: boolean }>()
 const emit = defineEmits<{ 'toggle-sidebar': [] }>()
 const auth = useAuthStore()
@@ -69,6 +76,15 @@ function handleHamburger() {
             </svg>
           </button>
 
+          <!-- Language toggle -->
+          <button
+            class="px-2 py-1.5 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+            title="Chuyển ngôn ngữ / Switch language"
+            @click="toggleLocale"
+          >
+            {{ currentLocale === 'vi' ? 'EN' : 'VI' }}
+          </button>
+
           <template v-if="auth.isAuthenticated">
             <NotificationBell />
             <div class="relative">
@@ -115,7 +131,7 @@ function handleHamburger() {
                     </svg>
                     {{ $t('nav.profile') }}
                   </router-link>
-                  <router-link to="/referral" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <router-link to="/dashboard/referral" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                     </svg>

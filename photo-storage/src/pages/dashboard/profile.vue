@@ -113,12 +113,12 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
 
   <div v-else>
     <!-- Profile Header -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
       <div class="flex items-start gap-4">
         <div class="relative group cursor-pointer" @click="avatarInput?.click()">
           <img
             :src="cdnUrl(auth.user?.avatarKey ?? null)"
-            class="w-20 h-20 rounded-full object-cover bg-gray-200"
+            class="w-20 h-20 rounded-full object-cover bg-gray-200 dark:bg-gray-700"
             alt=""
           />
           <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -130,14 +130,14 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
         <div class="flex-1">
           <template v-if="!editMode">
             <div class="flex items-center gap-3">
-              <h1 class="text-xl font-bold text-gray-900">{{ auth.user?.displayName }}</h1>
+              <h1 class="text-xl font-bold text-gray-900 dark:text-white">{{ auth.user?.displayName }}</h1>
               <BaseBadge :variant="planBadge[auth.planCode]?.variant ?? 'default'">
                 {{ planBadge[auth.planCode]?.label ?? 'Free' }}
               </BaseBadge>
             </div>
-            <p class="text-sm text-gray-500 mt-1">{{ auth.user?.email }}</p>
-            <p v-if="auth.user?.bio" class="text-sm text-gray-600 mt-2">{{ auth.user.bio }}</p>
-            <div class="flex gap-2 mt-3">
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ auth.user?.email }}</p>
+            <p v-if="auth.user?.bio" class="text-sm text-gray-600 dark:text-gray-400 mt-2">{{ auth.user.bio }}</p>
+            <div class="flex flex-col sm:flex-row gap-2 mt-3">
               <BaseButton size="sm" variant="secondary" @click="editMode = true">{{ $t('profile.editProfile') }}</BaseButton>
               <router-link to="/upgrade">
                 <BaseButton size="sm">{{ $t('profile.upgradePlan') }}</BaseButton>
@@ -148,13 +148,13 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
             <div class="space-y-3 max-w-md">
               <input
                 v-model="form.displayName"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                 :placeholder="$t('auth.displayName')"
               />
               <textarea
                 v-model="form.bio"
                 rows="2"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                 :placeholder="$t('profile.bio')"
               />
               <div class="flex gap-2">
@@ -169,51 +169,51 @@ const paymentStatusBadge: Record<string, { label: string; variant: 'default' | '
 
     <!-- Stat Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">{{ $t('profile.totalImages') }}</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalImages }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('profile.totalImages') }}</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.totalImages }}</p>
         <div class="flex gap-3 mt-1 text-xs">
           <span v-if="stats.processingImages" class="text-yellow-600">{{ stats.processingImages }} {{ $t('dashboard.processing') }}</span>
           <span v-if="stats.failedImages" class="text-red-600">{{ stats.failedImages }} {{ $t('common.error') }}</span>
         </div>
       </div>
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">{{ $t('profile.storage') }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('profile.storage') }}</p>
         <StorageBar :used-bytes="storage.usedBytes" :limit-bytes="storage.limitBytes" class="mt-2" />
       </div>
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">{{ $t('profile.albumCount') }}</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ albums.length }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('profile.albumCount') }}</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ albums.length }}</p>
       </div>
-      <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
-        <p class="text-sm text-gray-500">{{ $t('profile.interactionsReceived') }}</p>
-        <p class="text-2xl font-bold text-gray-900 mt-1">{{ stats.totalLikes }} {{ $t('dashboard.like') }}</p>
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('profile.interactionsReceived') }}</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.totalLikes }} {{ $t('dashboard.like') }}</p>
         <p class="text-xs text-gray-400 mt-1">{{ stats.totalComments }} {{ $t('dashboard.comments') }}</p>
       </div>
     </div>
 
     <!-- Albums -->
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('profile.myAlbums') }}</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ $t('profile.myAlbums') }}</h2>
     <AlbumGrid :albums="albums" class="mb-8" />
 
     <!-- Payment History -->
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('profile.paymentHistory') }}</h2>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ $t('profile.paymentHistory') }}</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700/50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.plan') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.amount') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.referenceCode') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.status') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('profile.date') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{{ $t('profile.plan') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{{ $t('profile.amount') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{{ $t('profile.referenceCode') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{{ $t('profile.status') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{{ $t('profile.date') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
-          <tr v-for="p in payments" :key="p.id" class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-sm text-gray-700">{{ p.planName ?? '-' }}</td>
-            <td class="px-4 py-3 text-sm text-gray-700">{{ formatVnd(p.amountVnd) }}</td>
-            <td class="px-4 py-3 text-sm text-gray-500 font-mono">{{ p.referenceCode }}</td>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          <tr v-for="p in payments" :key="p.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ p.planName ?? '-' }}</td>
+            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ formatVnd(p.amountVnd) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono">{{ p.referenceCode }}</td>
             <td class="px-4 py-3">
               <BaseBadge :variant="paymentStatusBadge[p.status]?.variant ?? 'default'">
                 {{ paymentStatusBadge[p.status]?.label ?? p.status }}

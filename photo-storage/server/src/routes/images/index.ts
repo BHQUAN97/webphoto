@@ -397,7 +397,7 @@ router.post('/:id/comments', async (req, res) => {
 
   const commentId = ulid()
   await db.insert(comments).values({
-    id: commentId, imageId: id, userId: user.sub, content: safeContent,
+    id: commentId, imageId: id, userId: user.sub, guestName: null, content: safeContent,
   })
   await db.update(images).set({ commentCount: sql`comment_count + 1` }).where(eq(images.id, id))
 
@@ -435,6 +435,90 @@ router.get('/:id/download-url', async (req, res) => {
 
   const url = await storage().downloadUrl(image.originalKey, image.originalName)
   res.json({ url })
+})
+
+// POST /batch — batch operations (rename, delete)
+router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
+  const user = requireAuth(req)
+  const { action, imageIds, pattern, replacement } = req.body
+
+  if (!Array.isArray(imageIds) || imageIds.length === 0) {
+    return res.status(400).json({ message: 'Chọn ít nhất 1 ảnh' })
+  }
+  if (imageIds.length > 500) {
+    return res.status(400).json({ message: 'Tối đa 500 ảnh mỗi lần' })
+  }
+  // Validate all IDs
+  if (!imageIds.every((id: string) => isValidUlid(id))) {
+    return res.status(400).json({ message: 'ID ảnh không hợp lệ' })
+  }
+
+  // Verify user owns these images (via album ownership)
+  const userImages = await db.select({ id: images.id, albumId: images.albumId, originalName: images.originalName })
+    .from(images)
+    .innerJoin(albums, eq(images.albumId, albums.id))
+    .where(and(inArray(images.id, imageIds), eq(albums.userId, user.sub)))
+
+  if (userImages.length === 0) {
+    return res.status(404).json({ message: 'Không tìm thấy ảnh' })
+  }
+
+  const validIds = userImages.map(i => i.id)
+
+  if (action === 'rename') {
+    if (!pattern && !replacement) {
+      return res.status(400).json({ message: 'Cần nhập mẫu đổi tên' })
+    }
+    let renamed = 0
+    for (const img of userImages) {
+      let newName = img.originalName
+      if (pattern && replacement !== undefined) {
+        // Simple find-replace in filename
+        newName = newName.replace(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement)
+      } else if (replacement) {
+        // Replace entire name (keep extension)
+        const ext = img.originalName.includes('.') ? '.' + img.originalName.split('.').pop() : ''
+        const idx = userImages.indexOf(img)
+        newName = `${replacement}_${String(idx + 1).padStart(3, '0')}${ext}`
+      }
+      if (newName !== img.originalName) {
+        await db.update(images).set({ originalName: sanitizeFilename(newName) }).where(eq(images.id, img.id))
+        renamed++
+      }
+    }
+    return res.json({ ok: true, action: 'rename', affected: renamed })
+
+  } else if (action === 'delete') {
+    // Delete images + R2 files
+    const toDelete = await db.select().from(images).where(inArray(images.id, validIds))
+
+    const privateKeys = toDelete.map(i => i.originalKey).filter(Boolean) as string[]
+    const publicKeys = toDelete.flatMap(i => [i.thumbKey, i.previewKey].filter(Boolean)) as string[]
+
+    await Promise.all([
+      privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
+      publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
+    ])
+
+    await db.delete(images).where(inArray(images.id, validIds))
+
+    // Update album image counts
+    const albumIds = [...new Set(toDelete.map(i => i.albumId))]
+    for (const albumId of albumIds) {
+      const [count] = await db.select({ c: sql<number>`COUNT(*)` }).from(images).where(eq(images.albumId, albumId))
+      await db.update(albums).set({ imageCount: count.c }).where(eq(albums.id, albumId))
+    }
+
+    // Invalidate feed cache
+    for (const albumId of albumIds) {
+      await feedCache.invalidate(`feed:album:${albumId}*`)
+    }
+
+    return res.json({ ok: true, action: 'delete', affected: toDelete.length })
+
+  } else {
+    return res.status(400).json({ message: 'Action không hợp lệ (rename | delete)' })
+  }
 })
 
 export default router

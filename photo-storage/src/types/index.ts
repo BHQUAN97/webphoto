@@ -145,6 +145,23 @@ export interface ZaloPayConfig {
   qrImageKey?: string
 }
 
+// ─── Voucher ────────────────────────────────────────────────────────────
+export interface Voucher {
+  id: string
+  code: string
+  type: 'plan_activation' | 'addon_storage' | 'addon_days'
+  planId: string | null
+  durationDays: number
+  addonBytes: string | null
+  maxUses: number | null
+  usedCount: number
+  validFrom: string
+  validUntil: string | null
+  isActive: boolean
+  createdBy: string | null
+  createdAt: string
+}
+
 // ─── Notification ────────────────────────────────────────────────────────
 export type UserEventType =
   | 'image:ready' | 'image:failed' | 'payment:success'

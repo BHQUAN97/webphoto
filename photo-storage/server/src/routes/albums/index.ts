@@ -269,6 +269,68 @@ router.get('/:id/subfolders', async (req, res) => {
   }
 })
 
+// POST /:id/drive-sync — resync album from Google Drive (add new files only)
+router.post('/:id/drive-sync', rateLimit('drive-sync', 5, 3600), async (req, res) => {
+  const user = requireAuth(req)
+  const id = req.params.id as string
+
+  const [album] = await db.select().from(albums)
+    .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
+
+  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+  if (!album.driveFolderId) return res.status(400).json({ message: 'Album không liên kết với Google Drive' })
+
+  // List current Drive files
+  let driveFiles
+  try {
+    driveFiles = await listFiles(album.driveFolderId)
+  } catch (err) {
+    return res.status(400).json({ message: (err as Error).message })
+  }
+
+  // Get existing driveFileIds in this album
+  const existingImages = await db.select({ driveFileId: images.driveFileId })
+    .from(images).where(eq(images.albumId, id))
+  const existingDriveIds = new Set(existingImages.map(i => i.driveFileId).filter(Boolean))
+
+  // Filter only new files
+  const newFiles = driveFiles.filter(f => !existingDriveIds.has(f.id))
+
+  if (newFiles.length === 0) {
+    return res.json({ newImages: 0, message: 'Không có ảnh mới từ Drive' })
+  }
+
+  // Quota check
+  const estimatedBytes = newFiles.reduce((sum, f) => sum + BigInt(f.size || 0), BigInt(0))
+  const quotaCheck = await quotaUtils.canUpload(user.sub, estimatedBytes)
+  if (!quotaCheck.ok) {
+    return res.status(403).json({ message: quotaCheck.reason ?? 'Không đủ dung lượng' })
+  }
+
+  const expiresAt = new Date(Date.now() + 365 * 24 * 3600_000)
+
+  for (const file of newFiles) {
+    const imageId = ulid()
+    const originalKey = `${user.sub}/${imageId}/${file.name}`
+
+    await db.insert(images).values({
+      id: imageId, albumId: id, userId: user.sub,
+      originalKey, driveFileId: file.id, originalName: file.name,
+      mimeType: file.mimeType, originalSize: BigInt(file.size || 0),
+      status: 'syncing', expiresAt,
+    })
+
+    await driveImportQueue.add('import', {
+      imageId, userId: user.sub, albumId: id,
+      driveFileId: file.id, originalKey,
+      mimeType: file.mimeType, originalName: file.name, fileSize: file.size,
+    })
+  }
+
+  logger.info(`[DriveSync] Resync found new files`, { userId: user.sub, albumId: id, newCount: newFiles.length })
+  res.json({ newImages: newFiles.length })
+})
+
 // GET /:id — album detail with images
 router.get('/:id', async (req, res) => {
   const { id } = req.params
@@ -300,7 +362,7 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const user = requireAuth(req)
   const { id } = req.params
-  const { title, description, isPublic, coverKey } = req.body
+  const { title, description, isPublic, coverKey, driveFolderId } = req.body
 
   const [album] = await db.select().from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
@@ -308,18 +370,43 @@ router.patch('/:id', async (req, res) => {
   if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
 
   const updates: Record<string, unknown> = { updatedAt: new Date() }
-  if (title !== undefined) updates.title = title
-  if (description !== undefined) updates.description = description
+  if (title !== undefined) updates.title = String(title).slice(0, 200)
+  if (description !== undefined) updates.description = String(description).slice(0, 2000)
   if (isPublic !== undefined) updates.isPublic = isPublic
   if (coverKey !== undefined) updates.coverKey = coverKey
+  if (driveFolderId !== undefined) {
+    if (driveFolderId === null) {
+      updates.driveFolderId = null
+    } else if (typeof driveFolderId === 'string' && /^[a-zA-Z0-9_-]+$/.test(driveFolderId)) {
+      updates.driveFolderId = driveFolderId
+    } else {
+      return res.status(400).json({ message: 'Drive folder ID không hợp lệ' })
+    }
+  }
 
-  await db.update(albums).set(updates).where(eq(albums.id, id))
+  try {
+    await db.update(albums).set(updates).where(eq(albums.id, id))
+  } catch {
+    return res.status(500).json({ message: 'Cập nhật album thất bại' })
+  }
 
   // Invalidate feed cache
   await feedCache.invalidate(`feed:album:${id}*`)
   await feedCache.invalidate('feed:public:*')
 
-  res.json({ ok: true })
+  const [updated] = await db.select({
+    id: albums.id,
+    title: albums.title,
+    description: albums.description,
+    isPublic: albums.isPublic,
+    coverKey: albums.coverKey,
+    driveFolderId: albums.driveFolderId,
+    imageCount: albums.imageCount,
+    createdAt: albums.createdAt,
+    updatedAt: albums.updatedAt,
+  }).from(albums)
+    .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
+  res.json(updated)
 })
 
 // DELETE /:id — delete album + cascade images

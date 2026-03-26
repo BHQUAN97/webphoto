@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import api from '@/utils/api'
 import BackButton from '@/components/ui/BackButton.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -10,6 +10,7 @@ import { useToast } from '@/composables/useToast'
 const { t } = useI18n()
 const toast = useToast()
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 
 // Album info
@@ -17,8 +18,8 @@ const title = ref('')
 const description = ref('')
 const isPublic = ref(true)
 
-// Source mode: 'upload' (default) or 'drive'
-const sourceMode = ref<'upload' | 'drive'>('upload')
+// Source mode: 'upload' (default) or 'drive' — supports ?tab=drive query param
+const sourceMode = ref<'upload' | 'drive'>(route.query.tab === 'drive' ? 'drive' : 'upload')
 
 // Drive options
 const driveLink = ref('')

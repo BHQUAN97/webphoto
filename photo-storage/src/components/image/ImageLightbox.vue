@@ -224,11 +224,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           >
             <div
               v-if="showComments"
-              class="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-gray-800 shadow-xl z-40 flex flex-col"
+              class="absolute right-0 top-0 bottom-0 w-full sm:w-80 sm:max-w-[85vw] bg-white dark:bg-gray-800 shadow-xl z-40 flex flex-col"
             >
               <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
                 <h3 class="font-semibold text-gray-900 dark:text-white text-sm">
-                  {{ t('image.comments') }} ({{ image.commentCount }})
+                  {{ t('comment.title') }} ({{ image.commentCount }})
                 </h3>
                 <button
                   class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
@@ -252,7 +252,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           <button
             class="w-10 h-10 flex items-center justify-center rounded-full transition-colors"
             :class="image.liked ? 'text-red-500 bg-red-500/20' : 'text-white/70 hover:text-white hover:bg-white/10'"
-            :title="t('image.like')"
+            :title="t('common.like')"
             @click="emit('like', image)"
           >
             <svg class="w-5 h-5" :fill="image.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -294,7 +294,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             class="w-10 h-10 flex items-center justify-center rounded-full transition-colors"
             :class="zoomLevel > 1 ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-white/30 cursor-not-allowed'"
             :disabled="zoomLevel <= 1"
-            :title="t('image.zoomOut')"
+            :title="t('common.zoomOut')"
             @click="zoomOut"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -310,7 +310,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             class="w-10 h-10 flex items-center justify-center rounded-full transition-colors"
             :class="zoomLevel < 3 ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-white/30 cursor-not-allowed'"
             :disabled="zoomLevel >= 3"
-            :title="t('image.zoomIn')"
+            :title="t('common.zoomIn')"
             @click="zoomIn"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -325,7 +325,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           <button
             class="w-10 h-10 flex items-center justify-center rounded-full transition-colors"
             :class="showComments ? 'text-blue-400 bg-blue-500/20' : 'text-white/70 hover:text-white hover:bg-white/10'"
-            :title="t('image.comments')"
+            :title="t('comment.title')"
             @click="showComments = !showComments"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

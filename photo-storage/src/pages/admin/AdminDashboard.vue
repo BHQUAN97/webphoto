@@ -200,7 +200,7 @@ function dismiss(id: string) {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-md border border-gray-100 dark:border-gray-700 transition-shadow hover:shadow-lg">
           <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-4">{{ $t('adminDashboard.planDistribution') }}</h3>
-          <div class="max-w-xs mx-auto">
+          <div class="w-full sm:max-w-xs mx-auto">
             <Doughnut
               :data="{
                 labels: chartData.planDistribution.map(p => p.planName),
@@ -218,7 +218,7 @@ function dismiss(id: string) {
         </div>
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-md border border-gray-100 dark:border-gray-700 transition-shadow hover:shadow-lg">
           <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-4">{{ $t('adminDashboard.r2StorageUsage') }}</h3>
-          <div class="max-w-xs mx-auto relative">
+          <div class="w-full sm:max-w-xs mx-auto relative">
             <Doughnut
               :data="{
                 datasets: [{

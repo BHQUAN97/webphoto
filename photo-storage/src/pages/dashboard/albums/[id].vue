@@ -50,6 +50,61 @@ const showDeleteImage = ref(false)
 const deleteImageTarget = ref<ImageItem | null>(null)
 const deleteImageLoading = ref(false)
 
+// Batch selection state
+const batchMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+const batchLoading = ref(false)
+const showBatchRename = ref(false)
+const renamePattern = ref('')
+const renameReplacement = ref('')
+
+function toggleSelect(id: string) {
+  if (selectedIds.value.has(id)) selectedIds.value.delete(id)
+  else selectedIds.value.add(id)
+  selectedIds.value = new Set(selectedIds.value) // trigger reactivity
+}
+function selectAll() {
+  if (selectedIds.value.size === images.value.length) selectedIds.value = new Set()
+  else selectedIds.value = new Set(images.value.map(i => i.id))
+}
+function exitBatchMode() {
+  batchMode.value = false
+  selectedIds.value = new Set()
+}
+
+async function batchDelete() {
+  if (selectedIds.value.size === 0) return
+  if (!confirm(t('batch.deleteConfirm', { count: selectedIds.value.size }))) return
+  batchLoading.value = true
+  try {
+    const res = await api.post('/images/batch', { action: 'delete', imageIds: [...selectedIds.value] })
+    toast.success(t('batch.deleteSuccess', { count: res.data.affected }))
+    images.value = images.value.filter(i => !selectedIds.value.has(i.id))
+    if (album.value) album.value.imageCount = images.value.length
+    exitBatchMode()
+  } catch { toast.error(t('batch.deleteFailed')) }
+  finally { batchLoading.value = false }
+}
+
+async function batchRename() {
+  if (selectedIds.value.size === 0) return
+  batchLoading.value = true
+  try {
+    const res = await api.post('/images/batch', {
+      action: 'rename', imageIds: [...selectedIds.value],
+      pattern: renamePattern.value || undefined,
+      replacement: renameReplacement.value,
+    })
+    toast.success(t('batch.renameSuccess', { count: res.data.affected }))
+    showBatchRename.value = false
+    renamePattern.value = ''
+    renameReplacement.value = ''
+    exitBatchMode()
+    await fetchAlbum()
+  } catch { toast.error(t('batch.renameFailed')) }
+  finally { batchLoading.value = false }
+}
+
 // Drive sync state
 const driveSyncing = ref(false)
 
@@ -84,7 +139,7 @@ async function handleFilter(filters: { liked: boolean; status: string; dateFrom:
   }
 }
 
-async function handleEditAlbum(data: { title: string; description: string; isPublic: boolean }) {
+async function handleEditAlbum(data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null }) {
   editLoading.value = true
   try {
     const res = await api.patch(`/albums/${albumId.value}`, data)
@@ -429,23 +484,59 @@ onUnmounted(stopPolling)
       <ImageUploader :album-id="albumId" @uploaded="onUploaded" />
     </div>
 
-    <!-- Filter -->
-    <ImageFilterBar v-if="auth.canFilter" @filter="handleFilter" />
+    <!-- Filter + Batch Toggle -->
+    <div class="flex flex-wrap items-center gap-3 mb-4">
+      <ImageFilterBar v-if="auth.canFilter" @filter="handleFilter" class="flex-1 min-w-0" />
+      <BaseButton v-if="album?.userId === auth.user?.id && images.length > 0" variant="secondary" size="sm" @click="batchMode ? exitBatchMode() : (batchMode = true)">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        {{ batchMode ? $t('batch.exitSelect') : $t('batch.selectMultiple') }}
+      </BaseButton>
+    </div>
+
+    <!-- Batch Toolbar -->
+    <div v-if="batchMode" class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+      <button @click="selectAll" class="text-sm text-orange-600 dark:text-orange-400 hover:underline">
+        {{ selectedIds.size === images.length ? $t('batch.deselectAll') : $t('batch.selectAll') }}
+      </button>
+      <span class="text-sm text-gray-500 dark:text-gray-400">{{ selectedIds.size }} / {{ images.length }} {{ $t('batch.selected') }}</span>
+      <div class="flex-1"></div>
+      <BaseButton size="sm" variant="secondary" :disabled="selectedIds.size === 0" @click="showBatchRename = true">
+        {{ $t('batch.rename') }}
+      </BaseButton>
+      <BaseButton size="sm" variant="danger" :disabled="selectedIds.size === 0" :loading="batchLoading" @click="batchDelete">
+        {{ $t('batch.delete') }} ({{ selectedIds.size }})
+      </BaseButton>
+    </div>
 
     <!-- Images Grid -->
     <div v-if="images.length > 0" class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4">
-      <ImageCard
-        v-for="img in images"
-        :key="img.id"
-        :image="img"
-        :show-like="auth.isAuthenticated"
-        :show-delete="album?.userId === auth.user?.id"
-        :show-set-cover="album?.userId === auth.user?.id"
-        @click="lightboxImage = img; lightboxIndex = images.indexOf(img)"
-        @like="handleLike"
-        @delete="confirmDeleteImage"
-        @set-cover="setAsCover"
-      />
+      <div v-for="img in images" :key="img.id" class="relative break-inside-avoid mb-4">
+        <!-- Batch checkbox overlay -->
+        <div v-if="batchMode" class="absolute top-2 left-2 z-10">
+          <button
+            @click.stop="toggleSelect(img.id)"
+            class="w-6 h-6 rounded border-2 flex items-center justify-center transition-colors"
+            :class="selectedIds.has(img.id) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white/80 border-gray-300 hover:border-orange-400'"
+          >
+            <svg v-if="selectedIds.has(img.id)" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
+        <ImageCard
+          :image="img"
+          :show-like="auth.isAuthenticated && !batchMode"
+          :show-delete="!batchMode && album?.userId === auth.user?.id"
+          :show-set-cover="!batchMode && album?.userId === auth.user?.id"
+          :class="{ 'ring-2 ring-orange-500 rounded-xl': batchMode && selectedIds.has(img.id) }"
+          @click="batchMode ? toggleSelect(img.id) : (lightboxImage = img, lightboxIndex = images.indexOf(img))"
+          @like="handleLike"
+          @delete="confirmDeleteImage"
+          @set-cover="setAsCover"
+        />
+      </div>
     </div>
     <div v-else class="text-center py-12 text-gray-400">
       <p>{{ $t('album.noImages') }}</p>
@@ -463,6 +554,26 @@ onUnmounted(stopPolling)
       @delete="confirmDeleteImage"
       @navigate="(idx: number) => { lightboxIndex = idx; lightboxImage = images[idx] }"
     />
+
+    <!-- Batch Rename Modal -->
+    <BaseModal :show="showBatchRename" :title="$t('batch.renameTitle')" @close="showBatchRename = false">
+      <form @submit.prevent="batchRename" class="space-y-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ $t('batch.renameDesc', { count: selectedIds.size }) }}</p>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('batch.findPatternLabel') }}</label>
+          <input v-model="renamePattern" type="text" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" placeholder="VD: IMG_" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('batch.replaceLabel') }}</label>
+          <input v-model="renameReplacement" type="text" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" placeholder="VD: Wedding_" />
+        </div>
+        <p class="text-xs text-gray-400">{{ $t('batch.renameHint') }}</p>
+        <div class="flex justify-end gap-3 pt-2">
+          <BaseButton variant="secondary" type="button" @click="showBatchRename = false">{{ $t('common.cancel') }}</BaseButton>
+          <BaseButton type="submit" :loading="batchLoading">{{ $t('batch.rename') }}</BaseButton>
+        </div>
+      </form>
+    </BaseModal>
 
     <!-- Edit Modal -->
     <BaseModal :show="showEdit" :title="$t('album.editAlbum')" @close="showEdit = false">

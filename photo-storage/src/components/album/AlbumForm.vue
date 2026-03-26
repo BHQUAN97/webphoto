@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Album } from '@/types'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  submit: [data: { title: string; description: string; isPublic: boolean }]
+  submit: [data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null }]
   cancel: []
 }>()
 
@@ -26,6 +26,14 @@ const form = ref({
   description: '',
   isPublic: true,
 })
+
+const driveLink = ref('')
+const hasDrive = computed(() => !!props.album?.driveFolderId)
+
+function extractFolderId(link: string): string | null {
+  const match = link.match(/\/folders\/([a-zA-Z0-9_-]+)/)
+  return match ? match[1] : null
+}
 
 watch(
   () => props.album,
@@ -36,6 +44,9 @@ watch(
         description: a.description || '',
         isPublic: a.isPublic,
       }
+      if (a.driveFolderId) {
+        driveLink.value = `https://drive.google.com/drive/folders/${a.driveFolderId}`
+      }
     }
   },
   { immediate: true },
@@ -43,35 +54,62 @@ watch(
 
 function handleSubmit() {
   if (!form.value.title.trim()) return
-  emit('submit', { ...form.value })
+  const data: { title: string; description: string; isPublic: boolean; driveFolderId?: string | null } = { ...form.value }
+  if (hasDrive.value) {
+    const newId = extractFolderId(driveLink.value)
+    if (newId !== props.album?.driveFolderId) {
+      data.driveFolderId = newId
+    }
+  }
+  emit('submit', data)
 }
 </script>
 
 <template>
   <form @submit.prevent="handleSubmit" class="space-y-4">
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('album.albumName') }}</label>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.albumName') }}</label>
       <input
         v-model="form.title"
         type="text"
         required
-        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
         :placeholder="$t('album.albumNamePlaceholder')"
       />
     </div>
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('album.description') }}</label>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $t('album.description') }}</label>
       <textarea
         v-model="form.description"
         rows="3"
-        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
         :placeholder="$t('album.descriptionPlaceholder')"
       />
     </div>
     <div class="flex items-center gap-2">
-      <input v-model="form.isPublic" type="checkbox" id="isPublic" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
-      <label for="isPublic" class="text-sm text-gray-700">{{ $t('album.isPublic') }}</label>
+      <input v-model="form.isPublic" type="checkbox" id="isPublic" class="rounded border-gray-300 dark:border-gray-600 text-orange-500 focus:ring-orange-500" />
+      <label for="isPublic" class="text-sm text-gray-700 dark:text-gray-300">{{ $t('album.isPublic') }}</label>
     </div>
+
+    <!-- Google Drive folder (only for Drive-linked albums) -->
+    <div v-if="hasDrive" class="pt-4 border-t border-gray-200 dark:border-gray-700">
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Google Drive Folder</label>
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7.71 3.5L1.15 15l3.43 5.96L11.14 9.46 7.71 3.5zm1.14 0l6.86 11.88H22.57L15.71 3.5H8.85zM15 12.96L11.57 19.5h13.29l3.43-5.96L15 12.96z" />
+        </svg>
+        <input
+          v-model="driveLink"
+          type="url"
+          class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+          placeholder="https://drive.google.com/drive/folders/..."
+        />
+      </div>
+      <p class="mt-1 text-xs text-gray-400">
+        Thay đổi folder sẽ cập nhật nguồn đồng bộ Drive
+      </p>
+    </div>
+
     <div class="flex justify-end gap-3 pt-2">
       <BaseButton variant="secondary" type="button" @click="emit('cancel')">{{ $t('common.cancel') }}</BaseButton>
       <BaseButton type="submit" :loading="loading">
