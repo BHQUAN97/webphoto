@@ -3,7 +3,7 @@
  * Replaces vue-i18n (alpha was unreliable).
  * Keeps the same API: $t() in templates, useI18n() in scripts.
  */
-import { type App, inject } from 'vue'
+import { type App } from 'vue'
 import vi from '@/locales/vi.json'
 
 type Messages = Record<string, unknown>
@@ -35,13 +35,10 @@ export function useI18n() {
   return { t, locale: 'vi' as const }
 }
 
-const I18N_KEY = Symbol('i18n')
-
 /** Vue plugin */
 const i18nPlugin = {
   install(app: App) {
     app.config.globalProperties.$t = t
-    app.provide(I18N_KEY, { t })
   },
 }
 
