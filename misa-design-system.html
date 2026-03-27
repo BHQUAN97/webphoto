@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MISA Design System — Style Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Brand */
+  --brand-50: #EFF6FF; --brand-100: #DBEAFE; --brand-200: #BFDBFE;
+  --brand-300: #93C5FD; --brand-400: #60A5FA; --brand-500: #3B82F6;
+  --brand-600: #2563EB; --brand-700: #1D4ED8; --brand-800: #1C6FA8; --brand-900: #1E3A8A;
+  /* Semantic */
+  --danger: #EF4444; --danger-light: #FEF2F2; --danger-border: #FECACA;
+  --success: #22C55E; --success-light: #F0FDF4; --success-border: #BBF7D0;
+  --warning: #F59E0B; --warning-light: #FFFBEB; --warning-border: #FDE68A;
+  --info: #0EA5E9;   --info-light: #F0F9FF;   --info-border: #BAE6FD;
+  /* Neutral */
+  --n50: #F9FAFB; --n100: #F3F4F6; --n200: #E5E7EB;
+  --n300: #D1D5DB; --n400: #9CA3AF; --n500: #6B7280;
+  --n600: #4B5563; --n700: #374151; --n800: #1F2937; --n900: #111827;
+  /* Text */
+  --text-primary: #111827; --text-secondary: #4B5563;
+  --text-tertiary: #9CA3AF; --text-brand: #1C6FA8;
+  --text-disabled: #9CA3AF;
+  /* BG */
+  --bg-page: #F3F4F6; --bg-surface: #FFFFFF; --bg-subtle: #F9FAFB;
+  /* Border */
+  --border-default: #E5E7EB; --border-strong: #D1D5DB;
+  /* Radius */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px;
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,.10);
+  /* Font */
+  --font: 'Inter', -apple-system, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 13px; }
+body { font-family: var(--font); background: var(--bg-page); color: var(--text-primary); line-height: 1.5; }
+
+/* LAYOUT */
+.ds-shell { display: flex; min-height: 100vh; }
+.ds-sidebar {
+  width: 220px; flex-shrink: 0; background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  padding: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.ds-sidebar-logo {
+  padding: 16px; border-bottom: 1px solid var(--border-default);
+  display: flex; align-items: center; gap: 8px;
+}
+.ds-logo-mark {
+  width: 28px; height: 28px; background: var(--brand-800);
+  border-radius: var(--r-md); display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 12px;
+}
+.ds-sidebar-label { font-size: 11px; font-weight: 600; color: var(--text-primary); letter-spacing: .02em; }
+.ds-sidebar-sublabel { font-size: 10px; color: var(--text-tertiary); }
+.ds-nav-group { padding: 12px 0 4px; }
+.ds-nav-group-title {
+  padding: 0 16px 4px; font-size: 10px; font-weight: 600;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .06em;
+}
+.ds-nav-item {
+  display: block; padding: 6px 16px; font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; transition: background .1s, color .1s; border-left: 2px solid transparent;
+  text-decoration: none;
+}
+.ds-nav-item:hover { background: var(--bg-subtle); color: var(--text-primary); }
+.ds-nav-item.active { background: var(--brand-50); color: var(--brand-800); border-left-color: var(--brand-800); font-weight: 500; }
+
+.ds-main { flex: 1; overflow-y: auto; }
+.ds-topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg-surface); border-bottom: 1px solid var(--border-default);
+  padding: 0 32px; height: 48px; display: flex; align-items: center; justify-content: space-between;
+}
+.ds-topbar-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ds-topbar-breadcrumb { font-size: 11px; color: var(--text-tertiary); }
+.ds-topbar-breadcrumb span { color: var(--text-secondary); }
+.ds-content { padding: 32px; max-width: 960px; }
+
+/* SECTION */
+.ds-section { margin-bottom: 48px; }
+.ds-section-heading {
+  font-size: 18px; font-weight: 600; color: var(--text-primary);
+  margin-bottom: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--border-default);
+}
+.ds-section-sub { font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; margin-top: 4px; }
+.ds-subsection { margin-bottom: 28px; }
+.ds-subsection-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
+.ds-rule-block {
+  background: var(--bg-subtle); border: 1px solid var(--border-default);
+  border-radius: var(--r-lg); padding: 16px 20px; margin-bottom: 12px;
+}
+.ds-rule-title { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.ds-rule-list { list-style: none; }
+.ds-rule-list li { font-size: 12px; color: var(--text-secondary); padding: 3px 0 3px 16px; position: relative; }
+.ds-rule-list li::before { content: '—'; position: absolute; left: 0; color: var(--n300); }
+
+/* DEMO BOX */
+.demo-box {
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--r-xl); padding: 24px; margin-bottom: 8px;
+}
+.demo-box-dark { background: var(--n800); }
+.demo-label {
+  font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px;
+}
+
+/* COLORS */
+.color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px,1fr)); gap: 4px; margin-bottom: 16px; }
+.color-swatch { border-radius: var(--r-md); overflow: hidden; }
+.color-swatch-fill { height: 40px; }
+.color-swatch-info { padding: 4px 6px; background: var(--bg-surface); border: 1px solid var(--border-default); border-top: none; border-radius: 0 0 var(--r-md) var(--r-md); }
+.color-swatch-stop { font-size: 10px; font-weight: 600; color: var(--text-primary); }
+.color-swatch-hex { font-size: 9px; color: var(--text-tertiary); font-family: monospace; }
+
+.semantic-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sem-chip { border-radius: var(--r-lg); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 100px; }
+.sem-chip-name { font-size: 11px; font-weight: 600; }
+.sem-chip-desc { font-size: 10px; opacity: .8; }
+.sem-chip-hex { font-size: 9px; font-family: monospace; opacity: .7; }
+
+/* TYPOGRAPHY */
+.type-row { display: flex; align-items: baseline; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border-default); }
+.type-meta { width: 140px; flex-shrink: 0; }
+.type-meta-name { font-size: 11px; font-weight: 600; color: var(--text-primary); }
+.type-meta-spec { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+.type-preview { flex: 1; }
+
+/* BUTTONS */
+.btn-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 32px; border-radius: var(--r-md);
+  font-size: 13px; font-weight: 500; font-family: var(--font);
+  border: 1px solid transparent; cursor: pointer; transition: all .12s;
+  white-space: nowrap;
+}
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
+.btn-lg { height: 38px; padding: 0 18px; font-size: 14px; }
+.btn-primary { background: var(--brand-800); color: #fff; border-color: var(--brand-800); }
+.btn-primary:hover { background: #155887; border-color: #155887; }
+.btn-secondary { background: #fff; color: var(--brand-800); border-color: var(--brand-800); }
+.btn-secondary:hover { background: var(--brand-50); }
+.btn-ghost { background: transparent; color: var(--brand-800); border-color: transparent; }
+.btn-ghost:hover { background: var(--brand-50); }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-danger:hover { background: #DC2626; }
+.btn-disabled { background: var(--n100); color: var(--text-disabled); border-color: var(--n200); cursor: not-allowed; }
+.btn-icon { width: 32px; padding: 0; justify-content: center; }
+
+/* INPUTS */
+.input-group { margin-bottom: 10px; }
+.input-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; display: block; }
+.input-helper { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+.input-helper.error { color: var(--danger); }
+.input-helper.success { color: var(--success); }
+.input {
+  width: 100%; height: 32px; padding: 0 10px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  font-size: 13px; font-family: var(--font); color: var(--text-primary);
+  background: #fff; outline: none; transition: border .15s, box-shadow .15s;
+}
+.input::placeholder { color: var(--text-tertiary); }
+.input:hover { border-color: var(--n400); }
+.input:focus { border-color: var(--brand-800); box-shadow: 0 0 0 3px rgba(28,111,168,.15); }
+.input.error { border-color: var(--danger); background: #FFF8F8; }
+.input.success { border-color: var(--success); }
+.input:disabled { background: var(--n50); color: var(--text-disabled); border-color: var(--n200); cursor: not-allowed; }
+.input-addon { display: flex; }
+.input-addon .input { border-radius: var(--r-md) 0 0 var(--r-md); border-right: none; }
+.input-addon-btn {
+  height: 32px; padding: 0 12px; background: var(--n100); border: 1px solid var(--border-strong);
+  border-radius: 0 var(--r-md) var(--r-md) 0; font-size: 12px; color: var(--text-secondary);
+  cursor: pointer; font-family: var(--font);
+}
+.input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* CHECKBOX / RADIO */
+.check-list { display: flex; flex-direction: column; gap: 8px; }
+.check-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.check-box {
+  width: 16px; height: 16px; border: 1.5px solid var(--n300); border-radius: var(--r-sm);
+  background: #fff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.check-box.checked { background: var(--brand-800); border-color: var(--brand-800); }
+.check-box.indeterminate { background: var(--brand-800); border-color: var(--brand-800); }
+.check-box.disabled { background: var(--n100); border-color: var(--n200); }
+.check-label { font-size: 13px; color: var(--text-primary); }
+.check-label.disabled { color: var(--text-disabled); }
+.radio-dot {
+  width: 16px; height: 16px; border: 1.5px solid var(--n300); border-radius: 50%;
+  background: #fff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.radio-dot.checked { border-color: var(--brand-800); }
+.radio-dot.checked::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-800); }
+
+/* DROPDOWN / SELECT */
+.select-wrap { position: relative; display: inline-block; width: 200px; }
+.select-wrap select {
+  appearance: none; width: 100%; height: 32px; padding: 0 32px 0 10px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  font-size: 13px; font-family: var(--font); color: var(--text-primary);
+  background: #fff; cursor: pointer; outline: none;
+}
+.select-wrap select:focus { border-color: var(--brand-800); box-shadow: 0 0 0 3px rgba(28,111,168,.15); }
+.select-caret {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: var(--n400);
+}
+
+/* TAGS / BADGES */
+.tag-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500;
+}
+.tag-default { background: var(--n100); color: var(--n700); }
+.tag-brand { background: var(--brand-100); color: var(--brand-800); }
+.tag-success { background: var(--success-light); color: #166534; }
+.tag-danger { background: var(--danger-light); color: #991B1B; }
+.tag-warning { background: var(--warning-light); color: #92400E; }
+.tag-info { background: var(--info-light); color: #075985; }
+
+/* STATUS BADGES */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: var(--r-md); font-size: 11px; font-weight: 500;
+}
+.badge::before { content:''; width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.badge-active { background: var(--success-light); color: #166534; border: 1px solid var(--success-border); }
+.badge-active::before { background: var(--success); }
+.badge-inactive { background: var(--n100); color: var(--n600); border: 1px solid var(--n200); }
+.badge-inactive::before { background: var(--n400); }
+.badge-warning { background: var(--warning-light); color: #92400E; border: 1px solid var(--warning-border); }
+.badge-warning::before { background: var(--warning); }
+.badge-danger { background: var(--danger-light); color: #991B1B; border: 1px solid var(--danger-border); }
+.badge-danger::before { background: var(--danger); }
+
+/* TABLE */
+.ds-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ds-table thead tr { background: var(--n50); }
+.ds-table th {
+  padding: 8px 12px; text-align: left; font-weight: 600; font-size: 11px;
+  color: var(--text-secondary); border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+.ds-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-default); color: var(--text-primary); }
+.ds-table tr:last-child td { border-bottom: none; }
+.ds-table tr:hover td { background: var(--bg-subtle); }
+.ds-table .col-number { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ANNOUNCEMENT */
+.alert {
+  display: flex; gap: 10px; padding: 12px 14px;
+  border-radius: var(--r-lg); margin-bottom: 8px; border: 1px solid transparent;
+}
+.alert-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert-content { flex: 1; }
+.alert-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.alert-body { font-size: 12px; }
+.alert-info { background: var(--info-light); border-color: var(--info-border); color: #075985; }
+.alert-success { background: var(--success-light); border-color: var(--success-border); color: #166534; }
+.alert-warning { background: var(--warning-light); border-color: var(--warning-border); color: #92400E; }
+.alert-danger { background: var(--danger-light); border-color: var(--danger-border); color: #991B1B; }
+
+/* DIALOG */
+.dialog-demo {
+  background: rgba(17,24,39,.5); border-radius: var(--r-xl);
+  padding: 40px; display: flex; align-items: center; justify-content: center;
+}
+.dialog {
+  background: #fff; border-radius: var(--r-xl); width: 100%; max-width: 400px;
+  box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.dialog-header { padding: 16px 20px; border-bottom: 1px solid var(--border-default); display: flex; align-items: center; justify-content: space-between; }
+.dialog-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.dialog-close { width: 24px; height: 24px; border-radius: var(--r-sm); background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); font-size: 14px; }
+.dialog-close:hover { background: var(--n100); }
+.dialog-body { padding: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.dialog-footer { padding: 12px 20px; border-top: 1px solid var(--border-default); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* LOADING */
+.loading-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes shimmer { to { background-position: 200% center; } }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--n200); border-top-color: var(--brand-800); border-radius: 50%; animation: spin .7s linear infinite; }
+.spinner-sm { width: 14px; height: 14px; }
+.spinner-lg { width: 28px; height: 28px; border-width: 3px; }
+.loading-dots { display: flex; gap: 4px; }
+.loading-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-800); animation: pulse 1s ease-in-out infinite; }
+.loading-dot:nth-child(2) { animation-delay: .15s; }
+.loading-dot:nth-child(3) { animation-delay: .3s; }
+.skeleton-line {
+  height: 12px; border-radius: 6px; margin-bottom: 8px;
+  background: linear-gradient(90deg, var(--n200) 25%, var(--n100) 50%, var(--n200) 75%);
+  background-size: 200% auto; animation: shimmer 1.5s linear infinite;
+}
+
+/* EMPTY STATE */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 48px 24px; text-align: center;
+}
+.empty-icon {
+  width: 48px; height: 48px; border-radius: var(--r-xl);
+  background: var(--n100); display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px; font-size: 20px;
+}
+.empty-title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.empty-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; max-width: 260px; }
+
+/* LAYOUT PATTERNS */
+.layout-card {
+  background: #fff; border: 1px solid var(--border-default); border-radius: var(--r-lg);
+  overflow: hidden; margin-bottom: 12px;
+}
+.layout-topbar-demo {
+  height: 44px; background: var(--brand-800); display: flex; align-items: center;
+  padding: 0 16px; gap: 12px; border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+.layout-sidebar-demo {
+  display: flex; min-height: 120px;
+}
+.layout-sidebar-pane {
+  width: 48px; background: var(--n900); border-right: 1px solid var(--n700);
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 6px;
+}
+.layout-side-icon {
+  width: 36px; height: 36px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--n400); transition: background .1s;
+}
+.layout-side-icon:hover, .layout-side-icon.active { background: rgba(255,255,255,.1); color: #fff; }
+.layout-main-demo { flex: 1; padding: 12px; background: var(--bg-page); }
+
+/* NUMBER FORMAT */
+.num-table { width: 100%; }
+.num-table td, .num-table th { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border-default); font-size: 12px; }
+.num-table th { background: var(--n50); font-weight: 600; color: var(--text-secondary); font-size: 11px; }
+.num-correct { color: #166534; font-weight: 500; }
+.num-wrong { color: var(--danger); text-decoration: line-through; }
+
+/* SHORTCUT */
+.shortcut-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.shortcut-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-subtle); border-radius: var(--r-md); border: 1px solid var(--border-default); }
+.shortcut-action { font-size: 12px; color: var(--text-primary); }
+.shortcut-keys { display: flex; gap: 3px; align-items: center; }
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 2px 6px; background: #fff; border: 1px solid var(--n300);
+  border-radius: var(--r-sm); font-size: 10px; font-weight: 600;
+  color: var(--text-secondary); box-shadow: 0 1px 0 var(--n300);
+  font-family: var(--font);
+}
+.kbd-plus { font-size: 10px; color: var(--text-tertiary); }
+
+/* PROGRESS BAR */
+.progress { height: 6px; background: var(--n200); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--brand-800); transition: width .3s; }
+
+/* TOOLTIP DEMO */
+.tooltip-wrap { position: relative; display: inline-block; }
+.tooltip-box {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--n900); color: #fff; font-size: 11px; padding: 4px 8px;
+  border-radius: var(--r-sm); white-space: nowrap; pointer-events: none;
+}
+.tooltip-box::after {
+  content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 4px solid transparent; border-top-color: var(--n900);
+}
+
+/* BREADCRUMB */
+.breadcrumb { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.breadcrumb-item { color: var(--text-secondary); }
+.breadcrumb-item.active { color: var(--text-primary); font-weight: 500; }
+.breadcrumb-sep { color: var(--n300); }
+
+/* TABS */
+.tab-list { display: flex; border-bottom: 1px solid var(--border-default); margin-bottom: 16px; }
+.tab-item {
+  padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .12s;
+}
+.tab-item:hover { color: var(--text-primary); }
+.tab-item.active { color: var(--brand-800); border-bottom-color: var(--brand-800); font-weight: 500; }
+
+/* PAGINATION */
+.pagination { display: flex; gap: 4px; align-items: center; }
+.page-btn {
+  width: 30px; height: 30px; border: 1px solid var(--border-default);
+  border-radius: var(--r-md); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; cursor: pointer; color: var(--text-secondary); background: #fff;
+  transition: all .1s;
+}
+.page-btn:hover { border-color: var(--brand-800); color: var(--brand-800); }
+.page-btn.active { background: var(--brand-800); color: #fff; border-color: var(--brand-800); }
+.page-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ICONS DEMO */
+.icon-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.icon-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px; border: 1px solid var(--border-default); border-radius: var(--r-md);
+  background: #fff; width: 64px; cursor: pointer; transition: border-color .1s;
+}
+.icon-chip:hover { border-color: var(--brand-800); }
+.icon-chip-label { font-size: 9px; color: var(--text-tertiary); text-align: center; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--n200); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--n300); }
+
+/* RESPONSIVE PANEL TOGGLE */
+.panel { display: none; }
+.panel.active { display: block; }
+</style>
+</head>
+<body>
+<div class="ds-shell">
+
+<!-- SIDEBAR -->
+<aside class="ds-sidebar">
+  <div class="ds-sidebar-logo">
+    <div class="ds-logo-mark">M</div>
+    <div>
+      <div class="ds-sidebar-label">MISA Design System</div>
+      <div class="ds-sidebar-sublabel">Web · v2025</div>
+    </div>
+  </div>
+
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">General</div>
+    <a class="ds-nav-item active" onclick="show('general')">Nguyên tắc chung</a>
+    <a class="ds-nav-item" onclick="show('usability')">Yêu cầu tiện dụng</a>
+  </div>
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">Styles</div>
+    <a class="ds-nav-item" onclick="show('color')">Màu sắc</a>
+    <a class="ds-nav-item" onclick="show('typography')">Kiểu chữ</a>
+    <a class="ds-nav-item" onclick="show('icons')">Icons</a>
+    <a class="ds-nav-item" onclick="show('layout')">Bố cục trang</a>
+  </div>
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">Communication</div>
+    <a class="ds-nav-item" onclick="show('announcement')">Thông báo</a>
+    <a class="ds-nav-item" onclick="show('loading')">Loading</a>
+    <a class="ds-nav-item" onclick="show('emptystate')">Empty State</a>
+  </div>
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">Components</div>
+    <a class="ds-nav-item" onclick="show('button')">Button</a>
+    <a class="ds-nav-item" onclick="show('input')">Text Field</a>
+    <a class="ds-nav-item" onclick="show('select')">Dropdown / ComboBox</a>
+    <a class="ds-nav-item" onclick="show('checkbox')">Checkbox / Radio</a>
+  </div>
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">Patterns</div>
+    <a class="ds-nav-item" onclick="show('table')">Data Table</a>
+    <a class="ds-nav-item" onclick="show('dialog')">Dialog / Popup</a>
+  </div>
+  <div class="ds-nav-group">
+    <div class="ds-nav-group-title">Others</div>
+    <a class="ds-nav-item" onclick="show('shortcut')">Phím tắt</a>
+    <a class="ds-nav-item" onclick="show('spelling')">Chính tả & Số</a>
+    <a class="ds-nav-item" onclick="show('browsertitle')">Browser Title</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="ds-main">
+  <div class="ds-topbar">
+    <div class="ds-topbar-breadcrumb">
+      <span>MISA Design System</span> / <span id="topbar-section">Nguyên tắc chung</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-tertiary)">© 1994–2025 MISA JSC</div>
+  </div>
+
+  <div class="ds-content">
+
+  <!-- GENERAL -->
+  <div id="panel-general" class="panel active">
+    <div class="ds-section">
+      <div class="ds-section-heading">Nguyên tắc chung khi thiết kế</div>
+      <div class="ds-section-sub">Các nguyên tắc nền tảng áp dụng cho mọi sản phẩm MISA</div>
+
+      <div class="ds-subsection">
+        <div class="ds-rule-block">
+          <div class="ds-rule-title">1. Dễ học, dễ nhớ</div>
+          <ul class="ds-rule-list">
+            <li>Sắp xếp chức năng theo thứ tự tác nghiệp thực tế của người dùng</li>
+            <li>Chức năng hay dùng đặt ở vị trí dễ nhận biết, không cần nhiều bước</li>
+            <li>Icon của chức năng giống nhau phải đồng nhất trên toàn hệ thống</li>
+            <li>Phím tắt dễ nhớ, có tooltip, đồng nhất cho chức năng tương tự</li>
+            <li>Chức năng phức tạp phải có hướng dẫn ngay trên form</li>
+          </ul>
+        </div>
+        <div class="ds-rule-block">
+          <div class="ds-rule-title">2. Dễ dàng nhập liệu</div>
+          <ul class="ds-rule-list">
+            <li>Thông tin nhập liệu sắp xếp đúng thứ tự thói quen người dùng</li>
+            <li>Có giá trị mặc định hợp lý cho từng trường</li>
+            <li>Hiển thị hướng dẫn real-time: đếm ký tự, phím tắt nhập nhanh</li>
+            <li>Tự động điền khi có thể (khi chọn mã KH → tự điền thông tin liên quan)</li>
+            <li>ComboBox: dữ liệu hay dùng ưu tiên lên đầu; dùng LoadOnDemand khi &gt;40 bản ghi</li>
+            <li>Dùng Combo với &gt;8 bản ghi, Dropdown với 4–8, Radio/Checkbox với 2–3</li>
+          </ul>
+        </div>
+        <div class="ds-rule-block">
+          <div class="ds-rule-title">3. Kiểm soát thao tác người dùng</div>
+          <ul class="ds-rule-list">
+            <li>Phản hồi mọi thao tác: đổi màu khi Hover/Click, disable button sau khi click</li>
+            <li>Chức năng xử lý &gt;5s cần thanh tiến trình hiển thị % thực hiện</li>
+            <li>Thông báo trước khi thực hiện chức năng xử lý lâu</li>
+          </ul>
+        </div>
+        <div class="ds-rule-block">
+          <div class="ds-rule-title">4. Kiểm soát lỗi</div>
+          <ul class="ds-rule-list">
+            <li>Có cảnh báo khi người dùng thao tác sai</li>
+            <li>Nội dung cảnh báo dễ hiểu, rõ ràng</li>
+            <li>Focus vào ô nhập liệu bị lỗi đầu tiên</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- USABILITY -->
+  <div id="panel-usability" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Yêu cầu tiện dụng chung</div>
+      <div class="ds-rule-block" style="margin-bottom:12px">
+        <div class="ds-rule-title">Tab Order & Focus</div>
+        <ul class="ds-rule-list">
+          <li>Khi mở form nhập liệu → focus vào ô đầu tiên</li>
+          <li>Tab di chuyển trái → phải → trên → xuống</li>
+          <li>Shift+Tab để di chuyển ngược lại</li>
+          <li>SelectAll khi focus vào ô nhập liệu</li>
+          <li>Nhóm thông tin: tab trong nhóm trước, sau đó mới chuyển nhóm</li>
+        </ul>
+      </div>
+      <div class="ds-rule-block" style="margin-bottom:12px">
+        <div class="ds-rule-title">HotTrack & Tooltip</div>
+        <ul class="ds-rule-list">
+          <li>Đổi màu khi di chuyển chuột qua (Tab, Sidebar, Toolbar, Button, Combo)</li>
+          <li>Cursor pointer = bàn tay khi hover vào đối tượng có thể click</li>
+          <li>Mọi từ viết tắt phải có Tooltip giải thích đầy đủ</li>
+          <li>Label chỉ được viết tắt khi từ 4 từ trở lên</li>
+          <li>Hiển thị phím tắt trong tooltip của button có phím tắt</li>
+        </ul>
+      </div>
+      <div class="ds-subsection-title">Demo: Tooltip</div>
+      <div class="demo-box">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+          <div class="tooltip-wrap">
+            <button class="btn btn-primary">Lưu <span style="font-size:10px;opacity:.7">(Ctrl+S)</span></button>
+            <div class="tooltip-box">Lưu lại thay đổi · Ctrl+S</div>
+          </div>
+          <div class="tooltip-wrap">
+            <button class="btn btn-secondary">Xuất khẩu</button>
+            <div class="tooltip-box">Xuất ra file Excel / PDF</div>
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);font-style:italic">↑ Hover để thấy tooltip</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLOR -->
+  <div id="panel-color" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Màu sắc</div>
+      <div class="ds-section-sub">Hệ thống màu 2 cấp: Base → Semantic tokens</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Semantic Colors — Nhóm Base cấp 1</div>
+        <div class="semantic-chips">
+          <div class="sem-chip" style="background:#EFF6FF;color:#1C6FA8"><span class="sem-chip-name">Brand</span><span class="sem-chip-desc">Màu chính app</span><span class="sem-chip-hex">#1C6FA8</span></div>
+          <div class="sem-chip" style="background:#F5F3FF;color:#7C3AED"><span class="sem-chip-name">Accent</span><span class="sem-chip-desc">Màu nhấn mạnh</span><span class="sem-chip-hex">#7C3AED</span></div>
+          <div class="sem-chip" style="background:#F0F9FF;color:#0369A1"><span class="sem-chip-name">Info</span><span class="sem-chip-desc">Hướng dẫn</span><span class="sem-chip-hex">#0EA5E9</span></div>
+          <div class="sem-chip" style="background:#FFFBEB;color:#92400E"><span class="sem-chip-name">Warning</span><span class="sem-chip-desc">Cảnh báo</span><span class="sem-chip-hex">#F59E0B</span></div>
+          <div class="sem-chip" style="background:#FEF2F2;color:#991B1B"><span class="sem-chip-name">Danger</span><span class="sem-chip-desc">Xóa, hủy</span><span class="sem-chip-hex">#EF4444</span></div>
+          <div class="sem-chip" style="background:#F0FDF4;color:#166534"><span class="sem-chip-name">Success</span><span class="sem-chip-desc">Thành công</span><span class="sem-chip-hex">#22C55E</span></div>
+          <div class="sem-chip" style="background:#F9FAFB;color:#4B5563"><span class="sem-chip-name">Neutral</span><span class="sem-chip-desc">Text, border, bg</span><span class="sem-chip-hex">#6B7280</span></div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Brand Color Scale</div>
+        <div class="color-grid">
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#EFF6FF"></div><div class="color-swatch-info"><div class="color-swatch-stop">50</div><div class="color-swatch-hex">#EFF6FF</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#DBEAFE"></div><div class="color-swatch-info"><div class="color-swatch-stop">100</div><div class="color-swatch-hex">#DBEAFE</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#BFDBFE"></div><div class="color-swatch-info"><div class="color-swatch-stop">200</div><div class="color-swatch-hex">#BFDBFE</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#93C5FD"></div><div class="color-swatch-info"><div class="color-swatch-stop">300</div><div class="color-swatch-hex">#93C5FD</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#60A5FA"></div><div class="color-swatch-info"><div class="color-swatch-stop">400</div><div class="color-swatch-hex">#60A5FA</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#3B82F6"></div><div class="color-swatch-info"><div class="color-swatch-stop">500</div><div class="color-swatch-hex">#3B82F6</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#2563EB"></div><div class="color-swatch-info"><div class="color-swatch-stop">600</div><div class="color-swatch-hex">#2563EB</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#1D4ED8"></div><div class="color-swatch-info"><div class="color-swatch-stop">700</div><div class="color-swatch-hex">#1D4ED8</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#1C6FA8"></div><div class="color-swatch-info"><div class="color-swatch-stop">800 ★</div><div class="color-swatch-hex">#1C6FA8</div></div></div>
+          <div class="color-swatch"><div class="color-swatch-fill" style="background:#1E3A8A"></div><div class="color-swatch-info"><div class="color-swatch-stop">900</div><div class="color-swatch-hex">#1E3A8A</div></div></div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Status Badges — Ứng dụng màu</div>
+        <div class="demo-box">
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <span class="badge badge-active">Đang hoạt động</span>
+            <span class="badge badge-inactive">Không hoạt động</span>
+            <span class="badge badge-warning">Chờ duyệt</span>
+            <span class="badge badge-danger">Đã hủy</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TYPOGRAPHY -->
+  <div id="panel-typography" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Kiểu chữ</div>
+      <div class="ds-section-sub">Font Inter — kích thước tiêu chuẩn 13px</div>
+      <div class="demo-box">
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">H1 — Banner</div><div class="type-meta-spec">24px / 700 / 1.3</div></div>
+          <div class="type-preview" style="font-size:24px;font-weight:700;line-height:1.3">Tiêu đề Banner lớn</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">H2 — Page Title</div><div class="type-meta-spec">20px / 600 / 1.4</div></div>
+          <div class="type-preview" style="font-size:20px;font-weight:600;line-height:1.4">Tiêu đề App / Page</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">H3 — Section</div><div class="type-meta-spec">16px / 600 / 1.4</div></div>
+          <div class="type-preview" style="font-size:16px;font-weight:600;line-height:1.4">Tiêu đề Form / Card / Section</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">Body Regular</div><div class="type-meta-spec">13px / 400 / 1.5</div></div>
+          <div class="type-preview" style="font-size:13px;font-weight:400">Label, dữ liệu bảng, mô tả thông thường</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">Body Medium</div><div class="type-meta-spec">13px / 500 / 1.5</div></div>
+          <div class="type-preview" style="font-size:13px;font-weight:500">Button text, Tag, Header bảng, Navigation</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">Body SemiBold</div><div class="type-meta-spec">13px / 600 / 1.5</div></div>
+          <div class="type-preview" style="font-size:13px;font-weight:600">Tên người, nội dung phân cấp mạnh</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">Body Bold</div><div class="type-meta-spec">13px / 700 / 1.5</div></div>
+          <div class="type-preview" style="font-size:13px;font-weight:700">Data number cần nhấn mạnh: 1.234.567</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta"><div class="type-meta-name">Body Large</div><div class="type-meta-spec">15px / 400 / 1.6</div></div>
+          <div class="type-preview" style="font-size:15px;font-weight:400;color:var(--text-secondary)">Đoạn văn bản dài, Rich Text, nội dung bài viết</div>
+        </div>
+        <div class="type-row" style="border:none">
+          <div class="type-meta"><div class="type-meta-name">Caption</div><div class="type-meta-spec">11px / 400 / 1.4</div></div>
+          <div class="type-preview" style="font-size:11px;color:var(--text-tertiary)">Helper text, chú thích, nhãn phụ</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ICONS -->
+  <div id="panel-icons" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Icons</div>
+      <div class="ds-section-sub">Icon đồng nhất trên toàn hệ thống. Kích thước chuẩn: 16px (inline), 20px (button), 24px (decorative)</div>
+      <div class="demo-box">
+        <div class="demo-label">Common Icons (SVG)</div>
+        <div class="icon-grid">
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg><span class="icon-chip-label">Thêm</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.364-6.364a2 2 0 112.828 2.828L11.828 15.828A2 2 0 0111 16H9v-2a2 2 0 01.586-1.414z"/></svg><span class="icon-chip-label">Sửa</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#EF4444" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4h6v3M4 7h16"/></svg><span class="icon-chip-label">Xóa</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg><span class="icon-chip-label">Tìm</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg><span class="icon-chip-label">Xuất</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg><span class="icon-chip-label">Nhập</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg><span class="icon-chip-label">Lọc</span></div>
+          <div class="icon-chip"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="icon-chip-label">Cài đặt</span></div>
+        </div>
+        <div style="margin-top:16px">
+          <div class="demo-label">Kích thước</div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg><span style="font-size:10px;color:var(--text-tertiary)">12px</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg><span style="font-size:10px;color:var(--text-tertiary)">16px ★</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg><span style="font-size:10px;color:var(--text-tertiary)">20px</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#4B5563" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg><span style="font-size:10px;color:var(--text-tertiary)">24px</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div id="panel-layout" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Bố cục trang</div>
+      <div class="ds-section-sub">Các dạng layout chuẩn và nguyên tắc sắp xếp toolbar</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Toolbar Rule</div>
+        <div class="ds-rule-block">
+          <ul class="ds-rule-list">
+            <li>Bên trái: Tiêu đề bảng / danh sách</li>
+            <li>Bên phải: Chức năng thao tác — Nút chính (ngoài cùng phải) → Nút phụ → Nút More (…)</li>
+            <li>Nút Lưu / Hủy ghim ở cuối trang trên màn hình thêm/sửa</li>
+            <li>Nút More luôn nằm bên phải nút Primary</li>
+          </ul>
+        </div>
+        <div class="demo-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-subtle);border:1px solid var(--border-default);border-radius:var(--r-lg)">
+            <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Danh sách hóa đơn</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn-ghost btn-sm">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Xuất Excel
+              </button>
+              <button class="btn btn-secondary btn-sm">Nhập từ file</button>
+              <button class="btn btn-primary btn-sm">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                Thêm mới
+              </button>
+              <button class="btn btn-secondary btn-sm btn-icon" style="border-radius:var(--r-md)">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Master–Detail: Left narrow / Right wide</div>
+        <div class="layout-card">
+          <div class="layout-sidebar-demo">
+            <div style="width:160px;border-right:1px solid var(--border-default);background:#fff">
+              <div style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-tertiary);border-bottom:1px solid var(--border-default)">Danh sách</div>
+              <div style="padding:7px 12px;font-size:12px;background:var(--brand-50);color:var(--brand-800);border-left:2px solid var(--brand-800)">Nguyễn Văn A</div>
+              <div style="padding:7px 12px;font-size:12px;color:var(--text-secondary)">Trần Thị B</div>
+              <div style="padding:7px 12px;font-size:12px;color:var(--text-secondary)">Lê Văn C</div>
+            </div>
+            <div style="flex:1;padding:12px">
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">Chi tiết: Nguyễn Văn A</div>
+              <div style="font-size:12px;color:var(--text-secondary)">Email: a@example.com</div>
+              <div style="font-size:12px;color:var(--text-secondary)">ĐT: 0901 234 567</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Breadcrumb</div>
+        <div class="demo-box">
+          <div class="breadcrumb">
+            <span class="breadcrumb-item">AMIS Kế toán</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item">Mua hàng</span>
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-item active">Đơn mua hàng</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANNOUNCEMENT -->
+  <div id="panel-announcement" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Thông báo</div>
+      <div class="ds-section-sub">Alert, Toast, và các dạng thông báo hệ thống</div>
+      <div class="alert alert-info"><svg class="alert-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4m0-4h.01"/></svg><div class="alert-content"><div class="alert-title">Thông tin</div><div class="alert-body">Hệ thống sẽ bảo trì từ 22:00 – 23:00 ngày 28/03/2025.</div></div></div>
+      <div class="alert alert-success"><svg class="alert-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><div class="alert-content"><div class="alert-title">Thành công</div><div class="alert-body">Đã lưu hóa đơn ĐMH00012 thành công.</div></div></div>
+      <div class="alert alert-warning"><svg class="alert-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><div class="alert-content"><div class="alert-title">Cảnh báo</div><div class="alert-body">Số dư tài khoản không đủ để thực hiện giao dịch này.</div></div></div>
+      <div class="alert alert-danger"><svg class="alert-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M15 9l-6 6M9 9l6 6"/></svg><div class="alert-content"><div class="alert-title">Lỗi</div><div class="alert-body">Không thể xóa bản ghi đang được sử dụng trong giao dịch khác.</div></div></div>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="panel-loading" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Loading</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Spinner</div>
+        <div class="demo-box">
+          <div class="loading-row">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="spinner spinner-sm"></div><span style="font-size:10px;color:var(--text-tertiary)">Small</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="spinner"></div><span style="font-size:10px;color:var(--text-tertiary)">Default</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="spinner spinner-lg"></div><span style="font-size:10px;color:var(--text-tertiary)">Large</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div><span style="font-size:10px;color:var(--text-tertiary)">Dots</span></div>
+          </div>
+        </div>
+        <div class="ds-subsection-title">Progress Bar</div>
+        <div class="demo-box">
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">Đang xử lý: 67%</div>
+          <div class="progress"><div class="progress-fill" style="width:67%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px">Hoàn thành: 100%</div>
+          <div class="progress"><div class="progress-fill" style="width:100%;background:var(--success)"></div></div>
+        </div>
+        <div class="ds-subsection-title">Skeleton Loading</div>
+        <div class="demo-box">
+          <div class="skeleton-line" style="width:40%"></div>
+          <div class="skeleton-line" style="width:100%"></div>
+          <div class="skeleton-line" style="width:85%"></div>
+          <div class="skeleton-line" style="width:60%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div id="panel-emptystate" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Empty State</div>
+      <div class="demo-box">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">Chưa có dữ liệu</div>
+          <div class="empty-desc">Bắt đầu bằng cách thêm hóa đơn đầu tiên của bạn</div>
+          <button class="btn btn-primary btn-sm">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Thêm mới
+          </button>
+        </div>
+      </div>
+      <div class="demo-box" style="margin-top:12px">
+        <div class="empty-state">
+          <div class="empty-icon" style="background:var(--danger-light)">🔍</div>
+          <div class="empty-title">Không tìm thấy kết quả</div>
+          <div class="empty-desc">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</div>
+          <button class="btn btn-secondary btn-sm">Xóa bộ lọc</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUTTON -->
+  <div id="panel-button" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Button</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Variants</div>
+        <div class="demo-box">
+          <div class="btn-row" style="margin-bottom:12px">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-ghost">Ghost</button>
+            <button class="btn btn-danger">Danger</button>
+            <button class="btn btn-disabled" disabled>Disabled</button>
+          </div>
+          <div class="demo-label">Sizes</div>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-sm">Small</button>
+            <button class="btn btn-primary">Default (32px)</button>
+            <button class="btn btn-primary btn-lg">Large</button>
+          </div>
+        </div>
+        <div class="ds-subsection-title">With Icon</div>
+        <div class="demo-box">
+          <div class="btn-row">
+            <button class="btn btn-primary"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>Thêm mới</button>
+            <button class="btn btn-secondary"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>Xuất Excel</button>
+            <button class="btn btn-ghost"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>Lọc</button>
+            <button class="btn btn-danger"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4h6v3M4 7h16"/></svg>Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Tags & Badges</div>
+        <div class="demo-box">
+          <div class="tag-grid">
+            <span class="tag tag-default">Draft</span>
+            <span class="tag tag-brand">Đang xử lý</span>
+            <span class="tag tag-success">Đã hoàn thành</span>
+            <span class="tag tag-danger">Đã hủy</span>
+            <span class="tag tag-warning">Chờ duyệt</span>
+            <span class="tag tag-info">Thông tin</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUT -->
+  <div id="panel-input" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Text Field</div>
+      <div class="demo-box">
+        <div class="input-grid">
+          <div class="input-group">
+            <label class="input-label">Tên khách hàng <span style="color:var(--danger)">*</span></label>
+            <input class="input" placeholder="Nhập tên khách hàng...">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Email</label>
+            <input class="input" type="email" value="focus@example.com" style="border-color:var(--brand-800);box-shadow:0 0 0 3px rgba(28,111,168,.15)">
+            <div class="input-helper">Đang chỉnh sửa</div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Số điện thoại</label>
+            <input class="input error" value="0901abc">
+            <div class="input-helper error">Số điện thoại không hợp lệ</div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Mã số thuế</label>
+            <input class="input success" value="0301234567">
+            <div class="input-helper success">Hợp lệ</div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Ghi chú (disabled)</label>
+            <input class="input" disabled placeholder="Không thể chỉnh sửa">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Tìm kiếm</label>
+            <div class="input-addon">
+              <input class="input" placeholder="Nhập từ khóa...">
+              <button class="input-addon-btn">Tìm</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Textarea</div>
+        <div class="demo-box">
+          <label class="input-label">Mô tả</label>
+          <textarea style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--r-md);font-size:13px;font-family:var(--font);color:var(--text-primary);resize:vertical;min-height:80px;outline:none" placeholder="Nhập mô tả chi tiết..."></textarea>
+          <div class="input-helper" style="text-align:right">0 / 500 ký tự</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SELECT -->
+  <div id="panel-select" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Dropdown / ComboBox</div>
+      <div class="demo-box">
+        <div class="input-grid">
+          <div class="input-group">
+            <label class="input-label">Phòng ban <span style="color:var(--danger)">*</span></label>
+            <div class="select-wrap" style="width:100%">
+              <select>
+                <option value="">-- Chọn phòng ban --</option>
+                <option>Kế toán</option>
+                <option selected>Nhân sự</option>
+                <option>Công nghệ thông tin</option>
+                <option>Kinh doanh</option>
+              </select>
+              <svg class="select-caret" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Trạng thái</label>
+            <div class="select-wrap" style="width:100%">
+              <select>
+                <option selected>Đang hoạt động</option>
+                <option>Tạm dừng</option>
+                <option>Đã nghỉ</option>
+              </select>
+              <svg class="select-caret" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="demo-label">Dropdown option list (selected + hover)</div>
+          <div style="width:200px;border:1px solid var(--border-default);border-radius:var(--r-md);background:#fff;box-shadow:var(--shadow-md);overflow:hidden">
+            <div style="padding:7px 10px;font-size:13px;color:var(--brand-800);background:var(--brand-50);border-left:2px solid var(--brand-800);font-weight:500">Kế toán ✓</div>
+            <div style="padding:7px 10px;font-size:13px;color:var(--text-primary);background:var(--n50)">Nhân sự</div>
+            <div style="padding:7px 10px;font-size:13px;color:var(--text-primary)">CNTT</div>
+            <div style="padding:7px 10px;font-size:13px;color:var(--text-disabled)">Kinh doanh (disabled)</div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Quy tắc chọn control</div>
+        <div class="ds-rule-block">
+          <ul class="ds-rule-list">
+            <li><strong>2–3 bản ghi</strong> → Radio button / Checkbox</li>
+            <li><strong>4–8 bản ghi</strong> → Dropdown (chỉ chọn, không gõ)</li>
+            <li><strong>&gt;8 bản ghi</strong> → ComboBox (có gõ tìm + AutoComplete)</li>
+            <li><strong>&gt;40 bản ghi</strong> → ComboBox với LoadOnDemand</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECKBOX -->
+  <div id="panel-checkbox" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Checkbox / Radio Button</div>
+      <div class="demo-box">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <div class="demo-label">Checkbox</div>
+            <div class="check-list">
+              <div class="check-item"><div class="check-box"></div><span class="check-label">Unchecked</span></div>
+              <div class="check-item"><div class="check-box checked"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="check-label">Checked</span></div>
+              <div class="check-item"><div class="check-box indeterminate"><svg width="8" height="2" viewBox="0 0 8 2"><rect width="8" height="2" rx="1" fill="white"/></svg></div><span class="check-label">Indeterminate</span></div>
+              <div class="check-item"><div class="check-box disabled"></div><span class="check-label disabled">Disabled</span></div>
+              <div class="check-item"><div class="check-box checked disabled" style="background:var(--n300);border-color:var(--n300)"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span class="check-label disabled">Checked & Disabled</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="demo-label">Radio Button</div>
+            <div class="check-list">
+              <div class="check-item"><div class="radio-dot"></div><span class="check-label">Chưa chọn</span></div>
+              <div class="check-item"><div class="radio-dot checked"></div><span class="check-label">Đã chọn</span></div>
+              <div class="check-item"><div class="radio-dot" style="background:var(--n50);border-color:var(--n200)"></div><span class="check-label disabled">Disabled</span></div>
+            </div>
+            <div style="margin-top:16px">
+              <div class="demo-label">Radio Group</div>
+              <div style="display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--n50);border-radius:var(--r-md)">
+                <div class="check-item"><div class="radio-dot checked"></div><span class="check-label">Nam</span></div>
+                <div class="check-item"><div class="radio-dot"></div><span class="check-label">Nữ</span></div>
+                <div class="check-item"><div class="radio-dot"></div><span class="check-label">Khác</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div id="panel-table" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Data Table</div>
+      <div class="demo-box" style="padding:0;overflow:hidden">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:600">Danh sách hóa đơn mua hàng</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm">Lọc</button>
+            <button class="btn btn-primary btn-sm">+ Thêm</button>
+          </div>
+        </div>
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" style="margin:0"></th>
+              <th>Số chứng từ</th>
+              <th>Ngày hóa đơn</th>
+              <th>Nhà cung cấp</th>
+              <th>Diễn giải</th>
+              <th class="col-number">Thành tiền</th>
+              <th>Trạng thái</th>
+              <th style="width:40px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox" style="margin:0"></td>
+              <td style="color:var(--brand-800);cursor:pointer">ĐMH00012</td>
+              <td>25/03/2025</td>
+              <td>Công ty ABC</td>
+              <td>Mua văn phòng phẩm Q1</td>
+              <td class="col-number" style="font-weight:600">4.500.000</td>
+              <td><span class="badge badge-active">Đã duyệt</span></td>
+              <td><button class="btn btn-ghost btn-sm btn-icon">···</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" style="margin:0"></td>
+              <td style="color:var(--brand-800);cursor:pointer">ĐMH00011</td>
+              <td>22/03/2025</td>
+              <td>Nhà cung cấp XYZ</td>
+              <td>Mua thiết bị IT</td>
+              <td class="col-number" style="font-weight:600">28.000.000</td>
+              <td><span class="badge badge-warning">Chờ duyệt</span></td>
+              <td><button class="btn btn-ghost btn-sm btn-icon">···</button></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox" style="margin:0"></td>
+              <td style="color:var(--brand-800);cursor:pointer">ĐMH00010</td>
+              <td>18/03/2025</td>
+              <td>Công ty DEF</td>
+              <td>Chi phí vận chuyển</td>
+              <td class="col-number" style="font-weight:600">1.200.000</td>
+              <td><span class="badge badge-danger">Đã hủy</span></td>
+              <td><button class="btn btn-ghost btn-sm btn-icon">···</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:8px 14px;border-top:1px solid var(--border-default);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:var(--text-tertiary)">Hiển thị 1–3 / 48 bản ghi</span>
+          <div class="pagination">
+            <button class="page-btn" disabled>‹</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <span style="font-size:12px;color:var(--text-tertiary);padding:0 4px">...</span>
+            <button class="page-btn">16</button>
+            <button class="page-btn">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIALOG -->
+  <div id="panel-dialog" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Dialog / Popup</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Confirm Dialog</div>
+        <div class="dialog-demo">
+          <div class="dialog">
+            <div class="dialog-header">
+              <span class="dialog-title">Xác nhận xóa</span>
+              <button class="dialog-close">✕</button>
+            </div>
+            <div class="dialog-body">Bạn có chắc chắn muốn xóa hóa đơn <strong>ĐMH00012</strong> không? Hành động này không thể hoàn tác.</div>
+            <div class="dialog-footer">
+              <button class="btn btn-secondary btn-sm">Hủy</button>
+              <button class="btn btn-danger btn-sm">Xóa</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Cảnh báo thoát trang (Leave Page Warning)</div>
+        <div class="dialog-demo">
+          <div class="dialog">
+            <div class="dialog-header">
+              <span class="dialog-title">⚠ Chưa lưu thay đổi</span>
+              <button class="dialog-close">✕</button>
+            </div>
+            <div class="dialog-body">Bạn có thay đổi chưa được lưu. Nếu thoát trang bây giờ, toàn bộ thay đổi sẽ bị mất.</div>
+            <div class="dialog-footer">
+              <button class="btn btn-secondary btn-sm">Tiếp tục chỉnh sửa</button>
+              <button class="btn btn-danger btn-sm">Thoát không lưu</button>
+              <button class="btn btn-primary btn-sm">Lưu và thoát</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHORTCUT -->
+  <div id="panel-shortcut" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Quy định phím tắt</div>
+      <div class="ds-section-sub">Phím tắt phổ biến dùng trên tất cả ứng dụng MISA</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Màn hình danh sách</div>
+        <div class="shortcut-grid">
+          <div class="shortcut-item"><span class="shortcut-action">Thêm mới</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">N</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Sửa bản ghi</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">E</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Xóa bản ghi</span><div class="shortcut-keys"><span class="kbd">Delete</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Tìm kiếm</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">F</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Làm mới</span><div class="shortcut-keys"><span class="kbd">F5</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Xuất Excel</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">Shift</span><span class="kbd-plus">+</span><span class="kbd">E</span></div></div>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Màn hình chi tiết / form</div>
+        <div class="shortcut-grid">
+          <div class="shortcut-item"><span class="shortcut-action">Lưu</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">S</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Hủy / Đóng</span><div class="shortcut-keys"><span class="kbd">Esc</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Thêm dòng chi tiết</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">Ins</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Xóa dòng chi tiết</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">Del</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Di chuyển field</span><div class="shortcut-keys"><span class="kbd">Tab</span></div></div>
+          <div class="shortcut-item"><span class="shortcut-action">Di chuyển ngược</span><div class="shortcut-keys"><span class="kbd">Shift</span><span class="kbd-plus">+</span><span class="kbd">Tab</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPELLING & NUMBER -->
+  <div id="panel-spelling" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Chính tả & Phân tách số</div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Quy tắc phân tách số (Thông tư 200/2014/TT-BTC)</div>
+        <div class="demo-box">
+          <table class="num-table">
+            <thead><tr><th>Loại</th><th>Đúng ✓</th><th>Sai ✗</th><th>Ghi chú</th></tr></thead>
+            <tbody>
+              <tr><td>Hàng nghìn</td><td class="num-correct">1.000</td><td class="num-wrong">1,000</td><td>Dùng dấu <strong>.</strong> (chấm)</td></tr>
+              <tr><td>Hàng triệu</td><td class="num-correct">1.234.567</td><td class="num-wrong">1,234,567</td><td>Dùng dấu <strong>.</strong> (chấm)</td></tr>
+              <tr><td>Thập phân</td><td class="num-correct">1.234.567,89</td><td class="num-wrong">1.234.567.89</td><td>Dùng dấu <strong>,</strong> (phẩy)</td></tr>
+              <tr><td>Quốc tế (EN)</td><td class="num-correct">1,234,567.89</td><td></td><td>Nếu hỗ trợ đa quốc gia → cho phép thiết lập</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Quy tắc dấu câu</div>
+        <div class="ds-rule-block">
+          <ul class="ds-rule-list">
+            <li>Dấu chấm (.) — Kết thúc câu, viết hoa từ tiếp theo, đặt 1 khoảng trắng sau</li>
+            <li>Dấu phẩy (,) — Phân tách thành phần, đặt 1 khoảng trắng sau</li>
+            <li>Dấu hai chấm (:) — Giới thiệu danh sách/trích dẫn, viết hoa nếu theo câu hoàn chỉnh</li>
+            <li>Dấu ngoặc () "" — Bao thông tin bổ sung, không cần khoảng trắng sau</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BROWSER TITLE -->
+  <div id="panel-browsertitle" class="panel">
+    <div class="ds-section">
+      <div class="ds-section-heading">Tiêu đề trình duyệt</div>
+      <div class="ds-section-sub">Cấu trúc title giúp người dùng nhận biết nhanh tab và hỗ trợ analytics</div>
+      <div class="ds-rule-block">
+        <div class="ds-rule-title">Màn hình danh sách</div>
+        <div style="font-family:monospace;font-size:12px;color:var(--text-primary);padding:6px 0">Tên phân hệ | Phân hệ cha | Tên ứng dụng</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Ví dụ: <em>Rút dự toán | Kho bạc | Mimosa Online</em></div>
+      </div>
+      <div class="ds-rule-block">
+        <div class="ds-rule-title">Màn hình thêm</div>
+        <div style="font-family:monospace;font-size:12px;color:var(--text-primary);padding:6px 0">Thêm [Tên phân hệ] | Phân hệ cha | Tên ứng dụng</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Ví dụ: <em>Thêm rút dự toán | Kho bạc | MISA Mimosa Online</em></div>
+      </div>
+      <div class="ds-rule-block">
+        <div class="ds-rule-title">Màn hình sửa</div>
+        <div style="font-family:monospace;font-size:12px;color:var(--text-primary);padding:6px 0">Sửa [Mã - Tên bản ghi] | Phân hệ | Tên ứng dụng</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Ví dụ: <em>Sửa RDT00012 | Rút dự toán | Kho bạc | MISA Mimosa Online</em></div>
+      </div>
+      <div class="ds-rule-block">
+        <div class="ds-rule-title">Nhiều công ty (multi-tenant)</div>
+        <div style="font-family:monospace;font-size:12px;color:var(--text-primary);padding:6px 0">Tên phân hệ | Phân hệ cha | Tên công ty | Tên ứng dụng</div>
+        <div style="font-size:12px;color:var(--text-secondary)">Ví dụ: <em>Rút dự toán | Kho bạc | Trường THPT Hà Tiên | Mimosa Online</em></div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /.ds-content -->
+</div><!-- /.ds-main -->
+</div><!-- /.ds-shell -->
+
+<script>
+const panels = {
+  general: 'Nguyên tắc chung', usability: 'Yêu cầu tiện dụng',
+  color: 'Màu sắc', typography: 'Kiểu chữ', icons: 'Icons', layout: 'Bố cục trang',
+  announcement: 'Thông báo', loading: 'Loading', emptystate: 'Empty State',
+  button: 'Button', input: 'Text Field', select: 'Dropdown / ComboBox',
+  checkbox: 'Checkbox / Radio', table: 'Data Table', dialog: 'Dialog / Popup',
+  shortcut: 'Phím tắt', spelling: 'Chính tả & Số', browsertitle: 'Browser Title'
+};
+
+function show(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ds-nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  document.getElementById('topbar-section').textContent = panels[id] || id;
+  document.querySelector('.ds-main').scrollTop = 0;
+}
+</script>
+</body>
+</html>
