@@ -68,8 +68,29 @@ ssh "${VPS_HOST}" "
 "
 log "Containers restarted"
 
-# 5. Health check
-step "5/5 — Health check"
+# 5. Run DB changelog (idempotent — safe to run every deploy)
+step "5/6 — DB Changelog"
+CHANGELOG_DIR="$ROOT_DIR/db/changelog"
+if [ -d "$CHANGELOG_DIR" ] && ls "$CHANGELOG_DIR"/V*.sql 1>/dev/null 2>&1; then
+  MYSQL_PWD=$(ssh "${VPS_HOST}" "grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env | cut -d= -f2-")
+  for f in $(find "$CHANGELOG_DIR" -name 'V*.sql' -type f | sort); do
+    FNAME=$(basename "$f")
+    echo -n "  $FNAME ... "
+    OUTPUT=$(ssh "${VPS_HOST}" "docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage" < "$f" 2>&1)
+    if [ $? -eq 0 ]; then
+      echo "OK"
+    else
+      echo "FAILED"
+      echo "$OUTPUT" | tail -3 | sed 's/^/    /'
+    fi
+  done
+  log "DB Changelog done"
+else
+  log "No changelog files (skip)"
+fi
+
+# 6. Health check
+step "6/6 — Health check"
 sleep 5
 ssh "${VPS_HOST}" "
   curl -sf http://localhost:4000/api/health && echo ''

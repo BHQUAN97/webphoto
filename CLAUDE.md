@@ -343,6 +343,172 @@ Action: [rollback/fix]
 ---
 
 ## ═══════════════════════════════════════════
+## DB STANDARDS — Agent_DBO BẮT BUỘC
+## ═══════════════════════════════════════════
+
+### Cấu trúc thư mục `db/`
+```
+db/
+├── schema/
+│   └── tables/          ← Mỗi file = 1 bảng (CREATE TABLE IF NOT EXISTS)
+│       ├── users.sql
+│       ├── albums.sql
+│       ├── images.sql
+│       └── ...
+├── data/                ← Seed data, master data (INSERT ... ON DUPLICATE KEY)
+│   └── seed_plans.sql
+└── changelog/           ← Changelog idempotent, chạy được nhiều lần
+    ├── V001__add_storage_backend_columns.sql
+    ├── V002__xxx.sql
+    └── ...
+```
+
+### Quy tắc đặt tên
+- **Schema**: `db/schema/tables/{table_name}.sql` — tên file = tên bảng MySQL
+- **Stored Procedure**: `db/schema/procedures/{sp_name}.sql`
+- **Function**: `db/schema/functions/{fn_name}.sql`
+- **Changelog**: `db/changelog/V{NNN}__{mo_ta_ngan}.sql` — 3 chữ số, double underscore
+- **Data**: `db/data/{mo_ta}.sql`
+
+### Changelog — PHẢI idempotent (chạy được nhiều lần)
+
+**Header bắt buộc:**
+```sql
+-- ============================================================
+-- V{NNN}: Mô tả ngắn
+-- Date:   YYYY-MM-DD
+-- Author: Agent_DBO
+-- Ticket: mô tả feature/bug
+-- ============================================================
+```
+
+**Pattern: Thêm cột (nếu chưa tồn tại)**
+```sql
+SET @sql = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ten_bang'
+              AND COLUMN_NAME = 'ten_cot'
+        ),
+        'SELECT ''[SKIP] ten_bang.ten_cot already exists'' AS info;',
+        'ALTER TABLE ten_bang ADD COLUMN ten_cot VARCHAR(100) NOT NULL DEFAULT ''gia_tri'';'
+    )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+```
+
+**Pattern: Sửa kiểu dữ liệu cột (nếu cột tồn tại)**
+```sql
+SET @sql = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ten_bang'
+              AND COLUMN_NAME = 'ten_cot'
+        ),
+        'ALTER TABLE ten_bang MODIFY COLUMN ten_cot VARCHAR(500) DEFAULT NULL;',
+        'SELECT ''[SKIP] ten_bang.ten_cot not found'' AS info;'
+    )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+```
+
+**Pattern: Thêm index (nếu chưa tồn tại)**
+```sql
+SET @sql = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ten_bang'
+              AND INDEX_NAME = 'idx_ten_index'
+        ),
+        'SELECT ''[SKIP] idx_ten_index already exists'' AS info;',
+        'ALTER TABLE ten_bang ADD INDEX idx_ten_index (cot1, cot2);'
+    )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+```
+
+**Pattern: Xóa index (nếu tồn tại)**
+```sql
+SET @sql = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ten_bang'
+              AND INDEX_NAME = 'idx_ten_index'
+        ),
+        'ALTER TABLE ten_bang DROP INDEX idx_ten_index;',
+        'SELECT ''[SKIP] idx_ten_index not found'' AS info;'
+    )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+```
+
+**Pattern: Xóa cột (nếu tồn tại)**
+```sql
+SET @sql = (
+    SELECT IF(
+        EXISTS (
+            SELECT 1
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'ten_bang'
+              AND COLUMN_NAME = 'ten_cot'
+        ),
+        'ALTER TABLE ten_bang DROP COLUMN ten_cot;',
+        'SELECT ''[SKIP] ten_bang.ten_cot not found'' AS info;'
+    )
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+```
+
+**Cuối mỗi changelog — verify:**
+```sql
+SELECT CONCAT('[OK] ', TABLE_NAME, '.', COLUMN_NAME) AS result
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'ten_bang' AND COLUMN_NAME IN ('cot_moi_1', 'cot_moi_2');
+```
+
+### Chạy changelog
+```bash
+# Chạy tất cả changelog (theo thứ tự V001, V002, ...)
+bash scripts/db-changelog.sh <vps-ip>
+
+# Chạy 1 version cụ thể
+bash scripts/db-changelog.sh <vps-ip> V005
+```
+
+### Agent_DBO Workflow
+1. Khi schema.ts thay đổi → **BẮT BUỘC** tạo changelog tương ứng trong `db/changelog/`
+2. Update file schema SQL trong `db/schema/tables/` cho khớp
+3. Changelog phải idempotent — chạy lần 2 không lỗi, chỉ in `[SKIP]`
+4. Sau deploy code → chạy `bash scripts/db-changelog.sh <vps-ip>`
+5. **KHÔNG** dùng `drizzle-kit push` trên production — chỉ dùng changelog
+
+---
+
+## ═══════════════════════════════════════════
 ## BE CODE STANDARDS — BẮT BUỘC
 ## ═══════════════════════════════════════════
 

@@ -17,6 +17,7 @@
 - Real-time notifications via Socket.io
 - Auto emails (welcome, orders, reminders)
 - Dark mode + i18n (Vietnamese/English)
+- **Dual storage backend**: Cloudflare R2 (cloud) or Local Filesystem — switchable at runtime, per-image tracking
 
 ## Tech Stack
 
@@ -24,9 +25,9 @@
 |-------|-----------|
 | Frontend | Vue 3 + TypeScript + Tailwind CSS 4 + Pinia + vue-i18n + vue-chartjs |
 | Backend | Express.js 5 + TypeScript + Drizzle ORM |
-| Database | MySQL 8 (14 tables, ULID primary keys) |
+| Database | MySQL 8 (16 tables, ULID primary keys) |
 | Cache/Queue | Redis 7 + BullMQ (4 workers) |
-| Storage | Cloudflare R2 (S3 compatible) or Local Filesystem |
+| Storage | Cloudflare R2 (S3 compatible) or Local Filesystem (per-image backend) |
 | Image Processing | dcraw + Sharp.js |
 | Real-time | Socket.io + Redis adapter |
 | Email | Resend |
@@ -48,20 +49,26 @@ WebPhoto/
 │   │
 │   └── server/                 # Backend Express
 │       └── src/
-│           ├── database/       #   Schema (14 tables) + seed
+│           ├── database/       #   Schema (16 tables) + seed
 │           ├── middleware/      #   Auth (JWT), admin guard, rate limit
 │           ├── routes/         #   44 API endpoints (auth, albums, images, payments, admin, cron, share)
 │           ├── utils/          #   DB, Redis, R2, JWT, hash, mail, socket, quota, validate
-│           │   └── storage/    #   r2-provider.ts, local-provider.ts
-│           ├── workers/        #   imageProcessor, imageExpiry, emailSender, storageMonitor
+│           │   └── storage/    #   r2-provider.ts, local-provider.ts (dual-backend)
+│           ├── workers/        #   imageProcessor, imageExpiry, driveImport, storageMonitor
 │           └── plugins/        #   Socket.io, BullMQ
 │
+├── db/                         # Database management (source of truth for DBO)
+│   ├── schema/tables/          #   16 files — 1 file per table (CREATE TABLE IF NOT EXISTS)
+│   ├── data/                   #   Seed data, master data
+│   └── changelog/              #   Idempotent migration scripts (V001, V002, ...)
+│
 ├── scripts/                    # All automation scripts
-│   ├── dev.sh / dev.bat        #   Start local dev (all services)
+│   ├── dev.sh                  #   Start local dev (all services)
 │   ├── build.sh                #   Build FE + BE
 │   ├── deploy.sh               #   Full deploy on production server
 │   ├── quick-deploy.sh         #   Deploy to new VPS from local machine
-│   ├── update-deploy.sh        #   Update existing VPS (build → upload → restart)
+│   ├── update-deploy.sh        #   Update existing VPS (build → upload → changelog → restart)
+│   ├── db-changelog.sh         #   Run DB changelog on VPS (idempotent)
 │   ├── backup.sh               #   Database backup
 │   ├── vps-setup.sh            #   Initial VPS setup
 │   └── ssl-init.sh             #   SSL certificate setup
@@ -69,8 +76,33 @@ WebPhoto/
 ├── docker-compose.yml          # Local dev (MySQL + Redis)
 ├── docker-compose.prod.yml     # Production stack
 ├── docker-compose.tunnel.yml   # Cloudflare Tunnel overlay
+├── CLAUDE.md                   # Agent system rules (BA → SA → Dev → QC → DBO → DevOps)
 └── .env                        # Environment variables (not committed)
 ```
+
+## Database Schema (16 tables)
+
+| Table | Description |
+|-------|-------------|
+| `users` | User accounts, roles, referral codes |
+| `plans` | Subscription plans (Free/Basic/Pro) |
+| `user_plans` | Active plan assignments per user |
+| `vouchers` | Discount/activation voucher codes |
+| `voucher_usages` | Voucher redemption log |
+| `referrals` | Referral tracking (referrer → referee) |
+| `storage_addons` | Extra storage purchased by user |
+| `payment_methods` | Bank transfer, MoMo, ZaloPay config |
+| `payments` | Payment orders + approval workflow |
+| `albums` | Photo albums with cover, sharing, password |
+| `images` | Photos with per-image `storage_backend` (r2/local) |
+| `likes` | Image like tracking (user + image composite PK) |
+| `comments` | Image comments (user or guest) |
+| `refresh_tokens` | JWT refresh token store |
+| `album_share_tokens` | Shareable album links with permissions |
+| `system_settings` | Key-value admin config |
+| `admin_logs` | Admin action audit log |
+| `app_logs` | Application-level log storage |
+| `storage_snapshots` | Daily storage/user/revenue metrics |
 
 ## Quick Start (Local Development)
 
@@ -100,57 +132,84 @@ npx tsx src/workers/start.ts        # Image processing, email, expiry, monitorin
 
 Open http://localhost:3000 — Login: `admin@photostorage.com` / `admin123`
 
-## Deployment Flow
+## Deployment
 
 ### First-time Deploy (new VPS)
 
 ```bash
-# From local machine — deploys everything automatically:
-# build → upload → Docker setup → DB schema → Nginx + SSL → cron jobs
 bash scripts/quick-deploy.sh <vps-ip> <domain>
-
-# Example:
-bash scripts/quick-deploy.sh <your-vps-ip> bhquan.site
+# Example: bash scripts/quick-deploy.sh 213.163.199.176 bhquan.site
 ```
 
-What `quick-deploy.sh` does:
-1. Builds frontend + backend locally
-2. Uploads dist files to VPS via SCP
-3. Creates docker-compose on VPS
-4. Starts MySQL + Redis + API + Worker containers
-5. Pushes DB schema + seeds data
-6. Configures Nginx (HTTP → certbot → HTTPS)
-7. Sets up cron jobs (expire images, reconcile quota, payment reminders, weekly backup)
-8. Health check
+Steps: build local → upload → Docker setup → DB schema + seed → Nginx + SSL → cron jobs → health check.
 
 ### Update Deploy (code changes)
 
 ```bash
-# From local machine — rebuild + upload + restart only:
 bash scripts/update-deploy.sh <vps-ip>
-
-# Example:
-bash scripts/update-deploy.sh <your-vps-ip>
 ```
 
-What `update-deploy.sh` does:
-1. Build FE (`npm run build`) + BE (`tsc`) locally
-2. Clean old dist on VPS, upload new dist
-3. Rebuild Docker images (api + worker)
-4. Restart containers
-5. Health check
+Steps:
+1. Build FE + BE locally
+2. Upload dist to VPS
+3. Update Nginx config
+4. Rebuild Docker images (api + worker)
+5. **Run DB changelog** (idempotent — safe every deploy)
+6. Health check
+
+### DB Changelog (standalone)
+
+```bash
+# Run all changelogs (V001, V002, ...)
+bash scripts/db-changelog.sh <vps-ip>
+
+# Run single version
+bash scripts/db-changelog.sh <vps-ip> V005
+```
+
+All changelog scripts are **idempotent** — they check `information_schema` before making changes, so running them multiple times is safe.
 
 ### Deploy on server directly
 
 ```bash
-# SSH into server, then:
+ssh root@<vps-ip>
 cd /opt/webphoto
 git pull origin main
 bash scripts/deploy.sh              # Direct SSL mode
 bash scripts/deploy.sh tunnel       # Cloudflare Tunnel mode
 ```
 
-### Git Workflow
+## Build Commands
+
+| Command | Location | Description |
+|---------|----------|-------------|
+| `npm run dev` | `photo-storage/` | Vite dev server (:3000) |
+| `npm run build` | `photo-storage/` | vue-tsc check + Vite bundle → dist/ |
+| `npm run dev` | `photo-storage/server/` | API with tsx watch (:4000) |
+| `npm run build` | `photo-storage/server/` | TypeScript → dist/ |
+| `npm run db:push` | `photo-storage/server/` | Push Drizzle schema to MySQL (dev only) |
+| `npm run db:seed` | `photo-storage/server/` | Seed default plans + admin user |
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `JWT_SECRET` | Yes | Secret for JWT token signing |
+| `DATABASE_URL` | Yes | MySQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `R2_ENDPOINT` | For R2 | Cloudflare R2 endpoint |
+| `R2_ACCESS_KEY` | For R2 | R2 access key |
+| `R2_SECRET_KEY` | For R2 | R2 secret key |
+| `CDN_URL` | For R2 | Public R2 CDN URL |
+| `RESEND_API_KEY` | Yes | Resend email API key |
+| `CRON_SECRET` | Yes | Secret header for cron endpoints |
+| `APP_URL` | No | App URL for email links (default: http://localhost:3000) |
+
+Storage backend (R2 or local) is configured via Admin Settings UI, not env vars.
+
+## Git Workflow
 
 ```
 main (production)
@@ -167,52 +226,10 @@ main (production)
         bash scripts/update-deploy.sh <vps-ip>
 ```
 
-All work happens on `main` branch. Deploy is manual via scripts.
-
-## Build Commands
-
-| Command | Location | Description |
-|---------|----------|-------------|
-| `npm run dev` | `photo-storage/` | Vite dev server (:3000) |
-| `npm run build` | `photo-storage/` | vue-tsc check + Vite bundle → dist/ |
-| `npm run dev` | `photo-storage/server/` | API with tsx watch (:4000) |
-| `npm run build` | `photo-storage/server/` | TypeScript → dist/ |
-| `npm run db:push` | `photo-storage/server/` | Push Drizzle schema to MySQL |
-| `npm run db:seed` | `photo-storage/server/` | Seed default plans + admin user |
-| `npm run db:migrate` | `photo-storage/server/` | Apply migration files |
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JWT_SECRET` | Yes | Secret for JWT token signing |
-| `DATABASE_URL` | Yes | MySQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
-| `R2_ENDPOINT` | Yes | Cloudflare R2 endpoint |
-| `R2_ACCESS_KEY` | Yes | R2 access key |
-| `R2_SECRET_KEY` | Yes | R2 secret key |
-| `RESEND_API_KEY` | Yes | Resend email API key |
-| `CRON_SECRET` | Yes | Secret header for cron endpoints |
-| `CDN_URL` | No | Public R2 CDN URL |
-| `STORAGE_BACKEND` | No | `r2` (default) or `local` |
-
-## Documentation
-
-| File | Content |
-|------|---------|
-| [SETUP.md](SETUP.md) | Detailed installation guide |
-| [API.md](API.md) | Full API documentation (44 endpoints) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture |
-| [DEPLOY.md](DEPLOY.md) | Production deployment guide |
-| [CHECKLIST.md](CHECKLIST.md) | Development progress tracking |
-
 ## URLs
 
 | Service | URL |
 |---------|-----|
 | Frontend | https://bhquan.site |
-| API | https://bhquan.site/api |
+| API | https://bhquan.site/api/health |
 | Admin | https://bhquan.site/admin |
-| CDN | *(configured via CDN_URL env var)* |
