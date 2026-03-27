@@ -14,12 +14,11 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   function markRead(id: string) {
-    const item = items.value.find((n) => n.id === id)
-    if (item) item.read = true
+    items.value = items.value.map((n) => n.id === id ? { ...n, read: true } : n)
   }
 
   function markAllRead() {
-    items.value.forEach((n) => (n.read = true))
+    items.value = items.value.map((n) => ({ ...n, read: true }))
   }
 
   function clear() {

@@ -105,9 +105,8 @@ async function handleDownload() {
   downloading.value = true
   toast.info(t('image.downloadProcessing'))
   try {
-    const res = await api.get(`/images/${props.image.id}/download-url`)
-    const blob = await fetch(res.data.url).then(r => r.blob())
-    const url = URL.createObjectURL(blob)
+    const res = await api.get(`/images/${props.image.id}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
     a.download = props.image.originalName || 'image'
@@ -289,7 +288,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('common.like')"
             @click="emit('like', image)"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" :fill="image.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" :fill="image.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </button>
@@ -303,7 +302,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('image.download')"
             @click="handleDownload"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
           </button>
@@ -316,10 +315,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('image.copyLink')"
             @click="copyPublicLink"
           >
-            <svg v-if="linkCopied" class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg v-if="linkCopied" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
-            <svg v-else class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
           </button>
@@ -331,7 +330,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('common.delete')"
             @click="emit('delete', image)"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
@@ -347,7 +346,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('common.zoomOut')"
             @click="zoomOut"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
             </svg>
           </button>
@@ -363,7 +362,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('common.zoomIn')"
             @click="zoomIn"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
             </svg>
           </button>
@@ -378,7 +377,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             :title="t('comment.title')"
             @click="showComments = !showComments"
           >
-            <svg class="w-5 h-5 lg:w-7 lg:h-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </button>

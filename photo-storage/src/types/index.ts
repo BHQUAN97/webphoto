@@ -45,6 +45,7 @@ export interface Album {
   isActive: boolean
   imageCount: number
   totalBytes: string
+  totalLikes?: number
   createdAt: string
   updatedAt: string
   ownerName?: string

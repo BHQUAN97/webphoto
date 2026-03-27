@@ -6,6 +6,7 @@ const MAX_VISIBLE = 5
 
 export const useUploadStore = defineStore('upload', () => {
   const files = ref<UploadFile[]>([])
+  const batchTotal = ref(0) // total files selected in current batch
 
   const summary = computed(() => {
     const total = files.value.length
@@ -15,7 +16,8 @@ export const useUploadStore = defineStore('upload', () => {
     const failed = files.value.filter(f => f.status === 'failed').length
     const done = ready + failed
     const active = uploading + processing
-    return { total, uploading, processing, ready, failed, done, active }
+    const selected = batchTotal.value // total files user selected
+    return { total, uploading, processing, ready, failed, done, active, selected }
   })
 
   // Hard limit: max 5 items. Priority: most recent active first, then recent done
@@ -63,5 +65,14 @@ export const useUploadStore = defineStore('upload', () => {
     files.value = files.value.filter((f) => f.status === 'uploading' || f.status === 'processing')
   }
 
-  return { files, visibleFiles, hiddenCount, summary, add, setProgress, setStatus, remove, clear }
+  function clearAll() {
+    files.value = []
+    batchTotal.value = 0
+  }
+
+  function setBatchTotal(n: number) {
+    batchTotal.value = n
+  }
+
+  return { files, visibleFiles, hiddenCount, summary, batchTotal, add, setProgress, setStatus, remove, clear, clearAll, setBatchTotal }
 })

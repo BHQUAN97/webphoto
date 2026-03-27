@@ -364,11 +364,17 @@ router.get('/:id', async (req, res) => {
     displayName: users.displayName, avatarKey: users.avatarKey,
   }).from(users).where(eq(users.id, album.userId)).limit(1)
 
+  // Get total likes for this album
+  const [likeStats] = await db.select({
+    totalLikes: sql<number>`CAST(COALESCE(SUM(${images.likeCount}), 0) AS UNSIGNED)`,
+  }).from(images).where(eq(images.albumId, id))
+
   // Don't expose passwordHash — return hasPassword boolean instead
   const { passwordHash, ...albumData } = album
   res.json({
     ...albumData,
     totalBytes: album.totalBytes.toString(),
+    totalLikes: Number(likeStats?.totalLikes ?? 0),
     hasPassword: !!passwordHash,
     owner,
   })

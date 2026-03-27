@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useI18n } from '@/plugins/i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -139,8 +139,8 @@ async function batchDownloadSequential() {
       const img = images.value.find(i => i.id === id)
       if (!img) continue
       try {
-        const res = await api.get(`/images/${id}/download-url`)
-        const blob = await fetch(res.data.url).then(r => r.blob())
+        const res = await api.get(`/images/${id}/download`, { responseType: 'blob' })
+        const blob = res.data
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -186,15 +186,27 @@ const showDownloadProgress = ref(false)
 const downloadBatchTotal = ref(0)
 const downloadBatchCurrent = ref(0)
 
+// Pagination state
+const INITIAL_LIMIT = 30
+const PAGE_SIZE = 20
+const nextCursor = ref<string | undefined>(undefined)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const activeFilters = ref<Record<string, unknown>>({})
+
 async function fetchAlbum() {
   loading.value = true
+  nextCursor.value = undefined
+  hasMore.value = true
   try {
     const [albumRes, imagesRes] = await Promise.all([
       api.get(`/albums/${albumId.value}`),
-      api.get('/images', { params: { albumId: albumId.value, limit: 100 } }),
+      api.get('/images', { params: { albumId: albumId.value, limit: INITIAL_LIMIT } }),
     ])
     album.value = albumRes.data
     images.value = imagesRes.data.items ?? imagesRes.data.data ?? imagesRes.data
+    nextCursor.value = imagesRes.data.nextCursor
+    hasMore.value = !!imagesRes.data.nextCursor
     // Auto-poll if album has Drive sync and images are still processing
     const hasProcessing = images.value.some(i => i.status === 'processing')
     if (hasProcessing || (album.value?.driveFolderId && images.value.length === 0 && album.value.imageCount > 0)) {
@@ -207,10 +219,30 @@ async function fetchAlbum() {
   }
 }
 
-async function handleFilter(filters: { liked: boolean; status: string; dateFrom: string; dateTo: string; sortBy: string; search: string }) {
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value || !nextCursor.value) return
+  loadingMore.value = true
   try {
-    const res = await api.get('/images', { params: { albumId: albumId.value, ...filters, limit: 100 } })
+    const res = await api.get('/images', {
+      params: { albumId: albumId.value, cursor: nextCursor.value, limit: PAGE_SIZE, ...activeFilters.value },
+    })
+    const newItems = res.data.items ?? res.data.data ?? res.data
+    images.value = [...images.value, ...newItems]
+    nextCursor.value = res.data.nextCursor
+    hasMore.value = !!res.data.nextCursor
+  } catch { /* ignore */ }
+  finally { loadingMore.value = false }
+}
+
+async function handleFilter(filters: { liked: boolean; status: string; dateFrom: string; dateTo: string; sortBy: string; search: string }) {
+  activeFilters.value = filters
+  nextCursor.value = undefined
+  hasMore.value = true
+  try {
+    const res = await api.get('/images', { params: { albumId: albumId.value, ...filters, limit: INITIAL_LIMIT } })
     images.value = res.data.items ?? res.data.data ?? res.data
+    nextCursor.value = res.data.nextCursor
+    hasMore.value = !!res.data.nextCursor
   } catch {
     // silently fail
   }
@@ -357,18 +389,30 @@ async function setAsCover(image: ImageItem) {
 }
 
 async function handleLike(image: ImageItem) {
+  const wasLiked = image.liked
+  const prevCount = image.likeCount
+  const prevTotal = album.value?.totalLikes
+
+  // Optimistic update — reflect immediately in UI
+  image.liked = !wasLiked
+  image.likeCount = wasLiked ? Math.max(0, prevCount - 1) : prevCount + 1
+  if (album.value) {
+    album.value.totalLikes = wasLiked
+      ? Math.max(0, Number(prevTotal ?? 0) - 1)
+      : Number(prevTotal ?? 0) + 1
+  }
+
   try {
-    if (image.liked) {
+    if (wasLiked) {
       await api.delete(`/images/${image.id}/like`)
-      image.liked = false
-      image.likeCount--
     } else {
       await api.post(`/images/${image.id}/like`)
-      image.liked = true
-      image.likeCount++
     }
   } catch {
-    // silently fail
+    // Revert on error
+    image.liked = wasLiked
+    image.likeCount = prevCount
+    if (album.value && prevTotal !== undefined) album.value.totalLikes = prevTotal
   }
 }
 
@@ -385,18 +429,34 @@ function startPolling() {
       return
     }
     try {
-      const res = await api.get('/images', { params: { albumId: albumId.value, limit: 100 } })
+      // Fetch only processing images' IDs to check status
+      const processingIds = images.value.filter(i => i.status === 'processing').map(i => i.id)
+      const res = await api.get('/images', { params: { albumId: albumId.value, limit: Math.max(processingIds.length + 10, 30) } })
       const newImages = res.data.items ?? res.data.data ?? res.data
-      // Check if any image transitioned to ready
+      // Merge: update existing images with new status, add new ones at the start
       for (const img of newImages) {
-        const old = images.value.find(i => i.id === img.id)
-        if (old?.status === 'processing' && img.status === 'ready') {
-          // Update upload store status too
-          const uploadFile = uploadStore.files.find(f => f.imageId === img.id)
-          if (uploadFile) uploadStore.setStatus(uploadFile.id, 'ready')
+        const idx = images.value.findIndex(i => i.id === img.id)
+        if (idx >= 0) {
+          // Update status and URLs for existing images
+          if (images.value[idx].status === 'processing' && img.status === 'ready') {
+            images.value[idx] = img
+            const uploadFile = uploadStore.files.find(f => f.imageId === img.id)
+            if (uploadFile) uploadStore.setStatus(uploadFile.id, 'ready')
+          }
+        } else {
+          // New image not yet in list — prepend
+          images.value.unshift(img)
         }
       }
-      images.value = newImages
+      // Also reconcile upload store files still stuck in processing
+      for (const uf of uploadStore.files) {
+        if (uf.status === 'processing' && uf.imageId) {
+          const img = newImages.find((i: ImageItem) => i.id === uf.imageId)
+          if (img && img.status === 'ready') {
+            uploadStore.setStatus(uf.id, 'ready')
+          }
+        }
+      }
     } catch { /* ignore */ }
   }, 5000)
 }
@@ -621,8 +681,35 @@ async function handleDriveResync() {
   }
 }
 
-onMounted(fetchAlbum)
-onUnmounted(stopPolling)
+// Infinite scroll with IntersectionObserver
+const scrollSentinel = ref<HTMLElement>()
+let scrollObserver: IntersectionObserver | null = null
+
+function setupScrollObserver() {
+  if (scrollObserver) scrollObserver.disconnect()
+  scrollObserver = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value) {
+      loadMore()
+    }
+  }, { rootMargin: '200px' })
+}
+
+watch(scrollSentinel, (el) => {
+  if (el && scrollObserver) scrollObserver.observe(el)
+})
+
+watch(hasMore, (val) => {
+  if (!val && scrollObserver) scrollObserver.disconnect()
+})
+
+onMounted(() => {
+  setupScrollObserver()
+  fetchAlbum()
+})
+onUnmounted(() => {
+  stopPolling()
+  scrollObserver?.disconnect()
+})
 </script>
 
 <template>
@@ -680,6 +767,10 @@ onUnmounted(stopPolling)
         <span>{{ album.imageCount }} {{ $t('album.images') }}</span>
         <span>&middot;</span>
         <span>{{ formatBytes(album.totalBytes) }}</span>
+        <template v-if="(album.totalLikes ?? 0) > 0">
+          <span>&middot;</span>
+          <span class="text-red-400">&#x2764; {{ album.totalLikes }}</span>
+        </template>
         <span>&middot;</span>
         <span>{{ formatDate(album.createdAt) }}</span>
         <span v-if="album.description" class="text-gray-500 dark:text-gray-400 hidden sm:inline">&middot; {{ album.description }}</span>
@@ -696,14 +787,16 @@ onUnmounted(stopPolling)
     </div>
 
     <!-- Filter + Batch Toggle -->
-    <div class="flex flex-wrap items-center gap-2 mb-3">
-      <ImageFilterBar v-if="auth.canFilter" class="flex-1 min-w-0" @filter="handleFilter" />
-      <BaseButton v-if="album?.userId === auth.user?.id && images.length > 0" variant="secondary" size="sm" @click="batchMode ? exitBatchMode() : (batchMode = true)">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        {{ batchMode ? $t('batch.exitSelect') : $t('batch.selectMultiple') }}
-      </BaseButton>
+    <div class="mb-3 space-y-2">
+      <ImageFilterBar v-if="auth.canFilter" @filter="handleFilter" />
+      <div v-if="album?.userId === auth.user?.id && images.length > 0" class="flex justify-end">
+        <BaseButton variant="secondary" size="sm" @click="batchMode ? exitBatchMode() : (batchMode = true)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          {{ batchMode ? $t('batch.exitSelect') : $t('batch.selectMultiple') }}
+        </BaseButton>
+      </div>
     </div>
 
     <!-- Batch Toolbar -->
@@ -755,7 +848,24 @@ onUnmounted(stopPolling)
         />
       </div>
     </div>
-    <div v-else class="text-center py-12 text-gray-400">
+    <!-- Load more sentinel -->
+    <div v-if="hasMore && images.length > 0" ref="scrollSentinel" class="flex justify-center py-6">
+      <button
+        v-if="!loadingMore"
+        class="px-4 py-2 text-sm text-orange-500 hover:text-orange-600 border border-orange-300 dark:border-orange-700 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+        @click="loadMore"
+      >
+        Tải thêm ảnh
+      </button>
+      <div v-else class="text-sm text-gray-400 flex items-center gap-2">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Đang tải...
+      </div>
+    </div>
+    <div v-else-if="images.length === 0 && !loading" class="text-center py-12 text-gray-400">
       <p>{{ $t('album.noImages') }}</p>
     </div>
 

@@ -1,8 +1,11 @@
 import { Router } from 'express'
+import express from 'express'
 import { asyncHandler } from '../../utils/asyncHandler.js'
 import { ulid } from 'ulid'
 import path from 'path'
 import archiver from 'archiver'
+import unzipper from 'unzipper'
+import { Readable } from 'stream'
 import { db } from '../../utils/db.js'
 import { images, albums, likes, comments, users } from '../../database/schema.js'
 import { eq, and, desc, asc, sql, lt, gte, lte, like as sqlLike, inArray } from 'drizzle-orm'
@@ -26,7 +29,7 @@ const router = Router()
 // GET / — list images with filters
 router.get('/', async (req, res) => {
   const { albumId, liked, status, sortBy, dateFrom, dateTo, search, cursor } = req.query
-  const limit = clampInt(req.query.limit, 1, 50, 20)
+  const limit = clampInt(req.query.limit, 1, 100, 20)
 
   const conditions: unknown[] = []
 
@@ -246,6 +249,130 @@ router.post('/complete', async (req, res) => {
   res.json({ ok: true })
 })
 
+// POST /upload-zip — upload a ZIP file containing images
+router.post('/upload-zip', express.raw({ limit: '500mb', type: ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'] }), asyncHandler(async (req, res) => {
+  const user = requireAuth(req)
+  const albumId = req.query.albumId as string
+
+  if (!albumId || !isValidUlid(albumId)) {
+    return res.status(400).json({ message: 'albumId không hợp lệ' })
+  }
+
+  // Verify album ownership
+  const [album] = await db.select().from(albums)
+    .where(and(eq(albums.id, albumId), eq(albums.userId, user.sub))).limit(1)
+  if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
+
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ message: 'Không nhận được dữ liệu ZIP' })
+  }
+
+  logger.info(`[ZIP Upload] Received ZIP file`, { userId: user.sub, albumId, size: req.body.length })
+
+  // Allowed image extensions
+  const ALLOWED_EXT = new Set(['.cr2', '.arw', '.nef', '.dng', '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.webp'])
+  const EXT_TO_MIME: Record<string, string> = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+    '.webp': 'image/webp', '.tiff': 'image/tiff', '.tif': 'image/tiff',
+    '.cr2': 'image/x-canon-cr2', '.arw': 'image/x-sony-arw',
+    '.nef': 'image/x-nikon-nef', '.dng': 'image/x-adobe-dng',
+  }
+
+  const maxMb = await getSetting('max_upload_size_mb', '200')
+  const maxBytes = parseInt(maxMb) * 1024 * 1024
+
+  let successCount = 0
+  let skipCount = 0
+  let failCount = 0
+  const imageIds: string[] = []
+
+  try {
+    const directory = await unzipper.Open.buffer(req.body)
+
+    for (const entry of directory.files) {
+      // Skip directories and hidden files
+      if (entry.type === 'Directory') continue
+      const filename = path.basename(entry.path)
+      if (filename.startsWith('.') || filename.startsWith('__MACOSX')) continue
+
+      const ext = path.extname(filename).toLowerCase()
+      if (!ALLOWED_EXT.has(ext)) {
+        skipCount++
+        continue
+      }
+
+      try {
+        const buffer = await entry.buffer()
+        if (buffer.length === 0 || buffer.length > maxBytes) {
+          skipCount++
+          continue
+        }
+
+        // Check quota
+        const quota = await quotaUtils.canUpload(user.sub, BigInt(buffer.length))
+        if (!quota.ok) {
+          skipCount++
+          continue
+        }
+
+        const safeFilename = sanitizeFilename(filename)
+        const imageId = ulid()
+        const mimeType = EXT_TO_MIME[ext] || 'application/octet-stream'
+        const key = `${user.sub}/${imageId}/original${ext}`
+
+        // Upload to storage
+        await storage().uploadBuffer(key, buffer, mimeType)
+
+        // Create DB record
+        await db.insert(images).values({
+          id: imageId, albumId, userId: user.sub,
+          originalKey: key, originalName: safeFilename,
+          mimeType, originalSize: BigInt(buffer.length), status: 'processing',
+          expiresAt: new Date(Date.now() + 365 * 86400_000),
+        })
+
+        // Update quota
+        await quotaUtils.addUsed(user.sub, BigInt(buffer.length))
+
+        // Queue processing
+        await imageQueue.add('process', { imageId, userId: user.sub, originalKey: key, mimeType })
+
+        imageIds.push(imageId)
+        successCount++
+      } catch (err) {
+        failCount++
+        logger.error(`[ZIP Upload] Failed to process entry: ${filename}`, { error: (err as Error).message })
+      }
+    }
+  } catch (err) {
+    logger.error(`[ZIP Upload] Failed to parse ZIP`, { error: (err as Error).message })
+    return res.status(400).json({ message: 'File ZIP không hợp lệ hoặc bị hỏng' })
+  }
+
+  // Update album stats
+  if (successCount > 0) {
+    const totalSize = await db.select({ sum: sql<string>`COALESCE(SUM(original_size), 0)` })
+      .from(images).where(inArray(images.id, imageIds))
+    const addedBytes = BigInt(totalSize[0]?.sum ?? 0)
+
+    await db.update(albums).set({
+      imageCount: sql`image_count + ${successCount}`,
+      totalBytes: sql`total_bytes + ${addedBytes}`,
+      updatedAt: new Date(),
+    }).where(eq(albums.id, albumId))
+
+    await feedCache.invalidate(`feed:album:${albumId}*`)
+  }
+
+  logger.info(`[ZIP Upload] Completed`, { userId: user.sub, albumId, success: successCount, skipped: skipCount, failed: failCount })
+
+  res.json({
+    success: true,
+    message: `Đã xử lý ${successCount} ảnh từ file ZIP`,
+    data: { success: successCount, skipped: skipCount, failed: failCount, imageIds },
+  })
+}))
+
 // GET /:id — single image detail
 router.get('/:id', async (req, res) => {
   const { id } = req.params
@@ -437,9 +564,34 @@ router.get('/:id/download-url', async (req, res) => {
     if (!album) return res.status(403).json({ message: 'Không có quyền tải ảnh này' })
   }
 
-  const url = await storage().downloadUrl(image.originalKey, image.originalName)
-  res.json({ url })
+  // Return proxy download URL instead of R2 presigned URL
+  res.json({ url: `/api/images/${id}/download` })
 })
+
+// GET /:id/download — proxy download (hides R2 URL from client)
+router.get('/:id/download', asyncHandler(async (req, res) => {
+  const user = requirePlan(req, 'basic')
+  const id = req.params.id as string
+
+  if (!isValidUlid(id)) return res.status(400).json({ message: 'ID không hợp lệ' })
+
+  const [image] = await db.select().from(images)
+    .where(and(eq(images.id, id), eq(images.status, 'ready'))).limit(1)
+  if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
+
+  if (image.userId !== user.sub) {
+    const [album] = await db.select().from(albums)
+      .where(and(eq(albums.id, image.albumId), eq(albums.isPublic, true))).limit(1)
+    if (!album) return res.status(403).json({ message: 'Không có quyền tải ảnh này' })
+  }
+
+  const stream = await storage().getStream(image.originalKey)
+  const safeName = encodeURIComponent(image.originalName || 'image')
+  res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${safeName}`)
+  res.set('Content-Type', image.mimeType || 'application/octet-stream')
+  if (image.originalSize) res.set('Content-Length', image.originalSize.toString())
+  stream.pipe(res)
+}))
 
 // POST /batch — batch operations (rename, delete)
 router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {

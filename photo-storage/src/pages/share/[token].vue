@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from '@/plugins/i18n'
 import { useRoute } from 'vue-router'
 import api from '@/utils/api'
@@ -29,6 +29,11 @@ const lightboxOpen = ref(false)
 // Filter state
 const sortBy = ref('newest')
 const searchQuery = ref('')
+
+// Batch selection state
+const batchMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+const batchLoading = ref(false)
 
 // Guest likes stored in localStorage
 const guestLikes = ref<Set<string>>(new Set())
@@ -109,19 +114,59 @@ const filteredImages = computed(() => {
 const lightboxImage = computed(() => filteredImages.value[lightboxIndex.value] ?? null)
 
 function openLightbox(index: number) {
+  if (batchMode.value) return
   lightboxIndex.value = index
   lightboxOpen.value = true
+  document.body.style.overflow = 'hidden'
   fetchComments(filteredImages.value[index]?.id)
 }
 
 function closeLightbox() {
   lightboxOpen.value = false
   lightboxComments.value = []
+  showComments.value = false
+  document.body.style.overflow = ''
 }
 
 function navigateLightbox(index: number) {
   lightboxIndex.value = index
   fetchComments(filteredImages.value[index]?.id)
+}
+
+// Batch selection
+function toggleSelect(id: string) {
+  if (selectedIds.value.has(id)) selectedIds.value.delete(id)
+  else selectedIds.value.add(id)
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+function selectAll() {
+  if (selectedIds.value.size === filteredImages.value.length) selectedIds.value = new Set()
+  else selectedIds.value = new Set(filteredImages.value.map(i => i.id))
+}
+
+function exitBatchMode() {
+  batchMode.value = false
+  selectedIds.value = new Set()
+}
+
+async function batchDownload() {
+  if (selectedIds.value.size === 0 || !permissions.value.allowDownload) return
+  batchLoading.value = true
+  let done = 0
+  try {
+    const ids = [...selectedIds.value]
+    for (const id of ids) {
+      try {
+        window.open(`/api/share/${token}/images/${id}/download`, '_blank')
+        done++
+        // Small delay to prevent popup blocker
+        if (ids.length > 1) await new Promise(r => setTimeout(r, 500))
+      } catch { /* skip failed */ }
+    }
+    if (done > 0) alert(`Đã tải ${done} ảnh`)
+  } catch { /* ignore */ }
+  finally { batchLoading.value = false }
 }
 
 async function fetchComments(imageId?: string) {
@@ -174,10 +219,14 @@ async function handleLike(image: ImageItem) {
   guestLikes.value = new Set(guestLikes.value)
   saveGuestLikes()
 
-  // Update like count in source images
+  // Update like count in source images + album totalLikes
   const img = images.value.find(i => i.id === id)
   if (img) {
     img.likeCount += isLiked ? -1 : 1
+  }
+  if (album.value) {
+    const current = Number(album.value.totalLikes ?? 0)
+    album.value.totalLikes = Math.max(0, current + (isLiked ? -1 : 1))
   }
 
   // Call API (fire-and-forget, works for both guest and logged-in)
@@ -202,12 +251,39 @@ async function handleLike(image: ImageItem) {
   }
 }
 
+// Pagination
+const INITIAL_LIMIT = 30
+const PAGE_SIZE = 20
+const nextCursor = ref<string | undefined>(undefined)
+const loadingMore = ref(false)
+const hasMore = ref(true)
+const totalImages = ref(0)
+const scrollSentinel = ref<HTMLElement>()
+
+// Guest liked count
+const guestLikedCount = computed(() => guestLikes.value.size)
+
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value || !nextCursor.value) return
+  loadingMore.value = true
+  try {
+    const res = await api.get(`/share/${token}`, { params: { cursor: nextCursor.value, limit: PAGE_SIZE } })
+    const newItems = (res.data.images ?? []).map((img: any) => ({
+      ...img,
+      liked: guestLikes.value.has(img.id),
+    }))
+    images.value = [...images.value, ...newItems]
+    nextCursor.value = res.data.nextCursor
+    hasMore.value = !!res.data.nextCursor
+  } catch { /* ignore */ }
+  finally { loadingMore.value = false }
+}
+
 async function handleDownload(image: ImageItem) {
   if (!permissions.value.allowDownload || downloadingImageId.value) return
   downloadingImageId.value = image.id
   try {
-    const res = await api.get(`/share/${token}/images/${image.id}/download-url`)
-    window.open(res.data.url, '_blank')
+    window.open(`/api/share/${token}/images/${image.id}/download`, '_blank')
   } catch {
     alert(t('share.downloadFailed'))
   } finally {
@@ -215,17 +291,53 @@ async function handleDownload(image: ImageItem) {
   }
 }
 
+// Keyboard shortcuts for lightbox
+function onKeydown(e: KeyboardEvent) {
+  if (!lightboxOpen.value) return
+  switch (e.key) {
+    case 'Escape':
+      closeLightbox()
+      break
+    case 'ArrowLeft':
+      e.preventDefault()
+      if (lightboxIndex.value > 0) navigateLightbox(lightboxIndex.value - 1)
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      if (lightboxIndex.value < filteredImages.value.length - 1) navigateLightbox(lightboxIndex.value + 1)
+      break
+  }
+}
+
+// Infinite scroll observer
+let scrollObserver: IntersectionObserver | null = null
+
+watch(scrollSentinel, (el) => {
+  if (el && scrollObserver) scrollObserver.observe(el)
+})
+watch(hasMore, (val) => {
+  if (!val && scrollObserver) scrollObserver.disconnect()
+})
+
 onMounted(async () => {
   loadGuestLikes()
   loadGuestName()
+  document.addEventListener('keydown', onKeydown)
+
+  scrollObserver = new IntersectionObserver((entries) => {
+    if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value) loadMore()
+  }, { rootMargin: '200px' })
+
   try {
-    const res = await api.get(`/share/${token}`)
+    const res = await api.get(`/share/${token}`, { params: { limit: INITIAL_LIMIT } })
     album.value = res.data.album
+    totalImages.value = res.data.totalImages ?? 0
     images.value = (res.data.images ?? []).map((img: any) => ({
       ...img,
       liked: guestLikes.value.has(img.id),
     }))
-    // Load permissions from API response
+    nextCursor.value = res.data.nextCursor
+    hasMore.value = !!res.data.nextCursor
     if (res.data.permissions) {
       permissions.value = {
         allowLike: res.data.permissions.allowLike ?? true,
@@ -239,6 +351,12 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown)
+  scrollObserver?.disconnect()
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -246,17 +364,17 @@ onMounted(async () => {
     <!-- Header -->
     <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center h-16">
-          <svg class="w-8 h-8 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center h-14">
+          <svg class="w-7 h-7 text-orange-500 shrink-0" fill="currentColor" viewBox="0 0 24 24">
             <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
           </svg>
-          <span class="ml-2 text-xl font-bold text-gray-900 dark:text-white">PhotoStorage</span>
-          <span class="ml-3 text-sm text-gray-400 dark:text-gray-500 hidden sm:inline">Album chia sẻ</span>
+          <span class="ml-2 text-lg font-bold text-gray-900 dark:text-white">PhotoStorage</span>
+          <span class="ml-3 text-xs text-gray-400 dark:text-gray-500 hidden sm:inline">Album chia sẻ</span>
         </div>
       </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <!-- Loading -->
       <div v-if="loading" class="text-center py-20 text-gray-400">{{ $t('common.loading') }}</div>
 
@@ -270,77 +388,134 @@ onMounted(async () => {
 
       <!-- Album Content -->
       <div v-else-if="album">
-        <!-- Album Info -->
-        <div class="mb-6">
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">{{ album.title }}</h1>
-          <p v-if="album.description" class="text-gray-600 dark:text-gray-400 mt-2">{{ album.description }}</p>
-          <div class="flex items-center gap-4 mt-3 text-sm text-gray-500 dark:text-gray-400">
-            <span v-if="album.owner" class="flex items-center gap-2">
-              <img
-                v-if="album.owner.avatarKey"
-                :src="cdnUrl(album.owner.avatarKey)"
-                class="w-5 h-5 rounded-full object-cover"
-                alt=""
-              />
-              {{ album.owner.displayName }}
-            </span>
-            <span>{{ filteredImages.length }} ảnh</span>
-            <span>{{ formatBytes(album.totalBytes) }}</span>
-          </div>
-          <!-- Permission indicators -->
-          <div class="flex items-center gap-2 mt-3 flex-wrap">
+        <!-- Album Info — compact layout -->
+        <div class="mb-4">
+          <!-- Title row + permission badges -->
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <h1 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">{{ album.title }}</h1>
             <span
               v-if="permissions.allowLike"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
             >
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
-              {{ $t('share.canLike') }}
+              Like
             </span>
             <span
               v-if="permissions.allowComment"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
             >
               <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              {{ $t('share.canComment') }}
+              Comment
             </span>
             <span
               v-if="permissions.allowDownload"
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
             >
               <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              {{ $t('share.canDownload') }}
+              Download
             </span>
+          </div>
+          <!-- Meta row -->
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-0 text-[11px] text-gray-400 dark:text-gray-500">
+            <span v-if="album.owner" class="flex items-center gap-1">
+              <img
+                v-if="album.owner.avatarKey"
+                :src="cdnUrl(album.owner.avatarKey)"
+                class="w-4 h-4 rounded-full object-cover"
+                alt=""
+              />
+              {{ album.owner.displayName }}
+            </span>
+            <span>&middot;</span>
+            <span>{{ images.length }}<template v-if="totalImages > images.length">/{{ totalImages }}</template> ảnh</span>
+            <span>&middot;</span>
+            <span>{{ formatBytes(album.totalBytes) }}</span>
+            <template v-if="(album.totalLikes ?? 0) > 0">
+              <span>&middot;</span>
+              <span class="text-red-400">&#x2764; {{ album.totalLikes }}</span>
+            </template>
+            <template v-if="guestLikedCount > 0">
+              <span>&middot;</span>
+              <span class="text-pink-500">Bạn đã thích {{ guestLikedCount }} ảnh</span>
+            </template>
+            <span v-if="album.description" class="hidden sm:inline">&middot; {{ album.description }}</span>
           </div>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <!-- Filter Bar + Batch Toggle -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-3">
+          <div class="flex gap-2 items-center">
             <input
               v-model="searchQuery"
               type="text"
               placeholder="Tìm kiếm ảnh..."
-              class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              class="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
             <select
               v-model="sortBy"
-              class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+              class="hidden sm:block min-w-[120px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
             >
               <option value="newest">Mới nhất</option>
               <option value="oldest">Cũ nhất</option>
               <option value="most_liked">Nhiều lượt thích</option>
               <option value="largest">Dung lượng lớn</option>
             </select>
-            <div class="flex items-center text-sm text-gray-500 dark:text-gray-400">
-              Hiển thị {{ filteredImages.length }} / {{ images.length }} ảnh
-            </div>
+            <span class="hidden sm:block text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+              {{ filteredImages.length }} / {{ images.length }}
+            </span>
+            <!-- Batch select toggle -->
+            <button
+              v-if="filteredImages.length > 0 && permissions.allowDownload"
+              class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors"
+              :class="batchMode
+                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600'
+                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-orange-400'"
+              @click="batchMode ? exitBatchMode() : (batchMode = true)"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span class="hidden sm:inline">{{ batchMode ? 'Thoát' : 'Chọn nhiều' }}</span>
+            </button>
           </div>
+          <!-- Mobile sort row -->
+          <div class="sm:hidden mt-2 flex gap-2 items-center">
+            <select
+              v-model="sortBy"
+              class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
+            >
+              <option value="newest">Mới nhất</option>
+              <option value="oldest">Cũ nhất</option>
+              <option value="most_liked">Nhiều lượt thích</option>
+              <option value="largest">Dung lượng lớn</option>
+            </select>
+            <span class="text-xs text-gray-400 whitespace-nowrap">{{ filteredImages.length }} / {{ images.length }}</span>
+          </div>
+        </div>
+
+        <!-- Batch Toolbar -->
+        <div v-if="batchMode" class="flex flex-wrap items-center gap-2 mb-3 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <button class="text-sm text-orange-600 dark:text-orange-400 hover:underline" @click="selectAll">
+            {{ selectedIds.size === filteredImages.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả' }}
+          </button>
+          <span class="text-sm text-gray-500 dark:text-gray-400">{{ selectedIds.size }} / {{ filteredImages.length }} đã chọn</span>
+          <div class="flex-1"></div>
+          <button
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            :disabled="selectedIds.size === 0 || batchLoading"
+            @click="batchDownload"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Tải ({{ selectedIds.size }})
+          </button>
         </div>
 
         <!-- Images Grid -->
@@ -349,8 +524,21 @@ onMounted(async () => {
             v-for="(img, idx) in filteredImages"
             :key="img.id"
             class="group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow break-inside-avoid mb-4"
-            @click="openLightbox(idx)"
+            :class="{ 'ring-2 ring-orange-500': batchMode && selectedIds.has(img.id) }"
+            @click="batchMode ? toggleSelect(img.id) : openLightbox(idx)"
           >
+            <!-- Batch checkbox overlay -->
+            <div v-if="batchMode" class="absolute top-2 left-2 z-10">
+              <button
+                class="w-6 h-6 rounded border-2 flex items-center justify-center transition-colors"
+                :class="selectedIds.has(img.id) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white/80 border-gray-300 hover:border-orange-400'"
+                @click.stop="toggleSelect(img.id)"
+              >
+                <svg v-if="selectedIds.has(img.id)" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            </div>
             <div class="bg-gray-100 dark:bg-gray-700">
               <img
                 v-if="img.thumbUrl || img.thumbKey"
@@ -370,7 +558,7 @@ onMounted(async () => {
               <div class="flex items-center gap-2">
                 <!-- Download icon on card (if allowed) -->
                 <button
-                  v-if="permissions.allowDownload"
+                  v-if="permissions.allowDownload && !batchMode"
                   class="text-gray-400 hover:text-green-500 transition-colors"
                   :title="$t('image.download')"
                   @click.stop="handleDownload(img)"
@@ -379,18 +567,41 @@ onMounted(async () => {
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                 </button>
-                <!-- Like count -->
-                <div v-if="permissions.allowLike" class="flex items-center gap-1 text-xs text-gray-400 shrink-0">
-                  <svg class="w-3.5 h-3.5" :class="img.liked ? 'text-red-500' : ''" :fill="img.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <!-- Like button on grid -->
+                <button
+                  v-if="permissions.allowLike"
+                  class="flex items-center gap-1 text-xs shrink-0 transition-colors"
+                  :class="img.liked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'"
+                  @click.stop="handleLike(img)"
+                >
+                  <svg class="w-3.5 h-3.5" :fill="img.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
                   {{ img.likeCount }}
-                </div>
+                </button>
               </div>
             </div>
           </div>
         </div>
-        <div v-else class="text-center py-20 text-gray-400">
+        <!-- Load more sentinel -->
+        <div v-if="hasMore && filteredImages.length > 0" ref="scrollSentinel" class="flex flex-col items-center py-6 gap-2">
+          <span class="text-xs text-gray-400">Đang hiển thị {{ images.length }}/{{ totalImages }} ảnh</span>
+          <button
+            v-if="!loadingMore"
+            class="px-5 py-2 text-sm font-medium text-orange-500 hover:text-orange-600 border border-orange-300 dark:border-orange-700 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+            @click="loadMore"
+          >
+            Tải thêm ảnh
+          </button>
+          <div v-else class="text-sm text-gray-400 flex items-center gap-2">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Đang tải thêm...
+          </div>
+        </div>
+        <div v-else-if="filteredImages.length === 0 && !loading" class="text-center py-20 text-gray-400">
           <p v-if="searchQuery">Không tìm thấy ảnh phù hợp</p>
           <p v-else>Chưa có ảnh nào trong album này</p>
         </div>
@@ -563,7 +774,7 @@ onMounted(async () => {
               :class="lightboxImage?.liked ? 'text-red-500 bg-red-500/20' : 'text-white/70 hover:text-white hover:bg-white/10'"
               @click="lightboxImage && handleLike(lightboxImage)"
             >
-              <svg class="w-5 h-5" :fill="lightboxImage?.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg class="w-6 h-6" :fill="lightboxImage?.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
             </button>
@@ -576,7 +787,7 @@ onMounted(async () => {
               :disabled="!!downloadingImageId"
               @click="lightboxImage && handleDownload(lightboxImage)"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </button>
@@ -591,7 +802,7 @@ onMounted(async () => {
               :class="showComments ? 'text-blue-400 bg-blue-500/20' : 'text-white/70 hover:text-white hover:bg-white/10'"
               @click="showComments = !showComments"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </button>

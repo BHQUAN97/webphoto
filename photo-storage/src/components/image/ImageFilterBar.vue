@@ -35,19 +35,19 @@ const hasActiveFilters = computed(() => {
 </script>
 
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 mb-4">
-    <!-- Mobile: search + toggle button -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+    <!-- Row 1: search + filter toggle (mobile) + desktop inline controls -->
     <div class="flex gap-2 items-center">
       <input
         v-model="filters.search"
         type="text"
         :placeholder="t('filter.searchPlaceholder')"
-        class="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+        class="flex-1 min-w-0 px-3 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
         @input="applyDebounced"
       />
       <!-- Filter toggle button (mobile) -->
       <button
-        class="sm:hidden shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border transition-colors"
+        class="sm:hidden shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border transition-colors"
         :class="expanded || hasActiveFilters
           ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-600'
           : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'"
@@ -60,7 +60,7 @@ const hasActiveFilters = computed(() => {
       <!-- Desktop: inline controls -->
       <select
         v-model="filters.status"
-        class="hidden sm:block min-w-[120px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+        class="hidden sm:block min-w-[100px] px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
         <option value="">{{ $t('filter.allStatus') }}</option>
@@ -70,7 +70,7 @@ const hasActiveFilters = computed(() => {
       </select>
       <select
         v-model="filters.sortBy"
-        class="hidden sm:block min-w-[120px] px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+        class="hidden sm:block min-w-[100px] px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
         @change="apply"
       >
         <option value="newest">{{ $t('filter.newest') }}</option>
@@ -78,10 +78,10 @@ const hasActiveFilters = computed(() => {
         <option value="most_liked">{{ $t('filter.mostLiked') }}</option>
         <option value="largest">{{ $t('filter.largestSize') }}</option>
       </select>
-      <input v-model="filters.dateFrom" type="date" class="hidden sm:block px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
-      <input v-model="filters.dateTo" type="date" class="hidden sm:block px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
-      <div class="hidden sm:flex items-center gap-3">
-        <label class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+      <input v-model="filters.dateFrom" type="date" class="hidden lg:block px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
+      <input v-model="filters.dateTo" type="date" class="hidden lg:block px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
+      <div class="hidden sm:flex items-center gap-2">
+        <label class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
           <input v-model="filters.liked" type="checkbox" class="rounded border-gray-300 text-orange-500" @change="apply" />
           {{ $t('filter.favorite') }}
         </label>
@@ -98,11 +98,11 @@ const hasActiveFilters = computed(() => {
       leave-from-class="opacity-100 max-h-60"
       leave-to-class="opacity-0 max-h-0"
     >
-      <div v-if="expanded" class="sm:hidden overflow-hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-        <div class="grid grid-cols-2 gap-2">
+      <div v-if="expanded" class="sm:hidden overflow-hidden mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
+        <div class="flex gap-2">
           <select
             v-model="filters.status"
-            class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
+            class="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs"
             @change="apply"
           >
             <option value="">{{ $t('filter.allStatus') }}</option>
@@ -112,7 +112,7 @@ const hasActiveFilters = computed(() => {
           </select>
           <select
             v-model="filters.sortBy"
-            class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
+            class="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs"
             @change="apply"
           >
             <option value="newest">{{ $t('filter.newest') }}</option>
@@ -120,11 +120,13 @@ const hasActiveFilters = computed(() => {
             <option value="most_liked">{{ $t('filter.mostLiked') }}</option>
             <option value="largest">{{ $t('filter.largestSize') }}</option>
           </select>
-          <input v-model="filters.dateFrom" type="date" class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
-          <input v-model="filters.dateTo" type="date" class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm" @change="apply" />
+        </div>
+        <div class="flex gap-2">
+          <input v-model="filters.dateFrom" type="date" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs" @change="apply" />
+          <input v-model="filters.dateTo" type="date" class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs" @change="apply" />
         </div>
         <div class="flex items-center justify-between">
-          <label class="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
+          <label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
             <input v-model="filters.liked" type="checkbox" class="rounded border-gray-300 text-orange-500" @change="apply" />
             {{ $t('filter.favorite') }}
           </label>

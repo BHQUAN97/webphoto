@@ -87,7 +87,10 @@ function getTitle(type: Notification['type']) {
     >
       <div
         v-if="open"
-        class="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50"
+        class="fixed right-2 top-14 sm:absolute sm:top-auto sm:right-0 mt-0 sm:mt-2 w-[calc(100vw-1rem)] sm:w-80 md:w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50"
+        style="max-width: min(24rem, calc(100vw - 1rem))"
+        @touchmove.stop
+        @wheel.stop
       >
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
@@ -102,7 +105,7 @@ function getTitle(type: Notification['type']) {
         </div>
 
         <!-- Notification list -->
-        <div class="max-h-[400px] overflow-y-auto">
+        <div class="max-h-[50vh] sm:max-h-[400px] overflow-y-auto overscroll-contain" style="-webkit-overflow-scrolling: touch">
           <div
             v-for="n in visibleItems"
             :key="n.id"

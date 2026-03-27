@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { ulid } from 'ulid'
 import { db } from '../../utils/db.js'
 import { albums, images, users, albumShareTokens, comments } from '../../database/schema.js'
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, lt } from 'drizzle-orm'
+import { clampInt, isValidUlid } from '../../utils/validate.js'
 import { storage } from '../../utils/storage/index.js'
 import { sanitizeText } from '../../utils/validate.js'
 
@@ -45,6 +46,15 @@ router.get('/:token', async (req, res) => {
     displayName: users.displayName, avatarKey: users.avatarKey,
   }).from(users).where(eq(users.id, album.userId)).limit(1)
 
+  // Pagination support
+  const limit = clampInt(req.query.limit, 1, 100, 30)
+  const cursor = req.query.cursor as string | undefined
+
+  const conditions: unknown[] = [eq(images.albumId, share.albumId)]
+  if (cursor && isValidUlid(cursor)) {
+    conditions.push(lt(images.id, cursor))
+  }
+
   // Get album images
   const albumImages = await db.select({
     id: images.id, thumbKey: images.thumbKey, previewKey: images.previewKey,
@@ -54,24 +64,37 @@ router.get('/:token', async (req, res) => {
     createdAt: images.createdAt,
   })
   .from(images)
-  .where(eq(images.albumId, share.albumId))
+  .where(and(...conditions as any))
   .orderBy(desc(images.createdAt))
-  .limit(200)
+  .limit(limit + 1)
 
-  const imageItems = albumImages.map(img => ({
+  const hasMore = albumImages.length > limit
+  const items = albumImages.slice(0, limit)
+  const nextCursor = hasMore ? items[items.length - 1]?.id : undefined
+
+  const imageItems = items.map(img => ({
     ...img,
     originalSize: img.originalSize.toString(),
     thumbUrl: img.thumbKey ? storage().publicUrl(img.thumbKey) : null,
     previewUrl: img.previewKey ? storage().publicUrl(img.previewKey) : null,
   }))
 
+  // Get total likes + total image count
+  const [stats] = await db.select({
+    totalLikes: sql<number>`CAST(COALESCE(SUM(${images.likeCount}), 0) AS UNSIGNED)`,
+    totalImages: sql<number>`COUNT(*)`,
+  }).from(images).where(eq(images.albumId, share.albumId))
+
   res.json({
     album: {
       ...album,
       totalBytes: album.totalBytes.toString(),
+      totalLikes: Number(stats?.totalLikes ?? 0),
       owner,
     },
     images: imageItems,
+    totalImages: Number(stats?.totalImages ?? 0),
+    nextCursor,
     permissions: {
       allowLike: share.allowLike,
       allowComment: share.allowComment,
@@ -242,8 +265,33 @@ router.get('/:token/images/:imageId/download-url', async (req, res) => {
 
   if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại hoặc chưa sẵn sàng' })
 
-  const url = await storage().downloadUrl(image.originalKey, image.originalName)
-  res.json({ url })
+  // Return proxy download URL
+  res.json({ url: `/api/share/${token}/images/${imageId}/download` })
+})
+
+// GET /:token/images/:imageId/download — proxy download for shared album
+router.get('/:token/images/:imageId/download', async (req, res) => {
+  const { token, imageId } = req.params
+
+  const result = await validateShareToken(token)
+  if (result.error) return res.status(result.error.status).json({ message: result.error.message })
+  const share = result.share!
+
+  if (!share.allowDownload) {
+    return res.status(403).json({ message: 'Chức năng tải xuống đã bị tắt' })
+  }
+
+  const [image] = await db.select().from(images)
+    .where(and(eq(images.id, imageId), eq(images.albumId, share.albumId), eq(images.status, 'ready')))
+    .limit(1)
+  if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
+
+  const stream = await storage().getStream(image.originalKey)
+  const safeName = encodeURIComponent(image.originalName || 'image')
+  res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${safeName}`)
+  res.set('Content-Type', image.mimeType || 'application/octet-stream')
+  if (image.originalSize) res.set('Content-Length', image.originalSize.toString())
+  stream.pipe(res)
 })
 
 export default router

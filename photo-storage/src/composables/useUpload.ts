@@ -6,7 +6,7 @@ import api from '@/utils/api'
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB
 const MAX_CONCURRENT_CHUNKS = 3 // parallel chunks per file
-const MAX_CONCURRENT_FILES = 5 // parallel file uploads
+const MAX_CONCURRENT_FILES = 10 // parallel file uploads
 
 interface UploadUrlResponse {
   imageId: string
@@ -86,15 +86,14 @@ export function useUpload() {
       await Promise.all(workers)
       completedParts.sort((a, b) => a.PartNumber - b.PartNumber)
 
-      store.setStatus(localId, 'processing')
+      // Set imageId BEFORE calling /images/complete so socket events can match
+      store.setStatus(localId, 'processing', data.imageId)
       await api.post('/images/complete', {
         imageId: data.imageId,
         uploadId: data.uploadId,
         key: data.key,
         parts: completedParts,
       })
-
-      store.setStatus(localId, 'processing', data.imageId)
       return true
     } catch (err: unknown) {
       const resp = (err as { response?: { status?: number; data?: { message?: string } } })?.response
@@ -120,6 +119,7 @@ export function useUpload() {
     if (!validFiles.length) return 0
 
     const totalFiles = validFiles.length
+    store.setBatchTotal(store.batchTotal + totalFiles)
     let nextFile = 0
     let successCount = 0
     let failCount = 0
