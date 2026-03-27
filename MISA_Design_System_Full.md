@@ -818,5 +818,21 @@ Quy định hiển thị thông tin bản quyền trên ứng dụng.
 
 **— HẾT TÀI LIỆU —**
 
+https://mind-glyph-46433684.figma.site/general-design-rules 
+https://mind-glyph-46433684.figma.site/general-usability-requirements 
+https://mind-glyph-46433684.figma.site/color https://mind-glyph-46433684.figma.site/typography https://mind-glyph-46433684.figma.site/icons https://mind-glyph-46433684.figma.site/layout https://mind-glyph-46433684.figma.site/contents https://mind-glyph-46433684.figma.site/announcement https://mind-glyph-46433684.figma.site/dialog 
+https://mind-glyph-46433684.figma.site/data-visualization https://mind-glyph-46433684.figma.site/leave-page-warning 
+https://mind-glyph-46433684.figma.site/loading 
+https://mind-glyph-46433684.figma.site/empty-state 
+https://mind-glyph-46433684.figma.site/error-page 
+https://mind-glyph-46433684.figma.site/button 
+https://mind-glyph-46433684.figma.site/text-field https://mind-glyph-46433684.figma.site/dropdownlist https://mind-glyph-46433684.figma.site/combobox https://mind-glyph-46433684.figma.site/checkbox https://mind-glyph-46433684.figma.site/radiobutton https://mind-glyph-46433684.figma.site/datetimepicker https://mind-glyph-46433684.figma.site/contextmenu 
+https://mind-glyph-46433684.figma.site/data-table 
+https://mind-glyph-46433684.figma.site/popup 
+https://mind-glyph-46433684.figma.site/sidebar 
+https://mind-glyph-46433684.figma.site/hearder-bar
+https://mind-glyph-46433684.figma.site/spelling-rules https://mind-glyph-46433684.figma.site/shortcut-key https://mind-glyph-46433684.figma.site/number-separation-rules 
+https://mind-glyph-46433684.figma.site/browser-title https://mind-glyph-46433684.figma.site/copyright
+
 **MISA Design System v2.0 | Web Platform**
 **Copyright © 1994 - 2025 MISA JSC. All Rights Reserved.**
