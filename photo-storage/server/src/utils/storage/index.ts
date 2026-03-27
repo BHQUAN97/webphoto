@@ -4,8 +4,13 @@ import type { StorageProvider } from './types.js'
 import { R2StorageProvider } from './r2-provider.js'
 import { LocalStorageProvider } from './local-provider.js'
 
-let _provider: StorageProvider | null = null
-let _backend: string | null = null
+/** Current default backend (used for new uploads). */
+let _currentBackend: 'r2' | 'local' = 'r2'
+
+/** Provider instances — both may be alive simultaneously so that
+ *  images uploaded to one backend can still be served after switching. */
+let _r2: StorageProvider | null = null
+let _local: StorageProvider | null = null
 
 export type { StorageProvider, StorageInfo } from './types.js'
 
@@ -21,21 +26,31 @@ export async function refreshStorage(): Promise<void> {
     try {
       const local = new LocalStorageProvider(dir)
       await local.init()
-      _provider = local
-      _backend = 'local'
+      _local = local
+      _currentBackend = 'local'
       logger.info(`Storage: local filesystem (${dir})`)
     } catch (err) {
       logger.error('Failed to init local storage, falling back to R2', {
         dir,
         error: (err as Error).message,
       })
-      _provider = new R2StorageProvider()
-      _backend = 'r2'
+      _currentBackend = 'r2'
     }
   } else {
-    _provider = new R2StorageProvider()
-    _backend = 'r2'
+    _currentBackend = 'r2'
     logger.info('Storage: Cloudflare R2')
+  }
+
+  // Always try to init R2 if env vars are present (needed for serving old R2 images)
+  if (!_r2) {
+    const hasR2Env = process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY && process.env.R2_SECRET_KEY
+    if (hasR2Env) {
+      try {
+        _r2 = new R2StorageProvider()
+      } catch (err) {
+        logger.warn('R2 provider not available', { error: (err as Error).message })
+      }
+    }
   }
 }
 
@@ -78,18 +93,36 @@ export async function validateBackend(backend: string, localDir?: string): Promi
   return `Backend "${backend}" không được hỗ trợ. Chỉ hỗ trợ: r2, local`
 }
 
+/** Return the current default storage provider (for new uploads). */
 export function storage(): StorageProvider {
-  if (!_provider) {
-    // Fallback: create R2 provider synchronously on first call
-    _provider = new R2StorageProvider()
-    _backend = 'r2'
-  }
-  return _provider
+  return storageFor(_currentBackend)
 }
 
-export async function getStorageBackend(): Promise<string> {
-  if (!_backend) {
-    _backend = await getSetting('storage_backend', 'r2')
+/** Return the provider for a specific backend.
+ *  Use this when serving / deleting images that store their own storageBackend. */
+export function storageFor(backend: string): StorageProvider {
+  if (backend === 'local') {
+    if (_local) return _local
+    // Local not initialized — fall through to R2
+    logger.warn('Local storage requested but not initialized, falling back to R2')
   }
-  return _backend
+  if (!_r2) {
+    _r2 = new R2StorageProvider()
+  }
+  return _r2
+}
+
+/** Return the current default backend name. */
+export async function getStorageBackend(): Promise<string> {
+  return _currentBackend
+}
+
+/** Return the current default backend name (sync). */
+export function getStorageBackendSync(): 'r2' | 'local' {
+  return _currentBackend
+}
+
+/** Return the local public directory if a local provider is initialized, else null. */
+export function getLocalPublicDir(): string | null {
+  return _local?.getPublicDir?.() ?? null
 }

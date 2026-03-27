@@ -4,7 +4,7 @@ import { db } from '../../utils/db.js'
 import { albums, images, users, albumShareTokens, comments } from '../../database/schema.js'
 import { eq, and, desc, sql, lt } from 'drizzle-orm'
 import { clampInt, isValidUlid } from '../../utils/validate.js'
-import { storage } from '../../utils/storage/index.js'
+import { storage, storageFor } from '../../utils/storage/index.js'
 import { sanitizeText } from '../../utils/validate.js'
 
 const router = Router()
@@ -58,6 +58,7 @@ router.get('/:token', async (req, res) => {
   // Get album images
   const albumImages = await db.select({
     id: images.id, thumbKey: images.thumbKey, previewKey: images.previewKey,
+    storageBackend: images.storageBackend,
     originalName: images.originalName, originalSize: images.originalSize,
     width: images.width, height: images.height,
     status: images.status, likeCount: images.likeCount, commentCount: images.commentCount,
@@ -75,8 +76,8 @@ router.get('/:token', async (req, res) => {
   const imageItems = items.map(img => ({
     ...img,
     originalSize: img.originalSize.toString(),
-    thumbUrl: img.thumbKey ? storage().publicUrl(img.thumbKey) : null,
-    previewUrl: img.previewKey ? storage().publicUrl(img.previewKey) : null,
+    thumbUrl: img.thumbKey ? storageFor(img.storageBackend).publicUrl(img.thumbKey) : null,
+    previewUrl: img.previewKey ? storageFor(img.storageBackend).publicUrl(img.previewKey) : null,
   }))
 
   // Get total likes + total image count
@@ -89,6 +90,7 @@ router.get('/:token', async (req, res) => {
     album: {
       ...album,
       totalBytes: album.totalBytes.toString(),
+      coverUrl: album.coverKey ? storageFor(album.coverStorageBackend || 'r2').publicUrl(album.coverKey) : null,
       totalLikes: Number(stats?.totalLikes ?? 0),
       owner,
     },
@@ -286,7 +288,7 @@ router.get('/:token/images/:imageId/download', async (req, res) => {
     .limit(1)
   if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
 
-  const stream = await storage().getStream(image.originalKey)
+  const stream = await storageFor(image.storageBackend).getStream(image.originalKey)
   const safeName = encodeURIComponent(image.originalName || 'image')
   res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${safeName}`)
   res.set('Content-Type', image.mimeType || 'application/octet-stream')

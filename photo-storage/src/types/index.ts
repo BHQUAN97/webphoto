@@ -41,6 +41,7 @@ export interface Album {
   title: string
   description: string | null
   coverKey: string | null
+  coverUrl?: string | null
   isPublic: boolean
   isActive: boolean
   imageCount: number

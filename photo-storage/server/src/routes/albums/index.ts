@@ -8,7 +8,7 @@ import { eq, and, desc, sql, lt } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { rateLimit } from '../../middleware/rateLimit.js'
 import { feedCache } from '../../utils/redis.js'
-import { storage } from '../../utils/storage/index.js'
+import { storageFor, getStorageBackendSync } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid } from '../../utils/validate.js'
 import { logger } from '../../utils/logger.js'
 import { quotaUtils } from '../../utils/quota.js'
@@ -28,13 +28,15 @@ router.get('/', async (req, res) => {
   const cached = await feedCache.get<unknown>(cacheKey)
   if (cached) return res.json(cached)
 
-  let query = db.select({
+  const albumCols = {
     id: albums.id, title: albums.title, description: albums.description,
-    coverKey: albums.coverKey, imageCount: albums.imageCount,
-    createdAt: albums.createdAt,
+    coverKey: albums.coverKey, coverStorageBackend: albums.coverStorageBackend,
+    imageCount: albums.imageCount, createdAt: albums.createdAt,
     userId: albums.userId,
     displayName: users.displayName, avatarKey: users.avatarKey,
-  })
+  }
+
+  let query = db.select(albumCols)
   .from(albums)
   .innerJoin(users, eq(albums.userId, users.id))
   .where(and(eq(albums.isPublic, true), eq(albums.isActive, true)))
@@ -42,13 +44,7 @@ router.get('/', async (req, res) => {
   .limit(limit + 1)
 
   if (cursor) {
-    query = db.select({
-      id: albums.id, title: albums.title, description: albums.description,
-      coverKey: albums.coverKey, imageCount: albums.imageCount,
-      createdAt: albums.createdAt,
-      userId: albums.userId,
-      displayName: users.displayName, avatarKey: users.avatarKey,
-    })
+    query = db.select(albumCols)
     .from(albums)
     .innerJoin(users, eq(albums.userId, users.id))
     .where(and(
@@ -61,8 +57,14 @@ router.get('/', async (req, res) => {
 
   const rows = await query
   const hasMore = rows.length > limit
-  const items = hasMore ? rows.slice(0, limit) : rows
-  const nextCursor = hasMore ? items[items.length - 1].id : undefined
+  const rawItems = hasMore ? rows.slice(0, limit) : rows
+  const nextCursor = hasMore ? rawItems[rawItems.length - 1].id : undefined
+
+  // Generate coverUrl server-side using per-album storage backend
+  const items = rawItems.map(r => ({
+    ...r,
+    coverUrl: r.coverKey ? storageFor(r.coverStorageBackend || 'r2').publicUrl(r.coverKey) : null,
+  }))
 
   const result = { items, nextCursor }
   await feedCache.set(cacheKey, result, 300)
@@ -238,6 +240,7 @@ router.post('/from-drive', rateLimit('drive-import', 5, 3600), async (req, res) 
       mimeType: file.mimeType,
       originalSize: BigInt(file.size || 0),
       status: 'syncing',
+      storageBackend: getStorageBackendSync(),
       expiresAt,
     })
 
@@ -330,7 +333,7 @@ router.post('/:id/drive-sync', rateLimit('drive-sync', 5, 3600), async (req, res
       id: imageId, albumId: id, userId: user.sub,
       originalKey, driveFileId: file.id, originalName: file.name,
       mimeType: file.mimeType, originalSize: BigInt(file.size || 0),
-      status: 'syncing', expiresAt,
+      status: 'syncing', storageBackend: getStorageBackendSync(), expiresAt,
     })
 
     await driveImportQueue.add('import', {
@@ -395,7 +398,17 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   if (title !== undefined) updates.title = String(title).slice(0, 200)
   if (description !== undefined) updates.description = String(description).slice(0, 2000)
   if (isPublic !== undefined) updates.isPublic = isPublic
-  if (coverKey !== undefined) updates.coverKey = coverKey
+  if (coverKey !== undefined) {
+    updates.coverKey = coverKey
+    // Look up the image that owns this thumbKey to set correct storage backend
+    if (coverKey) {
+      const [coverImg] = await db.select({ storageBackend: images.storageBackend })
+        .from(images).where(eq(images.thumbKey, coverKey)).limit(1)
+      updates.coverStorageBackend = coverImg?.storageBackend || getStorageBackendSync()
+    } else {
+      updates.coverStorageBackend = null
+    }
+  }
   if (driveFolderId !== undefined) {
     if (driveFolderId === null) {
       updates.driveFolderId = null
@@ -449,6 +462,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     description: albums.description,
     isPublic: albums.isPublic,
     coverKey: albums.coverKey,
+    coverStorageBackend: albums.coverStorageBackend,
     driveFolderId: albums.driveFolderId,
     imageCount: albums.imageCount,
     createdAt: albums.createdAt,
@@ -459,8 +473,12 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   }).from(albums)
     .where(and(eq(albums.id, id), eq(albums.userId, user.sub))).limit(1)
 
-  const { passwordHash: pwHash, ...updatedData } = updated!
-  res.json({ ...updatedData, hasPassword: !!pwHash })
+  const { passwordHash: pwHash, coverStorageBackend: csb, ...updatedData } = updated!
+  res.json({
+    ...updatedData,
+    coverUrl: updatedData.coverKey ? storageFor(csb || 'r2').publicUrl(updatedData.coverKey) : null,
+    hasPassword: !!pwHash,
+  })
 }))
 
 // POST /:id/verify-password — verify album password for shared view
@@ -494,19 +512,26 @@ router.delete('/:id', async (req, res) => {
 
   if (!album) return res.status(404).json({ message: 'Album không tồn tại' })
 
-  // Get all images to delete from R2
+  // Get all images to delete from storage
   const albumImages = await db.select().from(images).where(eq(images.albumId, id))
 
   if (albumImages.length > 0) {
-    const privateKeys = albumImages.map(i => i.originalKey).filter(Boolean)
-    const publicKeys = albumImages.flatMap(i =>
-      [i.thumbKey, i.previewKey].filter(Boolean) as string[]
+    // Group by storage backend
+    const byBackend = new Map<string, { priv: string[]; pub: string[] }>()
+    for (const i of albumImages) {
+      const b = i.storageBackend || 'r2'
+      if (!byBackend.has(b)) byBackend.set(b, { priv: [], pub: [] })
+      const g = byBackend.get(b)!
+      if (i.originalKey) g.priv.push(i.originalKey)
+      if (i.thumbKey) g.pub.push(i.thumbKey)
+      if (i.previewKey) g.pub.push(i.previewKey)
+    }
+    await Promise.all(
+      [...byBackend.entries()].flatMap(([backend, { priv, pub }]) => [
+        priv.length ? storageFor(backend).deletePrivate(priv) : Promise.resolve(),
+        pub.length ? storageFor(backend).deletePublic(pub) : Promise.resolve(),
+      ]),
     )
-
-    await Promise.all([
-      privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
-      publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
-    ])
 
     await db.delete(images).where(eq(images.albumId, id))
   }
@@ -675,6 +700,7 @@ router.post('/:id/download-zip', async (req, res) => {
     originalKey: images.originalKey,
     originalName: images.originalName,
     originalSize: images.originalSize,
+    storageBackend: images.storageBackend,
   }).from(images)
     .where(and(eq(images.albumId, id), eq(images.status, 'ready')))
     .orderBy(desc(images.createdAt))
@@ -755,7 +781,7 @@ router.post('/:id/download-zip', async (req, res) => {
 
   for (const img of batchImages) {
     try {
-      const stream = await storage().getStream(img.originalKey)
+      const stream = await storageFor(img.storageBackend).getStream(img.originalKey)
 
       // Generate unique filename within ZIP
       let filename = img.originalName || `${img.id}.raw`

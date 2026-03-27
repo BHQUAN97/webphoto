@@ -7,7 +7,7 @@ import { requestLogger } from './middleware/requestLogger.js'
 import { adminGuard } from './middleware/admin.js'
 import { connectRedis } from './utils/redis.js'
 import { initSocketEmitter } from './utils/socket-emit.js'
-import { initStorage, getStorageBackend } from './utils/storage/index.js'
+import { initStorage, getLocalPublicDir } from './utils/storage/index.js'
 import { logger } from './utils/logger.js'
 import { getSetting } from './utils/settings-cache.js'
 import { mailService } from './utils/mailService.js'
@@ -229,15 +229,25 @@ async function start() {
   const driveStatus = validateDriveConfig()
   logger[driveStatus.ok ? 'info' : 'warn'](driveStatus.message)
 
-  // Serve local storage public files if backend is local
-  const backend = await getStorageBackend()
-  if (backend === 'local') {
-    const { default: path } = await import('path')
-    const dir = await getSetting('local_storage_dir', './data/storage')
-    const publicDir = path.resolve(dir, 'public')
-    app.use('/storage/public', express.static(publicDir, { maxAge: '30d', immutable: true }))
-    logger.info(`Serving local storage public files from ${publicDir}`)
-  }
+  // Serve local storage public files — dynamic middleware that works
+  // even when admin switches storage_backend to 'local' at runtime.
+  // Registered once; on each request checks the current provider's publicDir.
+  const { default: path } = await import('path')
+  let _cachedDir: string | null = null
+  let _cachedStatic: express.RequestHandler | null = null
+
+  app.use('/storage/public', (req, res, next) => {
+    const pubDir = getLocalPublicDir()
+    if (!pubDir) return next()
+
+    // Re-create express.static only when the directory changes
+    if (pubDir !== _cachedDir) {
+      _cachedDir = pubDir
+      _cachedStatic = express.static(pubDir, { maxAge: '30d', immutable: true })
+      logger.info(`Serving local storage public files from ${pubDir}`)
+    }
+    _cachedStatic!(req, res, next)
+  })
 
   // Start API server
   app.listen(PORT, async () => {

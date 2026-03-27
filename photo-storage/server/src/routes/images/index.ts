@@ -11,7 +11,7 @@ import { images, albums, likes, comments, users } from '../../database/schema.js
 import { eq, and, desc, asc, sql, lt, gte, lte, like as sqlLike, inArray } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { rateLimit } from '../../middleware/rateLimit.js'
-import { storage } from '../../utils/storage/index.js'
+import { storage, storageFor, getStorageBackendSync } from '../../utils/storage/index.js'
 import { quotaUtils } from '../../utils/quota.js'
 import { feedCache } from '../../utils/redis.js'
 import { emitToUser } from '../../utils/socket-emit.js'
@@ -87,6 +87,7 @@ router.get('/', async (req, res) => {
     ? db.select({
         id: images.id, albumId: images.albumId, userId: images.userId,
         thumbKey: images.thumbKey, previewKey: images.previewKey,
+        storageBackend: images.storageBackend,
         originalName: images.originalName, mimeType: images.mimeType,
         originalSize: images.originalSize, width: images.width, height: images.height,
         status: images.status, likeCount: images.likeCount, commentCount: images.commentCount,
@@ -101,6 +102,7 @@ router.get('/', async (req, res) => {
     : db.select({
         id: images.id, albumId: images.albumId, userId: images.userId,
         thumbKey: images.thumbKey, previewKey: images.previewKey,
+        storageBackend: images.storageBackend,
         originalName: images.originalName, mimeType: images.mimeType,
         originalSize: images.originalSize, width: images.width, height: images.height,
         status: images.status, likeCount: images.likeCount, commentCount: images.commentCount,
@@ -131,8 +133,8 @@ router.get('/', async (req, res) => {
     width: r.width, height: r.height,
     status: r.status, likeCount: r.likeCount, commentCount: r.commentCount,
     expiresAt: r.expiresAt, createdAt: r.createdAt,
-    thumbUrl: r.thumbKey ? storage().publicUrl(r.thumbKey) : null,
-    previewUrl: r.previewKey ? storage().publicUrl(r.previewKey) : null,
+    thumbUrl: r.thumbKey ? storageFor(r.storageBackend).publicUrl(r.thumbKey) : null,
+    previewUrl: r.previewKey ? storageFor(r.storageBackend).publicUrl(r.previewKey) : null,
     liked: wantLiked ? true : likedSet.has(r.id),
   }))
 
@@ -204,11 +206,13 @@ router.post('/upload-url', rateLimit('upload', 60, 60), async (req, res) => {
   const CHUNK = 5 * 1024 * 1024 // 5MB — smaller for smoother progress
   const totalParts = Math.ceil(size / CHUNK)
 
-  // Create image record with sanitized filename
+  // Create image record with sanitized filename + current storage backend
+  const currentBackend = getStorageBackendSync()
   await db.insert(images).values({
     id: imageId, albumId, userId: user.sub,
     originalKey: key, originalName: safeFilename,
     mimeType, originalSize: BigInt(size), status: 'uploading',
+    storageBackend: currentBackend,
     expiresAt: new Date(Date.now() + 365 * 86400_000),
   })
 
@@ -321,13 +325,15 @@ router.post('/upload-zip', express.raw({ limit: '500mb', type: ['application/zip
         const key = `${user.sub}/${imageId}/original${ext}`
 
         // Upload to storage
-        await storage().uploadBuffer(key, buffer, mimeType)
+        const zipBackend = getStorageBackendSync()
+        await storage().uploadPrivateBuffer(key, buffer, mimeType)
 
         // Create DB record
         await db.insert(images).values({
           id: imageId, albumId, userId: user.sub,
           originalKey: key, originalName: safeFilename,
           mimeType, originalSize: BigInt(buffer.length), status: 'processing',
+          storageBackend: zipBackend,
           expiresAt: new Date(Date.now() + 365 * 86400_000),
         })
 
@@ -398,8 +404,8 @@ router.get('/:id', async (req, res) => {
   res.json({
     ...image,
     originalSize: image.originalSize.toString(),
-    thumbUrl: image.thumbKey ? storage().publicUrl(image.thumbKey) : null,
-    previewUrl: image.previewKey ? storage().publicUrl(image.previewKey) : null,
+    thumbUrl: image.thumbKey ? storageFor(image.storageBackend).publicUrl(image.thumbKey) : null,
+    previewUrl: image.previewKey ? storageFor(image.storageBackend).publicUrl(image.previewKey) : null,
     liked,
   })
 })
@@ -414,12 +420,13 @@ router.delete('/:id', async (req, res) => {
     .where(and(eq(images.id, id), eq(images.userId, user.sub))).limit(1)
   if (!image) return res.status(404).json({ message: 'Ảnh không tồn tại' })
 
-  // Delete from R2
+  // Delete from storage (using per-image backend)
+  const stor = storageFor(image.storageBackend)
   const privateKeys = [image.originalKey].filter(Boolean)
   const publicKeys = [image.thumbKey, image.previewKey].filter(Boolean) as string[]
   await Promise.all([
-    privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
-    publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
+    privateKeys.length ? stor.deletePrivate(privateKeys) : Promise.resolve(),
+    publicKeys.length ? stor.deletePublic(publicKeys) : Promise.resolve(),
   ])
 
   // Delete likes and comments
@@ -585,7 +592,7 @@ router.get('/:id/download', asyncHandler(async (req, res) => {
     if (!album) return res.status(403).json({ message: 'Không có quyền tải ảnh này' })
   }
 
-  const stream = await storage().getStream(image.originalKey)
+  const stream = await storageFor(image.storageBackend).getStream(image.originalKey)
   const safeName = encodeURIComponent(image.originalName || 'image')
   res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${safeName}`)
   res.set('Content-Type', image.mimeType || 'application/octet-stream')
@@ -645,16 +652,25 @@ router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
     return res.json({ ok: true, action: 'rename', affected: renamed })
 
   } else if (action === 'delete') {
-    // Delete images + R2 files
+    // Delete images — group by storage backend
     const toDelete = await db.select().from(images).where(inArray(images.id, validIds))
 
-    const privateKeys = toDelete.map(i => i.originalKey).filter(Boolean) as string[]
-    const publicKeys = toDelete.flatMap(i => [i.thumbKey, i.previewKey].filter(Boolean)) as string[]
-
-    await Promise.all([
-      privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
-      publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
-    ])
+    // Group keys by backend so each provider deletes its own files
+    const byBackend = new Map<string, { priv: string[]; pub: string[] }>()
+    for (const i of toDelete) {
+      const b = i.storageBackend || 'r2'
+      if (!byBackend.has(b)) byBackend.set(b, { priv: [], pub: [] })
+      const g = byBackend.get(b)!
+      if (i.originalKey) g.priv.push(i.originalKey)
+      if (i.thumbKey) g.pub.push(i.thumbKey)
+      if (i.previewKey) g.pub.push(i.previewKey)
+    }
+    await Promise.all(
+      [...byBackend.entries()].flatMap(([backend, { priv, pub }]) => [
+        priv.length ? storageFor(backend).deletePrivate(priv) : Promise.resolve(),
+        pub.length ? storageFor(backend).deletePublic(pub) : Promise.resolve(),
+      ]),
+    )
 
     await db.delete(images).where(inArray(images.id, validIds))
 
@@ -678,6 +694,7 @@ router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
       id: images.id,
       originalKey: images.originalKey,
       originalName: images.originalName,
+      storageBackend: images.storageBackend,
     }).from(images)
       .innerJoin(albums, eq(images.albumId, albums.id))
       .where(and(inArray(images.id, imageIds), eq(albums.userId, user.sub), eq(images.status, 'ready')))
@@ -700,7 +717,7 @@ router.post('/batch', rateLimit('batch', 10, 60), async (req, res) => {
     const usedNames = new Map<string, number>()
     for (const img of toDownload) {
       try {
-        const stream = await storage().getStream(img.originalKey)
+        const stream = await storageFor(img.storageBackend).getStream(img.originalKey)
         let filename = img.originalName || `${img.id}.raw`
         const baseCount = usedNames.get(filename) || 0
         if (baseCount > 0) {
@@ -727,12 +744,12 @@ router.get('/p/:id', asyncHandler(async (req, res) => {
   const id = req.params.id as string
   if (!isValidUlid(id)) return res.status(404).send('Not found')
 
-  const [image] = await db.select({ previewKey: images.previewKey })
+  const [image] = await db.select({ previewKey: images.previewKey, storageBackend: images.storageBackend })
     .from(images).where(eq(images.id, id)).limit(1)
 
   if (!image?.previewKey) return res.status(404).send('Not found')
 
-  const url = storage().publicUrl(image.previewKey)
+  const url = storageFor(image.storageBackend).publicUrl(image.previewKey)
   res.redirect(302, url)
 }))
 

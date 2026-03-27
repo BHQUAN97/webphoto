@@ -3,7 +3,7 @@ import { db } from '../../../utils/db.js'
 import { albums, images, users } from '../../../database/schema.js'
 import { eq, and, or, desc, lt, like as sqlLike } from 'drizzle-orm'
 import { requireAdmin } from '../../../middleware/auth.js'
-import { storage } from '../../../utils/storage/index.js'
+import { storageFor } from '../../../utils/storage/index.js'
 import { adminStats } from '../../../utils/admin-stats.js'
 import { feedCache } from '../../../utils/redis.js'
 
@@ -74,14 +74,22 @@ router.delete('/:id', async (req, res) => {
 
   const albumImages = await db.select().from(images).where(eq(images.albumId, id))
   if (albumImages.length > 0) {
-    const privateKeys = albumImages.map(i => i.originalKey).filter(Boolean)
-    const publicKeys = albumImages.flatMap(i =>
-      [i.thumbKey, i.previewKey].filter(Boolean) as string[]
+    // Group by storage backend
+    const byBackend = new Map<string, { priv: string[]; pub: string[] }>()
+    for (const i of albumImages) {
+      const b = i.storageBackend || 'r2'
+      if (!byBackend.has(b)) byBackend.set(b, { priv: [], pub: [] })
+      const g = byBackend.get(b)!
+      if (i.originalKey) g.priv.push(i.originalKey)
+      if (i.thumbKey) g.pub.push(i.thumbKey)
+      if (i.previewKey) g.pub.push(i.previewKey)
+    }
+    await Promise.all(
+      [...byBackend.entries()].flatMap(([backend, { priv, pub }]) => [
+        priv.length ? storageFor(backend).deletePrivate(priv) : Promise.resolve(),
+        pub.length ? storageFor(backend).deletePublic(pub) : Promise.resolve(),
+      ]),
     )
-    await Promise.all([
-      privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
-      publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
-    ])
     await db.delete(images).where(eq(images.albumId, id))
   }
 

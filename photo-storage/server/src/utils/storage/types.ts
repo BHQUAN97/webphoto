@@ -24,6 +24,9 @@ export interface StorageProvider {
   writeChunk?(key: string, uploadId: string, partNumber: number, data: Buffer): Promise<string>
   assembleChunks?(key: string, uploadId: string, totalParts: number): Promise<void>
 
+  // ── Directory access (local only) ──
+  getPublicDir?(): string
+
   // ── Info ──
   getStorageInfo(): Promise<StorageInfo>
 }

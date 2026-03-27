@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { db } from '../../utils/db.js'
 import { images, payments, users, albums, appLogs } from '../../database/schema.js'
 import { and, lt, lte, ne, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm'
-import { storage } from '../../utils/storage/index.js'
+import { storageFor, getStorageBackendSync } from '../../utils/storage/index.js'
 import { getSetting } from '../../utils/settings-cache.js'
 import { logger } from '../../utils/logger.js'
 import { quotaUtils } from '../../utils/quota.js'
@@ -41,15 +41,23 @@ router.get('/expire-images', async (req, res) => {
 
     if (expired.length === 0) break
 
-    const privateKeys = expired.map(i => i.originalKey).filter(Boolean)
-    const publicKeys = expired.flatMap(i =>
-      [i.thumbKey, i.previewKey].filter(Boolean) as string[]
-    )
+    // Group keys by storage backend
+    const byBackend = new Map<string, { priv: string[]; pub: string[] }>()
+    for (const i of expired) {
+      const b = i.storageBackend || 'r2'
+      if (!byBackend.has(b)) byBackend.set(b, { priv: [], pub: [] })
+      const g = byBackend.get(b)!
+      if (i.originalKey) g.priv.push(i.originalKey)
+      if (i.thumbKey) g.pub.push(i.thumbKey)
+      if (i.previewKey) g.pub.push(i.previewKey)
+    }
 
-    await Promise.all([
-      privateKeys.length ? storage().deletePrivate(privateKeys) : Promise.resolve(),
-      publicKeys.length ? storage().deletePublic(publicKeys) : Promise.resolve(),
-    ])
+    await Promise.all(
+      [...byBackend.entries()].flatMap(([backend, { priv, pub }]) => [
+        priv.length ? storageFor(backend).deletePrivate(priv) : Promise.resolve(),
+        pub.length ? storageFor(backend).deletePublic(pub) : Promise.resolve(),
+      ]),
+    )
 
     const ids = expired.map(i => i.id)
     await db.delete(images).where(inArray(images.id, ids))
@@ -220,6 +228,7 @@ router.post('/sync-drive', async (req, res) => {
           mimeType: file.mimeType,
           originalSize: BigInt(file.size || 0),
           status: 'syncing' as const,
+          storageBackend: getStorageBackendSync(),
           expiresAt,
         })))
 

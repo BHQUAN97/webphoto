@@ -377,11 +377,21 @@ async function handleDeleteImage() {
 async function setAsCover(image: ImageItem) {
   if (!image.thumbUrl) return
   try {
-    // Extract key from thumbUrl (remove CDN prefix)
+    // Extract storage key from thumbUrl
+    // R2: https://cdn.example.com/{key} → remove CDN prefix
+    // Local: /storage/public/{key} → remove /storage/public/ prefix
+    let thumbKey = image.thumbUrl
     const cdnPrefix = import.meta.env.VITE_CDN_URL || ''
-    const thumbKey = cdnPrefix ? image.thumbUrl.replace(cdnPrefix + '/', '') : image.thumbUrl
-    await api.patch(`/albums/${albumId.value}`, { coverKey: thumbKey })
-    if (album.value) album.value.coverKey = thumbKey
+    if (cdnPrefix && thumbKey.startsWith(cdnPrefix)) {
+      thumbKey = thumbKey.replace(cdnPrefix + '/', '')
+    } else if (thumbKey.startsWith('/storage/public/')) {
+      thumbKey = thumbKey.replace('/storage/public/', '')
+    }
+    const res = await api.patch(`/albums/${albumId.value}`, { coverKey: thumbKey })
+    if (album.value) {
+      album.value.coverKey = thumbKey
+      album.value.coverUrl = res.data?.coverUrl ?? null
+    }
     toast.success(t('album.coverSet'))
   } catch {
     toast.error(t('album.coverFailed'))

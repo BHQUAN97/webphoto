@@ -2,7 +2,7 @@ import { Worker } from 'bullmq'
 import sharp from 'sharp'
 import { spawn } from 'child_process'
 import { db } from '../utils/db.js'
-import { storage } from '../utils/storage/index.js'
+import { storageFor } from '../utils/storage/index.js'
 import { emitToUser } from '../utils/socket-emit.js'
 import { images, albums } from '../database/schema.js'
 import { eq, and, isNull } from 'drizzle-orm'
@@ -32,7 +32,12 @@ export function createImageWorker() {
     const { imageId, userId, originalKey, mimeType } = job.data
     logger.info(`[Worker] Processing image ${imageId}`, { source: 'worker:image-process', userId, imageId, mimeType, originalKey })
     try {
-      const rawStream = await storage().getStream(originalKey)
+      // Look up per-image storage backend
+      const [imgRow] = await db.select({ storageBackend: images.storageBackend }).from(images).where(eq(images.id, imageId)).limit(1)
+      const backend = imgRow?.storageBackend || 'r2'
+      const stor = storageFor(backend)
+
+      const rawStream = await stor.getStream(originalKey)
 
       let sharpInput: Buffer
 
@@ -57,8 +62,8 @@ export function createImageWorker() {
 
       const base = `${userId}/${imageId}`
       await Promise.all([
-        storage().uploadBuffer(`${base}/thumb.webp`, thumbBuf, 'image/webp'),
-        storage().uploadBuffer(`${base}/preview.webp`, previewBuf, 'image/webp'),
+        stor.uploadBuffer(`${base}/thumb.webp`, thumbBuf, 'image/webp'),
+        stor.uploadBuffer(`${base}/preview.webp`, previewBuf, 'image/webp'),
       ])
 
       await db.update(images).set({
@@ -68,10 +73,10 @@ export function createImageWorker() {
 
       logger.info(`[Worker] Image ready ${imageId} (${meta.width}x${meta.height})`, { source: 'worker:image-process', userId, imageId })
 
-      // Auto-set album cover if album has no cover yet
+      // Auto-set album cover if album has no cover yet (include coverStorageBackend)
       const [img] = await db.select({ albumId: images.albumId, originalName: images.originalName }).from(images).where(eq(images.id, imageId)).limit(1)
       if (img?.albumId) {
-        await db.update(albums).set({ coverKey: `${base}/thumb.webp` })
+        await db.update(albums).set({ coverKey: `${base}/thumb.webp`, coverStorageBackend: backend })
           .where(and(eq(albums.id, img.albumId), isNull(albums.coverKey)))
       }
 
@@ -79,7 +84,7 @@ export function createImageWorker() {
 
       await emitToUser(userId, {
         type: 'image:ready', imageId,
-        thumbUrl: storage().publicUrl(`${base}/thumb.webp`),
+        thumbUrl: stor.publicUrl(`${base}/thumb.webp`),
         message: `Ảnh ${imageName} đã xử lý xong`,
       })
     } catch (err) {

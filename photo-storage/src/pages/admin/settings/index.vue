@@ -191,14 +191,14 @@ function toggleMime(mime: string) {
 </script>
 
 <template>
-  <div class="max-w-3xl overflow-x-hidden">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">{{ $t('adminSettings.title') }}</h1>
+  <div class="max-w-3xl overflow-x-hidden h-[calc(100vh-7rem)] flex flex-col">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4 shrink-0">{{ $t('adminSettings.title') }}</h1>
 
     <div v-if="loading" class="text-center py-12 text-gray-400">Đang tải...</div>
 
-    <div v-else>
+    <div v-else class="flex-1 flex flex-col min-h-0">
       <!-- Tab Navigation -->
-      <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+      <div class="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-4 overflow-x-auto shrink-0">
         <button
           v-for="tab in tabs"
           :key="tab.key"
@@ -218,6 +218,8 @@ function toggleMime(mime: string) {
         </button>
       </div>
 
+      <!-- Tab content — scrollable area -->
+      <div class="flex-1 overflow-y-auto pr-1">
       <!-- Tab: General Settings -->
       <form v-if="activeTab === 'general'" class="space-y-6" @submit.prevent="save">
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6">
@@ -468,6 +470,7 @@ function toggleMime(mime: string) {
           </BaseButton>
         </div>
       </div>
+      </div><!-- /scrollable area -->
     </div>
   </div>
 </template>

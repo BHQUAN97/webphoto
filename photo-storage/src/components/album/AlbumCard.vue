@@ -13,8 +13,8 @@ defineProps<{ album: Album }>()
   >
     <div class="aspect-[4/3] bg-gray-100 relative">
       <img
-        v-if="album.coverKey"
-        :src="cdnUrl(album.coverKey)"
+        v-if="album.coverUrl || album.coverKey"
+        :src="album.coverUrl || cdnUrl(album.coverKey)"
         class="w-full h-full object-cover"
         :alt="album.title"
         loading="lazy"
