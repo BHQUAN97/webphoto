@@ -10,6 +10,7 @@ import { quotaRedis, redis } from '../../utils/redis.js'
 import { mailService } from '../../utils/mailService.js'
 import { listFiles } from '../../utils/googleDrive.js'
 import { driveImportQueue } from '../../plugins/bullmq.js'
+import { asyncHandler } from '../../utils/asyncHandler.js'
 import { ulid } from 'ulid'
 
 const router = Router()
@@ -25,7 +26,7 @@ function verifyCron(req: any, res: any): boolean {
 }
 
 // GET /expire-images — loop until no more expired
-router.get('/expire-images', async (req, res) => {
+router.get('/expire-images', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
   let totalDeleted = 0
@@ -74,10 +75,10 @@ router.get('/expire-images', async (req, res) => {
   }
 
   res.json({ deleted: totalDeleted })
-})
+}))
 
 // GET /reconcile-quota — sync Redis quota with DB
-router.get('/reconcile-quota', async (req, res) => {
+router.get('/reconcile-quota', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
   const actualByUser = await db.select({
@@ -98,10 +99,10 @@ router.get('/reconcile-quota', async (req, res) => {
   }
 
   res.json({ checked: actualByUser.length, fixed })
-})
+}))
 
 // GET /remind-payments — remind pending orders > 12h
-router.get('/remind-payments', async (req, res) => {
+router.get('/remind-payments', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
   const pendingOrders = await db
@@ -111,7 +112,8 @@ router.get('/remind-payments', async (req, res) => {
     .where(and(
       eq(payments.status, 'pending'),
       lt(payments.createdAt, new Date(Date.now() - 12 * 3600_000)),
-      gt(payments.expiresAt!, new Date()),
+      isNotNull(payments.expiresAt),
+      gt(payments.expiresAt, new Date()),
     ))
 
   for (const { p, u } of pendingOrders) {
@@ -126,10 +128,10 @@ router.get('/remind-payments', async (req, res) => {
   }
 
   res.json({ reminded: pendingOrders.length })
-})
+}))
 
 // GET /cleanup-logs — delete old logs from DB + files
-router.get('/cleanup-logs', async (req, res) => {
+router.get('/cleanup-logs', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
   const retentionDays = parseInt(await getSetting('log_retention_days', '30'))
@@ -161,10 +163,10 @@ router.get('/cleanup-logs', async (req, res) => {
 
   logger.info(`Cleanup logs: ${deletedRows} DB rows, ${deletedFiles} files deleted`, { source: 'cron' })
   res.json({ deletedRows, deletedFiles })
-})
+}))
 
 // POST /sync-drive — sync albums linked to Google Drive folders
-router.post('/sync-drive', async (req, res) => {
+router.post('/sync-drive', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
   // Acquire Redis lock to prevent concurrent sync-drive runs (5 min TTL)
@@ -278,6 +280,6 @@ router.post('/sync-drive', async (req, res) => {
     // Release lock
     await redis.del('sync-drive-lock')
   }
-})
+}))
 
 export default router
