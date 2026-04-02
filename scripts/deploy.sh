@@ -38,6 +38,11 @@ else
   DC="docker-compose"
 fi
 
+# 0.5 Ensure shared networks exist (app nào start trước cũng được)
+echo "[0/8] Ensure shared Docker networks..."
+docker network create webphoto_backend 2>/dev/null || true
+docker network create vietnet_frontend 2>/dev/null || true
+
 # 1. Check .env
 echo ""
 echo "[1/8] Kiem tra .env..."

@@ -60,6 +60,9 @@ scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${APP_DIR}/nginx/conf
 # 4. Rebuild + Restart
 step "4/5 — Rebuild Docker + Restart"
 ssh "${VPS_HOST}" "
+  # Ensure shared networks (app nào start trước cũng được)
+  docker network create webphoto_backend 2>/dev/null || true
+  docker network create vietnet_frontend 2>/dev/null || true
   cd ${APP_DIR}
   docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
   docker compose -f docker-compose.prod.yml up -d api worker

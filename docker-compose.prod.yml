@@ -140,7 +140,6 @@ services:
       - api
     networks:
       - frontend
-      - webproxy
       - vietnet_frontend
 
   # ─── Certbot (SSL) ──────────────────────
@@ -161,9 +160,9 @@ volumes:
 networks:
   frontend:
   backend:
-  webproxy:
+    name: webphoto_backend
     external: true
   # VietNet (bhquan.store) chạy cùng VPS — photo-nginx cần join network này
   vietnet_frontend:
-    external: true
     name: vietnet_frontend
+    external: true
