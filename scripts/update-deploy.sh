@@ -48,11 +48,10 @@ scp "$ROOT_DIR/photo-storage/server/package.json" "${VPS_HOST}:${APP_DIR}/photo-
 scp "$ROOT_DIR/photo-storage/server/package-lock.json" "${VPS_HOST}:${APP_DIR}/photo-storage/server/"
 log "Upload OK"
 
-# 3. Update Nginx config (BT Panel path)
+# 3. Update Nginx config (Docker photo-nginx)
 step "3/5 — Update Nginx config"
-NGINX_CONF="/www/server/panel/vhost/nginx/bhquan.site.conf"
-scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${NGINX_CONF}" 2>/dev/null && {
-  ssh "${VPS_HOST}" "nginx -t && nginx -s reload"
+scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${APP_DIR}/nginx/conf.d/bhquan.site.conf" 2>/dev/null && {
+  ssh "${VPS_HOST}" "docker exec photo-nginx nginx -t 2>&1 | tail -1 && docker exec photo-nginx nginx -s reload"
   log "Nginx config updated + reloaded"
 } || {
   log "Nginx config unchanged (skip)"
@@ -62,8 +61,9 @@ scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${NGINX_CONF}" 2>/dev
 step "4/5 — Rebuild Docker + Restart"
 ssh "${VPS_HOST}" "
   cd ${APP_DIR}
-  docker compose build api worker 2>&1 | tail -5
-  docker compose up -d api worker
+  docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
+  docker compose -f docker-compose.prod.yml up -d api worker
+  docker exec photo-nginx nginx -s reload 2>/dev/null || true
   echo 'Restarted'
 "
 log "Containers restarted"
@@ -93,8 +93,8 @@ fi
 step "6/6 — Health check"
 sleep 5
 ssh "${VPS_HOST}" "
-  curl -sf http://localhost:4000/api/health && echo ''
-  docker compose -f ${APP_DIR}/docker-compose.yml ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null || docker ps --format 'table {{.Names}}\t{{.Status}}'
+  curl -sf https://bhquan.site/api/health && echo ''
+  docker compose -f ${APP_DIR}/docker-compose.prod.yml ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null || docker ps --format 'table {{.Names}}\t{{.Status}}'
 "
 log "Update deploy done!"
 
