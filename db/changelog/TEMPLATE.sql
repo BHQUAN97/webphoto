@@ -1,0 +1,53 @@
+-- ============================================================
+-- VXXX: [Mo ta thay doi]
+-- Date:   YYYY-MM-DD
+-- Author: [ten]
+-- Ticket: [link hoac mo ta]
+-- ============================================================
+-- [Giai thich tai sao can thay doi nay]
+-- ============================================================
+
+-- === QUY TAC VIET CHANGELOG ===
+-- 1. Ten file: V{XXX}__{mo_ta_ngan}.sql (2 gach duoi)
+--    VD: V002__add_user_avatar.sql
+--
+-- 2. Version tang dan: V001, V002, V003...
+--    Dung `bash scripts/db-changelog.sh <ip> --status` de xem version hien tai
+--
+-- 3. PHAI idempotent (chay lai khong loi). Dung pattern:
+--
+--    -- Them column (neu chua co):
+--    SET @sql = (SELECT IF(
+--        EXISTS (SELECT 1 FROM information_schema.COLUMNS
+--                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='xxx' AND COLUMN_NAME='yyy'),
+--        'SELECT ''[SKIP] xxx.yyy already exists'' AS info;',
+--        'ALTER TABLE xxx ADD COLUMN yyy VARCHAR(255) NULL;'
+--    ));
+--    PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--
+--    -- Them index (neu chua co):
+--    SET @sql = (SELECT IF(
+--        EXISTS (SELECT 1 FROM information_schema.STATISTICS
+--                WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='xxx' AND INDEX_NAME='idx_xxx_yyy'),
+--        'SELECT ''[SKIP] idx_xxx_yyy already exists'' AS info;',
+--        'CREATE INDEX idx_xxx_yyy ON xxx(yyy);'
+--    ));
+--    PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--
+--    -- Tao table (neu chua co):
+--    CREATE TABLE IF NOT EXISTS xxx (...);
+--
+--    -- Update data (idempotent):
+--    UPDATE xxx SET yyy = 'value' WHERE yyy IS NULL OR yyy = '';
+--
+-- 4. Cuoi file LUON co Verify block:
+--    SELECT CONCAT('[OK] ', ...) AS result FROM information_schema...
+--
+-- 5. KHONG dung: DROP TABLE, DROP COLUMN, TRUNCATE (tru khi co ly do chinh dang)
+-- 6. KHONG thay doi column type co data (phai migrate data truoc)
+-- ============================================================
+
+-- [Viet SQL o day]
+
+-- Verify
+-- SELECT ... AS result;
