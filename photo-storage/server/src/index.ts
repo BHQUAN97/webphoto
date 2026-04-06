@@ -307,6 +307,11 @@ process.on('unhandledRejection', (reason) => {
 })
 
 process.on('uncaughtException', (err) => {
+  // ECONNRESET la loi binh thuong khi client disconnect, khong can crash
+  if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') {
+    logger.warn(`Connection reset: ${err.message}`)
+    return
+  }
   logger.fatal(`Uncaught exception: ${err.message}`, {
     errorName: err.constructor?.name,
     stack: err.stack,

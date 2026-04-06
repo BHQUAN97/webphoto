@@ -21,7 +21,7 @@ export default defineConfig({
     allowedHosts: ['bhquan.site'],
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'http://localhost:4100',
         // Preserve original Host header (bhquan.site vs localhost)
         // so backend can detect secure cookies correctly
         changeOrigin: false,
