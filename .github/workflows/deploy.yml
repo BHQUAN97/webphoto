@@ -101,7 +101,12 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/nginx/conf.d"
           sshpass -e scp -P $PORT nginx/nginx.conf $VPS:${APP_DIR}/nginx/
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.init.conf.disabled $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
-          sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${APP_DIR}/nginx/conf.d/ 2>/dev/null || true
+          # Chi upload bhquan.store.conf neu VietNet da deploy (tranh nginx fail khi upstream chua co)
+          if sshpass -e ssh -p $PORT $VPS "test -f /opt/vietnet/docker-compose.prod.yml"; then
+            sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${APP_DIR}/nginx/conf.d/ 2>/dev/null || true
+          else
+            echo "VietNet not deployed yet — skipping bhquan.store.conf"
+          fi
 
           # Frontend dist
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/photo-storage"
