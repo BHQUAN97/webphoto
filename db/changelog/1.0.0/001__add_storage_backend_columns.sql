@@ -1,8 +1,7 @@
 -- ============================================================
--- V001: Add per-image storage backend tracking
+-- 1.0.0/001: Add per-image storage backend tracking
 -- Date:   2026-03-27
 -- Author: Agent_DBO
--- Ticket: per-image storage backend feature
 -- ============================================================
 -- Cho phep moi anh luu storage_backend rieng (r2/local).
 -- Khi chuyen backend, anh cu van load dung provider.

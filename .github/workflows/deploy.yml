@@ -313,66 +313,69 @@ jobs:
       # ══════════════════════════════════════════
       # SHARED STEPS (both init and update)
       # ══════════════════════════════════════════
-      - name: Run DB Changelog (versioned)
+      - name: Run DB Changelog (directory-versioned)
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
 
-          if [ ! -d "db/changelog" ] || ! ls db/changelog/V*.sql 1>/dev/null 2>&1; then
-            echo "No changelog files (skip)"
+          if [ ! -d "db/changelog" ]; then
+            echo "No changelog directory (skip)"
             exit 0
           fi
 
           MYSQL_PWD=$(sshpass -e ssh -p $PORT $VPS "grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env | cut -d= -f2-")
           MYSQL_CMD="docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
-          # Step 1: Ensure schema_changelog table exists (V000)
-          sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < db/changelog/V000__create_changelog_tracker.sql > /dev/null 2>&1
+          # Step 1: Ensure schema_changelog table exists (_init/)
+          for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
+            sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" > /dev/null 2>&1
+          done
 
-          # Step 2: Get list of already-applied versions
-          APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT version FROM schema_changelog ORDER BY version\"" 2>/dev/null || echo "")
-          echo "Already applied: ${APPLIED:-none}"
+          # Step 2: Get already-applied migrations (version/filename)
+          APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
+          echo "Already applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
 
-          # Step 3: Run only unapplied versions (skip V000)
+          # Step 3: Run unapplied migrations per version directory
           PASS=0
           SKIP=0
           FAIL=0
-          for f in $(find db/changelog -name 'V*.sql' -type f | sort); do
-            FNAME=$(basename "$f")
-            # Extract version: V001 from V001__description.sql
-            VERSION=$(echo "$FNAME" | grep -oP '^V\d+')
 
-            # Skip V000 (tracker table — already ran above)
-            if [ "$VERSION" = "V000" ]; then continue; fi
+          for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
+            VER=$(basename "$ver_dir")
+            echo ""
+            echo "── Version $VER ──"
 
-            # Skip already-applied versions
-            if echo "$APPLIED" | grep -qw "$VERSION"; then
-              echo "  $FNAME ... SKIP (already applied)"
-              ((SKIP++))
-              continue
-            fi
+            for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
+              FNAME=$(basename "$f")
+              KEY="${VER}/${FNAME}"
 
-            echo -n "  $FNAME ... "
-            START_MS=$(date +%s%N)
-            OUTPUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
-            EXIT_CODE=$?
-            END_MS=$(date +%s%N)
-            DURATION_MS=$(( (END_MS - START_MS) / 1000000 ))
+              # Skip already applied
+              if echo "$APPLIED" | grep -qF "$KEY"; then
+                echo "  $FNAME ... SKIP (already applied)"
+                ((SKIP++))
+                continue
+              fi
 
-            if [ $EXIT_CODE -eq 0 ]; then
-              # Extract description from filename: V001__add_something.sql → add something
-              DESC=$(echo "$FNAME" | sed 's/^V[0-9]*__//; s/\.sql$//; s/_/ /g')
-              CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
+              echo -n "  $FNAME ... "
+              START_MS=$(date +%s%N)
+              OUTPUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
+              EXIT_CODE=$?
+              END_MS=$(date +%s%N)
+              DURATION_MS=$(( (END_MS - START_MS) / 1000000 ))
 
-              # Record in schema_changelog
-              sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"INSERT INTO schema_changelog (version, description, filename, applied_by, checksum, execution_ms) VALUES ('$VERSION', '$DESC', '$FNAME', 'ci', '$CHECKSUM', $DURATION_MS)\"" 2>/dev/null
-              echo "OK (${DURATION_MS}ms)"
-              ((PASS++))
-            else
-              echo "FAILED"
-              echo "$OUTPUT" | tail -5 | sed 's/^/    /'
-              ((FAIL++))
-            fi
+              if [ $EXIT_CODE -eq 0 ]; then
+                DESC=$(echo "$FNAME" | sed 's/^[0-9]*__//; s/\.sql$//; s/_/ /g')
+                CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
+
+                sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"REPLACE INTO schema_changelog (version, filename, description, applied_by, checksum, execution_ms) VALUES ('$VER', '$FNAME', '$DESC', 'ci', '$CHECKSUM', $DURATION_MS)\"" 2>/dev/null
+                echo "OK (${DURATION_MS}ms)"
+                ((PASS++))
+              else
+                echo "FAILED"
+                echo "$OUTPUT" | tail -5 | sed 's/^/    /'
+                ((FAIL++))
+              fi
+            done
           done
 
           echo ""
