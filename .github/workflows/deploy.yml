@@ -336,7 +336,17 @@ jobs:
             docker network create webphoto_backend 2>/dev/null || true
             docker network create vietnet_frontend 2>/dev/null || true
             docker rm -f photo-mysql photo-redis 2>/dev/null || true
-            cd ${INFRA_DIR} && docker compose up -d
+            cd ${INFRA_DIR} && docker compose up -d --force-recreate
+
+            echo 'Waiting for MySQL...'
+            for i in \$(seq 1 60); do
+              if docker exec shared-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+                echo 'MySQL ready!'
+                break
+              fi
+              [ \$i -eq 60 ] && echo 'WARNING: MySQL slow to start' && exit 1
+              sleep 1
+            done
           "
           echo "[OK] Infra synced"
 
