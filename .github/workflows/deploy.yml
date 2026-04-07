@@ -644,6 +644,7 @@ jobs:
           fi
 
           echo "Waiting for API health..."
+          set +e
           for i in $(seq 1 15); do
             RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "curl -sf http://localhost:4000/api/health" 2>&1)
             SSH_EXIT=$?
