@@ -1,0 +1,184 @@
+name: Daily Backup
+
+on:
+  schedule:
+    - cron: '0 21 * * *'   # 4:00 AM UTC+7
+  workflow_dispatch:        # Cho phep chay thu cong
+
+env:
+  INFRA_DIR: /opt/infra
+  KEEP_DAYS: 7
+
+# Can quyen push len branch backups
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    name: Backup DB + Uploads → Git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load config/env
+        run: |
+          grep -v '^#' config/env | grep -v '^$' | grep '=' >> $GITHUB_ENV
+          PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
+          echo "SSHPASS=${PASS}" >> $GITHUB_ENV
+          echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
+
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Create backups on VPS
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          DATE="${{ env.DATE }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            set -e
+            BACKUP_DIR=/tmp/backup-${DATE}
+            rm -rf \$BACKUP_DIR
+            mkdir -p \$BACKUP_DIR/webphoto \$BACKUP_DIR/vietnet
+
+            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env | cut -d= -f2-)
+
+            # ── DB dumps ──
+            echo '=== Database dumps ==='
+
+            echo 'Dumping photo_storage...'
+            docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+              --single-transaction --routines --triggers --events \
+              photo_storage 2>/dev/null | gzip > \$BACKUP_DIR/webphoto/photo_storage.sql.gz
+            echo \"  \$(du -h \$BACKUP_DIR/webphoto/photo_storage.sql.gz | cut -f1)\"
+
+            if docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'USE vietnet' 2>/dev/null; then
+              echo 'Dumping vietnet...'
+              docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+                --single-transaction --routines --triggers --events \
+                vietnet 2>/dev/null | gzip > \$BACKUP_DIR/vietnet/vietnet.sql.gz
+              echo \"  \$(du -h \$BACKUP_DIR/vietnet/vietnet.sql.gz | cut -f1)\"
+            else
+              echo 'vietnet DB not found — skip'
+              rm -rf \$BACKUP_DIR/vietnet
+            fi
+
+            # ── Uploads ──
+            echo ''
+            echo '=== Upload archives ==='
+
+            # WebPhoto local uploads
+            WP_UPLOADS=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/uploads\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
+            if [ -n \"\$WP_UPLOADS\" ] && [ -d \"\$WP_UPLOADS\" ] && [ \"\$(ls -A \$WP_UPLOADS 2>/dev/null)\" ]; then
+              echo \"WebPhoto uploads: \$WP_UPLOADS\"
+              cd \$WP_UPLOADS && zip -rq \$BACKUP_DIR/webphoto/uploads.zip . && cd /
+              echo \"  \$(du -h \$BACKUP_DIR/webphoto/uploads.zip | cut -f1)\"
+            else
+              echo 'WebPhoto: no local uploads (skip)'
+            fi
+
+            # VietNet uploads
+            VN_UPLOADS=\$(docker volume inspect vietnet_uploads --format '{{.Mountpoint}}' 2>/dev/null || echo '')
+            if [ -n \"\$VN_UPLOADS\" ] && [ -d \"\$VN_UPLOADS\" ] && [ \"\$(ls -A \$VN_UPLOADS 2>/dev/null)\" ]; then
+              echo \"VietNet uploads: \$VN_UPLOADS\"
+              cd \$VN_UPLOADS && zip -rq \$BACKUP_DIR/vietnet/uploads.zip . && cd /
+              echo \"  \$(du -h \$BACKUP_DIR/vietnet/uploads.zip | cut -f1)\"
+            else
+              echo 'VietNet: no uploads (skip)'
+            fi
+
+            echo ''
+            echo '=== All backup files ==='
+            find \$BACKUP_DIR -type f -exec ls -lh {} \;
+          "
+
+      - name: Download backups from VPS
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          DATE="${{ env.DATE }}"
+
+          mkdir -p /tmp/backups
+          sshpass -e scp -P $PORT -r $VPS:/tmp/backup-${DATE}/* /tmp/backups/
+
+          echo "Downloaded:"
+          find /tmp/backups -type f -exec ls -lh {} \;
+
+      - name: Push to backups branch
+        run: |
+          DATE="${{ env.DATE }}"
+
+          # Checkout orphan branch 'backups' (tach biet voi code)
+          git fetch origin backups 2>/dev/null || true
+          if git rev-parse origin/backups >/dev/null 2>&1; then
+            git checkout backups
+          else
+            git checkout --orphan backups
+            git rm -rf . > /dev/null 2>&1 || true
+            echo "# Backups" > README.md
+            echo "" >> README.md
+            echo "Auto-generated daily backups. Structure:" >> README.md
+            echo '```' >> README.md
+            echo "webphoto/YYYY-MM-DD/photo_storage.sql.gz" >> README.md
+            echo "webphoto/YYYY-MM-DD/uploads.zip" >> README.md
+            echo "vietnet/YYYY-MM-DD/vietnet.sql.gz" >> README.md
+            echo "vietnet/YYYY-MM-DD/uploads.zip" >> README.md
+            echo '```' >> README.md
+            git add README.md
+          fi
+
+          # Copy backup files vao dung cau truc
+          for project in webphoto vietnet; do
+            if [ -d "/tmp/backups/${project}" ]; then
+              mkdir -p "${project}/${DATE}"
+              cp /tmp/backups/${project}/* "${project}/${DATE}/"
+            fi
+          done
+
+          # Xoa backup cu hon KEEP_DAYS ngay
+          CUTOFF=$(date -d "${KEEP_DAYS} days ago" +%Y-%m-%d)
+          for project in webphoto vietnet; do
+            if [ -d "${project}" ]; then
+              for dir in ${project}/*/; do
+                DIRNAME=$(basename "$dir")
+                if [[ "$DIRNAME" < "$CUTOFF" ]]; then
+                  echo "Removing old: ${project}/${DIRNAME}"
+                  rm -rf "$dir"
+                fi
+              done
+            fi
+          done
+
+          # Commit + push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "backup: ${DATE}"
+            git push origin backups
+            echo "Pushed to branch: backups"
+          fi
+
+      - name: Cleanup VPS temp
+        if: always()
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-*" 2>/dev/null || true
+
+      - name: Summary
+        run: |
+          echo "==============================="
+          echo "Backup OK — ${{ env.DATE }}"
+          echo "Branch: backups"
+          echo "Structure: {webphoto,vietnet}/${{ env.DATE }}/"
+          echo "Retention: ${{ env.KEEP_DAYS }} days"
+          echo "==============================="
