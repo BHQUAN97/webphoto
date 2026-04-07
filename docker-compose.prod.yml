@@ -5,50 +5,8 @@
 
 services:
 
-  # ─── MySQL 8 ────────────────────────────
-  mysql:
-    image: mysql:8.0
-    container_name: photo-mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-StrongRootPass2024!}
-      MYSQL_DATABASE: photo_storage
-      MYSQL_USER: photo_user
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-StrongUserPass2024!}
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./backups/mysql:/backups
-    command: >
-      --default-authentication-plugin=mysql_native_password
-      --innodb-buffer-pool-size=256M
-      --max-connections=100
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - backend
-
-  # ─── Redis 7 ────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: photo-redis
-    restart: always
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - backend
-
   # ─── API Server ─────────────────────────
+  # MySQL + Redis nam trong /opt/infra/docker-compose.yml (shared voi VietNet)
   api:
     build:
       context: ./photo-storage/server
@@ -58,8 +16,8 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      DATABASE_URL: mysql://photo_user:${MYSQL_PASSWORD:-StrongUserPass2024!}@mysql:3306/photo_storage
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: mysql://photo_user:${MYSQL_PASSWORD:-StrongUserPass2024!}@photo-mysql:3306/photo_storage
+      REDIS_URL: redis://photo-redis:6379
       JWT_SECRET: ${JWT_SECRET}
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_ACCESS_KEY: ${R2_ACCESS_KEY}
@@ -79,11 +37,6 @@ services:
       CORS_ORIGIN: https://bhquan.site
       SOCKET_PORT: 4001
       CRON_SECRET: ${CRON_SECRET}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - backend
       - frontend
@@ -97,8 +50,8 @@ services:
     restart: always
     environment:
       NODE_ENV: production
-      DATABASE_URL: mysql://photo_user:${MYSQL_PASSWORD:-StrongUserPass2024!}@mysql:3306/photo_storage
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: mysql://photo_user:${MYSQL_PASSWORD:-StrongUserPass2024!}@photo-mysql:3306/photo_storage
+      REDIS_URL: redis://photo-redis:6379
       R2_ENDPOINT: ${R2_ENDPOINT}
       R2_ACCESS_KEY: ${R2_ACCESS_KEY}
       R2_SECRET_KEY: ${R2_SECRET_KEY}
@@ -113,11 +66,6 @@ services:
       SUPPORT_PHONE: ${SUPPORT_PHONE:-0123456789}
       SUPPORT_EMAIL: support@bhquan.site
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@bhquan.site}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - backend
 
@@ -152,8 +100,6 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
-  mysql_data:
-  redis_data:
   certbot_data:
   certbot_www:
 

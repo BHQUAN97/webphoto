@@ -147,36 +147,57 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/config/env ${APP_DIR}/.env"
           echo ".env created from config/env"
 
-      - name: '[INIT] Create Docker networks + Start infrastructure'
+      - name: '[INIT] Start shared infrastructure (MySQL + Redis)'
         if: steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+          INFRA_DIR=/opt/infra
 
+          # Upload infra compose
+          sshpass -e ssh -p $PORT $VPS "mkdir -p ${INFRA_DIR}"
+          sshpass -e scp -P $PORT infra/docker-compose.yml $VPS:${INFRA_DIR}/docker-compose.yml
+
+          # Tao .env cho infra (chi can MYSQL_ROOT_PASSWORD)
+          MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
+          sshpass -e ssh -p $PORT $VPS "echo 'MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PWD}' > ${INFRA_DIR}/.env"
+
+          # Start infra + wait for MySQL
           sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-
-            # Tao shared networks
-            docker network create webphoto_backend 2>/dev/null || true
-            docker network create vietnet_frontend 2>/dev/null || true
-
-            # Start MySQL + Redis truoc
-            docker compose -f docker-compose.prod.yml up -d mysql redis
+            cd ${INFRA_DIR}
+            docker compose up -d
 
             echo 'Waiting for MySQL...'
             for i in \$(seq 1 60); do
-              if docker compose -f docker-compose.prod.yml exec -T mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+              if docker exec photo-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
                 echo 'MySQL ready!'
                 break
               fi
               if [ \$i -eq 60 ]; then
                 echo 'MySQL not ready after 60s'
-                docker compose -f docker-compose.prod.yml logs mysql --tail 20
+                docker logs photo-mysql --tail 20
                 exit 1
               fi
               sleep 1
             done
           "
+
+      - name: '[INIT] Create WebPhoto DB + user'
+        if: steps.detect.outputs.mode == 'init'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+
+          sshpass -e ssh -p $PORT $VPS "docker exec -i photo-mysql mysql -u root -p${MYSQL_ROOT_PWD} <<EOSQL
+            CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
+            GRANT ALL PRIVILEGES ON photo_storage.* TO 'photo_user'@'%';
+            FLUSH PRIVILEGES;
+            SELECT '[OK] photo_storage database + photo_user ready' AS result;
+          EOSQL"
 
       - name: '[INIT] Build & Start all services'
         if: steps.detect.outputs.mode == 'init'
@@ -190,7 +211,7 @@ jobs:
             # Build api + worker images
             docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -10
 
-            # Start tat ca services (mysql, redis da chay roi — se skip)
+            # Start all services
             docker compose -f docker-compose.prod.yml up -d
 
             echo 'All services started'
@@ -296,6 +317,19 @@ jobs:
             echo "Nginx config updated + reloaded"
           } || echo "Nginx config unchanged (skip)"
 
+      - name: '[UPDATE] Sync shared infra'
+        if: steps.detect.outputs.mode == 'update'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          INFRA_DIR=/opt/infra
+
+          sshpass -e ssh -p $PORT $VPS "mkdir -p ${INFRA_DIR}"
+          sshpass -e scp -P $PORT infra/docker-compose.yml $VPS:${INFRA_DIR}/docker-compose.yml
+          MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
+          sshpass -e ssh -p $PORT $VPS "echo 'MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PWD}' > ${INFRA_DIR}/.env"
+          sshpass -e ssh -p $PORT $VPS "cd ${INFRA_DIR} && docker compose up -d"
+
       - name: '[UPDATE] Rebuild & Restart containers'
         if: steps.detect.outputs.mode == 'update'
         run: |
@@ -304,8 +338,6 @@ jobs:
 
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-            docker network create webphoto_backend 2>/dev/null || true
-            docker network create vietnet_frontend 2>/dev/null || true
             docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
             docker compose -f docker-compose.prod.yml up -d api worker
           "
