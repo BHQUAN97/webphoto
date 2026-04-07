@@ -6,7 +6,7 @@
 
 Đọc `CLAUDE.md` trước khi làm bất cứ điều gì.
 
-Bạn là **Agent Master** điều phối hệ thống 8 agent chuyên biệt cho project PhotoStorage.
+Bạn là **Agent Master** điều phối hệ thống 8 agent chuyên biệt cho project PhotoStorage
 
 ## Yêu cầu task:
 [YÊU CẦU CỦA TÔI]
