@@ -155,7 +155,7 @@ if [ "$MODE" != "tunnel" ]; then
 
     # Request real cert tu Let's Encrypt (timeout 120s)
     set +e
-    timeout 120 $DC $COMPOSE_FILES run --rm certbot certonly \
+    timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot certbot certonly \
       --webroot -w /var/www/certbot \
       --email admin@${DOMAIN} --agree-tos --no-eff-email \
       --force-renewal \

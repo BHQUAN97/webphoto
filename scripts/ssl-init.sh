@@ -60,7 +60,7 @@ fi
 # 4. Lay certificate that tu Let's Encrypt (timeout 120s)
 echo "[4/5] Requesting SSL certificate..."
 set +e
-timeout 120 $DC $COMPOSE_FILES run --rm certbot certonly \
+timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot certbot certonly \
   --webroot \
   --webroot-path /var/www/certbot \
   --email "$EMAIL" \

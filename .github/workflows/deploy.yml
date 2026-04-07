@@ -294,7 +294,7 @@ jobs:
           echo "--- Certbot: bhquan.site ---"
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-            timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+            timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot certbot certonly \
               --webroot -w /var/www/certbot \
               --email admin@bhquan.site --agree-tos --no-eff-email \
               --force-renewal \
@@ -307,7 +307,7 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
               cd ${APP_DIR}
-              timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+              timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot certbot certonly \
                 --webroot -w /var/www/certbot \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
                 --force-renewal \
@@ -817,7 +817,7 @@ jobs:
             # bhquan.site
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
               cd ${APP_DIR}
-              timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+              timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot certbot certonly \
                 --webroot -w /var/www/certbot \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
                 --force-renewal \
@@ -829,7 +829,7 @@ jobs:
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
               if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
                 cd ${APP_DIR}
-                timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+                timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot certbot certonly \
                   --webroot -w /var/www/certbot \
                   --email admin@bhquan.site --agree-tos --no-eff-email \
                   --force-renewal \
