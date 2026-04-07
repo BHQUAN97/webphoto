@@ -51,14 +51,14 @@ jobs:
             echo '=== Database dumps ==='
 
             echo 'Dumping photo_storage...'
-            docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+            docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
               --single-transaction --routines --triggers --events \
               photo_storage 2>/dev/null | gzip > \$BACKUP_DIR/webphoto/photo_storage.sql.gz
             echo \"  \$(du -h \$BACKUP_DIR/webphoto/photo_storage.sql.gz | cut -f1)\"
 
-            if docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'USE vietnet' 2>/dev/null; then
+            if docker exec shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'USE vietnet' 2>/dev/null; then
               echo 'Dumping vietnet...'
-              docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+              docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
                 --single-transaction --routines --triggers --events \
                 vietnet 2>/dev/null | gzip > \$BACKUP_DIR/vietnet/vietnet.sql.gz
               echo \"  \$(du -h \$BACKUP_DIR/vietnet/vietnet.sql.gz | cut -f1)\"

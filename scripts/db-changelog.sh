@@ -39,7 +39,7 @@ if [ -z "$MYSQL_PWD" ]; then
   exit 1
 fi
 
-MYSQL_CMD="docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
+MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
 echo ""
 echo "=== DB Changelog Runner ==="

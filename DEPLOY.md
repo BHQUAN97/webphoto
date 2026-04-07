@@ -32,8 +32,8 @@
   │  ┌─────────────────────────────────────┐     │
   │  │ photo-api    :4000 (Express.js 5)   │     │
   │  │ photo-worker       (BullMQ jobs)    │     │
-  │  │ photo-mysql  :3306 (MySQL 8)        │     │
-  │  │ photo-redis  :6379 (Redis 7)        │     │
+  │  │ shared-mysql  :3306 (MySQL 8)        │     │
+  │  │ shared-redis  :6379 (Redis 7)        │     │
   │  └─────────────────────────────────────┘     │
   └──────────────────────────────────────────────┘
        │
@@ -201,7 +201,7 @@ docker compose build
 docker compose up -d
 
 # Đợi MySQL ready
-docker exec photo-mysql mysqladmin ping -h localhost --silent
+docker exec shared-mysql mysqladmin ping -h localhost --silent
 
 # Fix MySQL auth (nếu cần — caching_sha2_password → mysql_native_password)
 docker exec photo-api node -e "
@@ -361,11 +361,11 @@ docker compose down && docker compose up -d # Recreate tất cả
 
 # === DATABASE ===
 # Backup
-docker exec photo-mysql mysqldump -u root -p"<ROOT_PASS>" photo_storage \
+docker exec shared-mysql mysqldump -u root -p"<ROOT_PASS>" photo_storage \
   --single-transaction | gzip > backup_$(date +%Y%m%d).sql.gz
 
 # Restore
-gunzip < backup.sql.gz | docker exec -i photo-mysql mysql -u root -p"<ROOT_PASS>" photo_storage
+gunzip < backup.sql.gz | docker exec -i shared-mysql mysql -u root -p"<ROOT_PASS>" photo_storage
 
 # === CẬP NHẬT CODE (từ máy local) ===
 bash scripts/update-deploy.sh <your-vps-ip>
@@ -532,6 +532,6 @@ dig +short <DOMAIN>  # Phải trả về VPS IP
 | **App directory** | `/opt/webphoto` |
 | **Frontend dist** | `/opt/webphoto/photo-storage/dist` |
 | **SSL certs** | `/etc/letsencrypt/live/bhquan.site/` |
-| **Docker containers** | photo-api, photo-worker, photo-mysql, photo-redis |
+| **Docker containers** | photo-api, photo-worker, shared-mysql, shared-redis |
 | **Ports** | 4000 (API), 4001 (Socket.io), 3306 (MySQL), 6379 (Redis) |
 | **Default admin** | admin@photostorage.com / admin123 |

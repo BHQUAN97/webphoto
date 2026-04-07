@@ -98,7 +98,7 @@ XU LY LOI THUONG GAP
   2. API khong phan hoi:
      - docker logs photo-api --tail 50
      - Kiem tra MySQL:
-       docker exec photo-mysql mysqladmin ping
+       docker exec shared-mysql mysqladmin ping
 
   3. Anh khong hien:
      - Kiem tra CDN_URL trong docker-compose.prod.yml

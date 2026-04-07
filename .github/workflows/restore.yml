@@ -133,7 +133,7 @@ jobs:
             echo 'Restoring photo_storage database...'
 
             # Dam bao DB + user ton tai
-            docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} <<EOSQL
+            docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} <<EOSQL
               CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
               CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '\${MYSQL_PWD}';
               GRANT ALL PRIVILEGES ON photo_storage.* TO 'photo_user'@'%';
@@ -143,28 +143,28 @@ jobs:
             # Safety backup truoc khi DROP — phong truong hop restore fail
             PRE_RESTORE=/tmp/pre-restore-\$(date +%Y%m%d_%H%M%S).sql.gz
             echo \"Creating safety backup → \${PRE_RESTORE}\"
-            docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+            docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
               --single-transaction --quick photo_storage 2>/dev/null | gzip > \${PRE_RESTORE}
             PRE_SIZE=\$(du -h \${PRE_RESTORE} | cut -f1)
             echo \"Safety backup: \${PRE_SIZE}\"
 
             # Drop + recreate de restore sach
-            docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+            docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
 
             # Import dump — neu fail thi restore lai tu safety backup
-            if gunzip -c \$DUMP | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage; then
+            if gunzip -c \$DUMP | docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage; then
               echo 'Database restored!'
               rm -f \${PRE_RESTORE}
             else
               echo 'RESTORE FAILED — rolling back from safety backup...'
-              docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE IF EXISTS photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
-              gunzip -c \${PRE_RESTORE} | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage
+              docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE IF EXISTS photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+              gunzip -c \${PRE_RESTORE} | docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage
               echo 'Rollback complete. Original data preserved.'
               exit 1
             fi
 
             # Verify
-            TABLES=\$(docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"photo_storage\"' 2>/dev/null)
+            TABLES=\$(docker exec shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"photo_storage\"' 2>/dev/null)
             echo \"Tables: \${TABLES}\"
             if [ \"\${TABLES}\" -lt 1 ]; then
               echo 'WARNING: No tables found after restore!'
@@ -212,7 +212,7 @@ jobs:
           fi
 
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
-          MYSQL_CMD="docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
+          MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
           # Init tracker table
           for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do

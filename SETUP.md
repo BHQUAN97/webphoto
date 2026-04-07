@@ -25,8 +25,8 @@ docker-compose up -d
 Kiểm tra:
 ```bash
 docker ps
-# photo-mysql   Up   0.0.0.0:3306->3306
-# photo-redis   Up   0.0.0.0:6379->6379
+# shared-mysql   Up   0.0.0.0:3306->3306
+# shared-redis   Up   0.0.0.0:6379->6379
 ```
 
 ## 3. Setup Backend
@@ -168,11 +168,11 @@ bash scripts/dev.sh
 ### MySQL connection refused
 ```bash
 # Kiểm tra container
-docker ps | grep photo-mysql
-docker logs photo-mysql
+docker ps | grep shared-mysql
+docker logs shared-mysql
 
 # Đợi MySQL ready (30s sau khi start)
-docker exec photo-mysql mysqladmin ping -h localhost -u root -proot123
+docker exec shared-mysql mysqladmin ping -h localhost -u root -proot123
 ```
 
 ### Port already in use
@@ -192,6 +192,6 @@ TypeError: Do not know how to serialize a BigInt
 ### Redis connection error
 ```bash
 # Kiểm tra Redis
-docker exec photo-redis redis-cli ping
+docker exec shared-redis redis-cli ping
 # → PONG
 ```

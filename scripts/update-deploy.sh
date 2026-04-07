@@ -79,7 +79,7 @@ if [ -d "$CHANGELOG_DIR" ] && ls "$CHANGELOG_DIR"/V*.sql 1>/dev/null 2>&1; then
   for f in $(find "$CHANGELOG_DIR" -name 'V*.sql' -type f | sort); do
     FNAME=$(basename "$f")
     echo -n "  $FNAME ... "
-    OUTPUT=$(ssh "${VPS_HOST}" "docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage" < "$f" 2>&1)
+    OUTPUT=$(ssh "${VPS_HOST}" "docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage" < "$f" 2>&1)
     if [ $? -eq 0 ]; then
       echo "OK"
     else

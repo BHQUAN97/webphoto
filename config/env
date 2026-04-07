@@ -17,7 +17,7 @@ VPS_PASSWORD=12345678@Abc
 # -- API URL (cho cron jobs goi API tu ben ngoai) --
 API_URL=https://bhquan.site
 
-# -- MySQL (shared: photo-mysql container) --
+# -- MySQL (shared: shared-mysql container) --
 # Root password cho MySQL server (dung chung cho tat ca project)
 MYSQL_ROOT_PASSWORD=8bb34f47771a83d9ab543bc0f47d5e1a
 # Password cho user photo_user (app connect den DB photo_storage)

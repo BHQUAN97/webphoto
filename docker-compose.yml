@@ -5,7 +5,7 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: photo-mysql
+    container_name: shared-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root123
@@ -23,7 +23,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: photo-redis
+    container_name: shared-redis
     restart: unless-stopped
     ports:
       - '6379:6379'

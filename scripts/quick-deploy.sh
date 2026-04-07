@@ -136,7 +136,7 @@ services:
 
   mysql:
     image: mysql:8.0
-    container_name: photo-mysql
+    container_name: shared-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: \${MYSQL_ROOT_PASSWORD:-StrongRootPass2024!}
@@ -161,7 +161,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: photo-redis
+    container_name: shared-redis
     restart: always
     command: redis-server --maxmemory 128mb --maxmemory-policy noeviction --appendonly yes
     volumes:
@@ -275,7 +275,7 @@ ssh "${VPS_HOST}" "
 
   echo '  Waiting for MySQL...'
   for i in \$(seq 1 60); do
-    if docker exec photo-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+    if docker exec shared-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
       echo '  MySQL ready'
       break
     fi

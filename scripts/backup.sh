@@ -20,7 +20,7 @@ fi
 mkdir -p "$BACKUP_DIR"
 
 echo "Backing up database..."
-docker exec photo-mysql mysqldump -u root -p"${MYSQL_ROOT_PASSWORD}" \
+docker exec shared-mysql mysqldump -u root -p"${MYSQL_ROOT_PASSWORD}" \
   photo_storage --single-transaction --routines --triggers --events --quick \
   | gzip > "${BACKUP_DIR}/${FILENAME}"
 
