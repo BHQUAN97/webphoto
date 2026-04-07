@@ -137,36 +137,32 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
-          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}"
+          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/{nginx/conf.d,photo-storage/server,scripts,db/changelog}"
 
-          sshpass -e scp -P $PORT docker-compose.prod.yml $VPS:${APP_DIR}/
-          sshpass -e scp -P $PORT docker-compose.tunnel.yml $VPS:${APP_DIR}/ 2>/dev/null || true
-          sshpass -e scp -P $PORT .env.example $VPS:${APP_DIR}/
+          # Tar pipe: 1 compressed stream thay vi 20+ scp calls
+          tar czf - \
+            docker-compose.prod.yml \
+            docker-compose.tunnel.yml \
+            .env.example \
+            nginx/nginx.conf \
+            nginx/conf.d/bhquan.site.init.conf.disabled \
+            nginx/conf.d/bhquan.store.conf \
+            photo-storage/dist \
+            photo-storage/server/dist \
+            photo-storage/server/package.json \
+            photo-storage/server/package-lock.json \
+            photo-storage/server/Dockerfile \
+            photo-storage/server/Dockerfile.worker \
+            scripts/deploy.sh \
+            db/changelog 2>/dev/null | \
+            sshpass -e ssh -p $PORT $VPS "tar xzf - -C ${APP_DIR}/"
 
-          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/nginx/conf.d"
-          sshpass -e scp -P $PORT nginx/nginx.conf $VPS:${APP_DIR}/nginx/
-          sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.init.conf.disabled $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
+          # Nginx init config
+          sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/nginx/conf.d/bhquan.site.init.conf.disabled ${APP_DIR}/nginx/conf.d/bhquan.site.conf"
           if sshpass -e ssh -p $PORT $VPS "test -f /opt/vietnet/docker-compose.prod.yml"; then
-            sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${APP_DIR}/nginx/conf.d/ 2>/dev/null || true
+            echo "VietNet detected — bhquan.store.conf included"
           fi
 
-          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/photo-storage"
-          sshpass -e scp -P $PORT -r photo-storage/dist $VPS:${APP_DIR}/photo-storage/
-
-          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/photo-storage/server"
-          sshpass -e scp -P $PORT -r photo-storage/server/dist $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/package.json $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/package-lock.json $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/Dockerfile $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/Dockerfile.worker $VPS:${APP_DIR}/photo-storage/server/
-
-          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/scripts"
-          sshpass -e scp -P $PORT scripts/deploy.sh $VPS:${APP_DIR}/scripts/ 2>/dev/null || true
-
-          if [ -d "db/changelog" ]; then
-            sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/db/changelog"
-            sshpass -e scp -P $PORT db/changelog/*.sql $VPS:${APP_DIR}/db/changelog/ 2>/dev/null || true
-          fi
           echo "[OK] Full project uploaded"
 
       - name: '[INIT] Upload config/env as .env'
@@ -299,7 +295,7 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "rm -rf ${APP_DIR}/photo-storage/dist"
-          sshpass -e scp -P $PORT -r photo-storage/dist $VPS:${APP_DIR}/photo-storage/
+          tar czf - photo-storage/dist | sshpass -e ssh -p $PORT $VPS "tar xzf - -C ${APP_DIR}/"
           echo "[OK] Frontend dist uploaded"
 
       - name: '[UPDATE] Upload backend dist'
@@ -308,11 +304,12 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "rm -rf ${APP_DIR}/photo-storage/server/dist"
-          sshpass -e scp -P $PORT -r photo-storage/server/dist $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/package.json $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/package-lock.json $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/Dockerfile $VPS:${APP_DIR}/photo-storage/server/
-          sshpass -e scp -P $PORT photo-storage/server/Dockerfile.worker $VPS:${APP_DIR}/photo-storage/server/
+          tar czf - photo-storage/server/dist \
+            photo-storage/server/package.json \
+            photo-storage/server/package-lock.json \
+            photo-storage/server/Dockerfile \
+            photo-storage/server/Dockerfile.worker | \
+            sshpass -e ssh -p $PORT $VPS "tar xzf - -C ${APP_DIR}/"
           echo "[OK] Backend dist uploaded"
 
       - name: '[UPDATE] Sync deploy config'
