@@ -631,27 +631,65 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+          SSH_OPTS="-o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3"
+
+          # Test SSH truoc khi health check
+          echo "Testing SSH connection..."
+          if ! sshpass -e ssh -p $PORT $SSH_OPTS $VPS "echo SSH_OK" 2>&1; then
+            echo "ERROR: SSH connection failed (exit=$?)"
+            echo "VPS=$VPS PORT=$PORT"
+            echo "Trying verbose SSH for diagnostics..."
+            sshpass -e ssh -v -p $PORT $SSH_OPTS $VPS "echo SSH_OK" 2>&1 || true
+            exit 1
+          fi
 
           echo "Waiting for API health..."
           for i in $(seq 1 15); do
-            RESULT=$(sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" 2>&1)
-            if [ $? -eq 0 ] && [ -n "$RESULT" ]; then
-              echo "API healthy (${i}s): $RESULT"
+            RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "curl -sf http://localhost:4000/api/health" 2>&1)
+            SSH_EXIT=$?
+            if [ $SSH_EXIT -eq 0 ] && [ -n "$RESULT" ]; then
+              echo "API healthy (attempt $i): $RESULT"
               echo "Deploy successful! (mode=${{ steps.detect.outputs.mode }}, fe=${{ steps.changes.outputs.fe }}, be=${{ steps.changes.outputs.be }}, infra=${{ steps.changes.outputs.infra }})"
               exit 0
             fi
+            echo "  attempt $i: ssh_exit=$SSH_EXIT result='$RESULT'"
             sleep 2
           done
 
+          echo ""
           echo "ERROR: Health check failed after 30s"
           echo "Last response: $RESULT"
+
+          # Diagnostics — gom vao 1 SSH call duy nhat de tranh connection exhaustion
           echo ""
-          echo "=== Container status ==="
-          sshpass -e ssh -p $PORT $VPS "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'photo|shared'" 2>&1
-          echo ""
-          echo "=== API logs (last 30) ==="
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 30 --no-color" 2>&1
-          echo ""
-          echo "=== Redis check ==="
-          sshpass -e ssh -p $PORT $VPS "docker exec shared-redis redis-cli CONFIG GET maxmemory-policy" 2>&1
+          echo "=== DIAGNOSTICS (single SSH call) ==="
+          sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
+            echo '--- Container status ---'
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'photo|shared' || echo '(no containers found)'
+
+            echo ''
+            echo '--- API logs (last 50) ---'
+            cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 50 --no-color 2>&1 || echo '(failed to get API logs)'
+
+            echo ''
+            echo '--- Worker logs (last 15) ---'
+            docker compose -f docker-compose.prod.yml logs worker --tail 15 --no-color 2>&1 || echo '(failed to get worker logs)'
+
+            echo ''
+            echo '--- Curl verbose ---'
+            curl -v http://localhost:4000/api/health 2>&1 || echo '(curl failed)'
+
+            echo ''
+            echo '--- Redis check ---'
+            docker exec shared-redis redis-cli CONFIG GET maxmemory-policy 2>&1 || echo '(redis unreachable)'
+
+            echo ''
+            echo '--- Docker networks ---'
+            docker network ls | grep -E 'webphoto|vietnet' || echo '(no networks)'
+
+            echo ''
+            echo '--- Disk/Memory ---'
+            df -h / | tail -1
+            free -h | head -2
+          " 2>&1 || echo "WARNING: Diagnostic SSH call also failed (exit=$?)"
           exit 1
