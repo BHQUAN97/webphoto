@@ -202,7 +202,7 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' <<EOSQL
             CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
             CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
-            GRANT ALL PRIVILEGES ON photo_storage.* TO 'photo_user'@'%';
+            GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
             FLUSH PRIVILEGES;
             SELECT '[OK] photo_storage database + photo_user ready' AS result;
           EOSQL"
@@ -373,6 +373,7 @@ jobs:
 
       - name: Run DB Changelog (directory-versioned)
         run: |
+          set +e
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
@@ -381,12 +382,58 @@ jobs:
             exit 0
           fi
 
+          # --- Debug: Read password from VPS .env ---
+          echo "[1/5] Reading MYSQL_PASSWORD from VPS .env..."
           MYSQL_PWD=$(sshpass -e ssh -p $PORT $VPS "grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env | cut -d= -f2-")
+          if [ -z "$MYSQL_PWD" ]; then
+            echo "ERROR: MYSQL_PASSWORD is empty! Check ${APP_DIR}/.env on VPS"
+            sshpass -e ssh -p $PORT $VPS "ls -la ${APP_DIR}/.env 2>&1; grep -c 'MYSQL_PASSWORD' ${APP_DIR}/.env 2>&1 || echo '.env not found'"
+            exit 1
+          fi
+          echo "  MYSQL_PASSWORD found (${#MYSQL_PWD} chars)"
+
           MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
+          # --- Debug: Test MySQL connection ---
+          echo "[2/5] Testing MySQL connection as photo_user..."
+          TEST_OUTPUT=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} -e 'SELECT 1 AS connection_ok'" 2>&1)
+          TEST_EXIT=$?
+          if [ $TEST_EXIT -ne 0 ]; then
+            echo "ERROR: Cannot connect to MySQL as photo_user (exit=$TEST_EXIT)"
+            echo "$TEST_OUTPUT"
+            echo ""
+            echo "--- Checking shared-mysql container ---"
+            sshpass -e ssh -p $PORT $VPS "docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'"
+            echo "--- Checking MySQL users ---"
+            MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
+            sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' -e \"SELECT User, Host FROM mysql.user; SHOW DATABASES;\"" 2>&1 || echo "(root login also failed)"
+            exit 1
+          fi
+          echo "  Connection OK"
+
+          # --- Debug: Test DB access ---
+          echo "[3/5] Testing photo_storage database access..."
+          DB_OUTPUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e 'SHOW TABLES'" 2>&1)
+          DB_EXIT=$?
+          if [ $DB_EXIT -ne 0 ]; then
+            echo "ERROR: Cannot access photo_storage database (exit=$DB_EXIT)"
+            echo "$DB_OUTPUT"
+            exit 1
+          fi
+          echo "  Tables in photo_storage: $(echo "$DB_OUTPUT" | tail -n +2 | wc -l)"
+
           # Step 1: Ensure schema_changelog table exists (_init/)
+          echo "[4/5] Running _init scripts..."
           for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
-            sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" > /dev/null 2>&1
+            echo "  Running $(basename $f)..."
+            INIT_OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
+            INIT_EXIT=$?
+            if [ $INIT_EXIT -ne 0 ]; then
+              echo "  WARNING: $(basename $f) failed (exit=$INIT_EXIT)"
+              echo "$INIT_OUT" | tail -3 | sed 's/^/    /'
+            else
+              echo "  OK"
+            fi
           done
 
           # Step 2: Get already-applied migrations (version/filename)
@@ -394,6 +441,7 @@ jobs:
           echo "Already applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
 
           # Step 3: Run unapplied migrations per version directory
+          echo "[5/5] Running migrations..."
           PASS=0
           SKIP=0
           FAIL=0
@@ -429,8 +477,8 @@ jobs:
                 echo "OK (${DURATION_MS}ms)"
                 ((PASS++))
               else
-                echo "FAILED"
-                echo "$OUTPUT" | tail -5 | sed 's/^/    /'
+                echo "FAILED (exit=$EXIT_CODE)"
+                echo "$OUTPUT" | sed 's/^/    /'
                 ((FAIL++))
               fi
             done

@@ -136,7 +136,7 @@ jobs:
             docker exec -i shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} <<EOSQL
               CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
               CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '\${MYSQL_PWD}';
-              GRANT ALL PRIVILEGES ON photo_storage.* TO 'photo_user'@'%';
+              GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
               FLUSH PRIVILEGES;
           EOSQL
 
