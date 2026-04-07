@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:4000` (dev) | `https://bhquan.site` (prod)
 
-Tất cả request/response dùng JSON. Authentication qua HttpOnly cookie hoặc `Authorization: Bearer <token>`.
+Tất cả request/response dùng JSON. Authentication qua HttpOnly cookie hoặc `Authorization: Bearer <token>`
 
 ---
 
