@@ -65,7 +65,7 @@ ssh "${VPS_HOST}" "
   docker network create vietnet_frontend 2>/dev/null || true
   cd ${APP_DIR}
   docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
-  docker compose -f docker-compose.prod.yml up -d api worker
+  docker compose -f docker-compose.prod.yml up -d api worker nginx
   docker exec shared-nginx nginx -s reload 2>/dev/null || true
   echo 'Restarted'
 "

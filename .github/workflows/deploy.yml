@@ -375,8 +375,8 @@ jobs:
             exit 1
           fi
 
-          echo "--- Restarting api + worker ---"
-          UP_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d api worker 2>&1")
+          echo "--- Restarting api + worker + nginx ---"
+          UP_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d api worker nginx 2>&1")
           if [ $? -ne 0 ]; then
             echo "ERROR: docker compose up failed"
             echo "$UP_OUT"
@@ -399,9 +399,9 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-          # FE dist duoc serve boi API container — restart de pick up new files
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml restart api 2>&1"
-          echo "[OK] API restarted (FE-only change, no rebuild)"
+          # FE dist duoc serve boi nginx — restart api + nginx de pick up new files
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d nginx && docker compose -f docker-compose.prod.yml restart api 2>&1"
+          echo "[OK] API + Nginx restarted (FE-only change, no rebuild)"
 
       # ══════════════════════════════════════════
       # SHARED STEPS (both init and update)
@@ -643,10 +643,13 @@ jobs:
             exit 1
           fi
 
+          # Ensure nginx is running (may have been missed by conditional steps)
+          sshpass -e ssh -p $PORT $SSH_OPTS $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d nginx 2>&1" || true
+
           echo "Waiting for API health..."
           set +e
           for i in $(seq 1 15); do
-            RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "curl -sf http://localhost:4000/api/health" 2>&1)
+            RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "docker exec photo-api curl -sf http://localhost:4000/api/health" 2>&1)
             SSH_EXIT=$?
             if [ $SSH_EXIT -eq 0 ] && [ -n "$RESULT" ]; then
               echo "API healthy (attempt $i): $RESULT"
