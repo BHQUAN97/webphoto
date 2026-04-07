@@ -91,6 +91,40 @@ jobs:
               echo 'VietNet: no uploads (skip)'
             fi
 
+            # ── Verify backup integrity ──
+            echo ''
+            echo '=== Verify backups ==='
+            VERIFY_FAIL=0
+
+            for gz in \$(find \$BACKUP_DIR -name '*.sql.gz' -type f); do
+              if gunzip -t \"\$gz\" 2>/dev/null; then
+                SIZE=\$(stat -c%s \"\$gz\")
+                if [ \"\$SIZE\" -lt 100 ]; then
+                  echo \"FAIL: \$(basename \$gz) too small (\${SIZE} bytes)\"
+                  VERIFY_FAIL=1
+                else
+                  echo \"OK: \$(basename \$gz) (\$(du -h \$gz | cut -f1))\"
+                fi
+              else
+                echo \"FAIL: \$(basename \$gz) corrupt (gunzip -t failed)\"
+                VERIFY_FAIL=1
+              fi
+            done
+
+            for z in \$(find \$BACKUP_DIR -name '*.zip' -type f); do
+              if unzip -tq \"\$z\" > /dev/null 2>&1; then
+                echo \"OK: \$(basename \$z) (\$(du -h \$z | cut -f1))\"
+              else
+                echo \"FAIL: \$(basename \$z) corrupt (unzip -t failed)\"
+                VERIFY_FAIL=1
+              fi
+            done
+
+            if [ \$VERIFY_FAIL -eq 1 ]; then
+              echo 'ERROR: Backup verification failed!'
+              exit 1
+            fi
+
             echo ''
             echo '=== All backup files ==='
             find \$BACKUP_DIR -type f -exec ls -lh {} \;
@@ -108,6 +142,25 @@ jobs:
           echo "Downloaded:"
           find /tmp/backups -type f -exec ls -lh {} \;
 
+      - name: Encrypt backups
+        run: |
+          ENCRYPT_KEY=$(grep '^BACKUP_ENCRYPT_KEY=' config/env | cut -d= -f2-)
+          if [ -z "$ENCRYPT_KEY" ]; then
+            echo "WARNING: BACKUP_ENCRYPT_KEY not set in config/env — skipping encryption"
+            exit 0
+          fi
+
+          # Encrypt tat ca backup files bang GPG symmetric (AES-256)
+          for f in $(find /tmp/backups -type f \( -name '*.sql.gz' -o -name '*.zip' \)); do
+            gpg --batch --yes --passphrase "${ENCRYPT_KEY}" \
+              --symmetric --cipher-algo AES256 "$f"
+            rm -f "$f"
+            echo "Encrypted: $(basename "$f").gpg"
+          done
+
+          echo "All backups encrypted"
+          find /tmp/backups -type f -exec ls -lh {} \;
+
       - name: Push to backups branch
         run: |
           DATE="${{ env.DATE }}"
@@ -119,19 +172,22 @@ jobs:
           else
             git checkout --orphan backups
             git rm -rf . > /dev/null 2>&1 || true
-            echo "# Backups" > README.md
+            echo "# Backups (encrypted)" > README.md
             echo "" >> README.md
-            echo "Auto-generated daily backups. Structure:" >> README.md
+            echo "Auto-generated daily backups. All files encrypted with AES-256." >> README.md
+            echo "" >> README.md
+            echo "Decrypt: gpg --decrypt --output FILE FILE.gpg" >> README.md
+            echo "" >> README.md
             echo '```' >> README.md
-            echo "webphoto/YYYY-MM-DD/photo_storage.sql.gz" >> README.md
-            echo "webphoto/YYYY-MM-DD/uploads.zip" >> README.md
-            echo "vietnet/YYYY-MM-DD/vietnet.sql.gz" >> README.md
-            echo "vietnet/YYYY-MM-DD/uploads.zip" >> README.md
+            echo "webphoto/YYYY-MM-DD/photo_storage.sql.gz.gpg" >> README.md
+            echo "webphoto/YYYY-MM-DD/uploads.zip.gpg" >> README.md
+            echo "vietnet/YYYY-MM-DD/vietnet.sql.gz.gpg" >> README.md
+            echo "vietnet/YYYY-MM-DD/uploads.zip.gpg" >> README.md
             echo '```' >> README.md
             git add README.md
           fi
 
-          # Copy backup files vao dung cau truc
+          # Copy encrypted backup files vao dung cau truc
           for project in webphoto vietnet; do
             if [ -d "/tmp/backups/${project}" ]; then
               mkdir -p "${project}/${DATE}"

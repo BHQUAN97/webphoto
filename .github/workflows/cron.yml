@@ -15,7 +15,7 @@ jobs:
       - name: Run expire-images cron
         run: |
           source config/env
-          curl -f -s -H "x-cron-secret: ${CRON_SECRET}" \
+          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
             "${API_URL}/api/cron/expire-images"
 
   reconcile-quota:
@@ -26,7 +26,7 @@ jobs:
       - name: Run reconcile-quota cron
         run: |
           source config/env
-          curl -f -s -H "x-cron-secret: ${CRON_SECRET}" \
+          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
             "${API_URL}/api/cron/reconcile-quota"
 
   remind-payments:
@@ -37,5 +37,5 @@ jobs:
       - name: Run remind-payments cron
         run: |
           source config/env
-          curl -f -s -H "x-cron-secret: ${CRON_SECRET}" \
+          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
             "${API_URL}/api/cron/remind-payments"

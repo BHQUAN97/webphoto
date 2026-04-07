@@ -81,6 +81,27 @@ jobs:
           cp -r webphoto/${DATE} /tmp/restore/webphoto
           git checkout main
 
+      # ── Decrypt backup files (neu co encrypt) ──
+      - name: Decrypt backups
+        run: |
+          ENCRYPT_KEY=$(grep '^BACKUP_ENCRYPT_KEY=' config/env | cut -d= -f2-)
+          GPG_COUNT=$(find /tmp/restore -name '*.gpg' -type f 2>/dev/null | wc -l)
+          if [ "$GPG_COUNT" -eq 0 ]; then
+            echo "No encrypted files — skip"
+            exit 0
+          fi
+          if [ -z "$ENCRYPT_KEY" ]; then
+            echo "ERROR: Found .gpg files but BACKUP_ENCRYPT_KEY not set!"
+            exit 1
+          fi
+          for f in $(find /tmp/restore -name '*.gpg' -type f); do
+            OUTPUT="${f%.gpg}"
+            gpg --batch --yes --passphrase "${ENCRYPT_KEY}" \
+              --decrypt --output "$OUTPUT" "$f"
+            rm -f "$f"
+            echo "Decrypted: $(basename "$OUTPUT")"
+          done
+
       # ── Upload backup len VPS ──
       - name: Upload backup to VPS
         run: |
@@ -119,16 +140,36 @@ jobs:
               FLUSH PRIVILEGES;
           EOSQL
 
+            # Safety backup truoc khi DROP — phong truong hop restore fail
+            PRE_RESTORE=/tmp/pre-restore-\$(date +%Y%m%d_%H%M%S).sql.gz
+            echo \"Creating safety backup → \${PRE_RESTORE}\"
+            docker exec photo-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
+              --single-transaction --quick photo_storage 2>/dev/null | gzip > \${PRE_RESTORE}
+            PRE_SIZE=\$(du -h \${PRE_RESTORE} | cut -f1)
+            echo \"Safety backup: \${PRE_SIZE}\"
+
             # Drop + recreate de restore sach
             docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
 
-            # Import dump
-            gunzip -c \$DUMP | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage
-            echo 'Database restored!'
+            # Import dump — neu fail thi restore lai tu safety backup
+            if gunzip -c \$DUMP | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage; then
+              echo 'Database restored!'
+              rm -f \${PRE_RESTORE}
+            else
+              echo 'RESTORE FAILED — rolling back from safety backup...'
+              docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE IF EXISTS photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+              gunzip -c \${PRE_RESTORE} | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage
+              echo 'Rollback complete. Original data preserved.'
+              exit 1
+            fi
 
             # Verify
             TABLES=\$(docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"photo_storage\"' 2>/dev/null)
             echo \"Tables: \${TABLES}\"
+            if [ \"\${TABLES}\" -lt 1 ]; then
+              echo 'WARNING: No tables found after restore!'
+              exit 1
+            fi
           "
 
       # ── Restore uploads ──
