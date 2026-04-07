@@ -1,0 +1,439 @@
+name: Restore Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project to restore'
+        required: true
+        type: choice
+        options:
+          - webphoto
+          - vietnet
+          - both
+      date:
+        description: 'Backup date (YYYY-MM-DD), empty = latest'
+        required: false
+        default: ''
+      restore_db:
+        description: 'Restore database?'
+        required: true
+        type: boolean
+        default: true
+      restore_uploads:
+        description: 'Restore uploads?'
+        required: true
+        type: boolean
+        default: true
+      run_changelog:
+        description: 'Run DB changelog after restore? (upgrade to latest schema)'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  INFRA_DIR: /opt/infra
+  WEBPHOTO_DIR: /opt/webphoto
+  VIETNET_DIR: /opt/vietnet
+
+jobs:
+  restore:
+    name: "Restore ${{ inputs.project }} (${{ inputs.date || 'latest' }})"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load config/env
+        run: |
+          grep -v '^#' config/env | grep -v '^$' | grep '=' >> $GITHUB_ENV
+          PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
+          echo "SSHPASS=${PASS}" >> $GITHUB_ENV
+
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      # ── Tim backup date ──
+      - name: Resolve backup date
+        id: resolve
+        run: |
+          git fetch origin backups
+          git checkout origin/backups -- . 2>/dev/null || { echo "Branch 'backups' not found"; exit 1; }
+
+          if [ -n "${{ inputs.date }}" ]; then
+            DATE="${{ inputs.date }}"
+          else
+            # Tim ngay moi nhat
+            DATE=""
+            for project in webphoto vietnet; do
+              if [ "${{ inputs.project }}" = "both" ] || [ "${{ inputs.project }}" = "$project" ]; then
+                LATEST=$(ls -d ${project}/????-??-?? 2>/dev/null | sort -r | head -1 | xargs basename 2>/dev/null || echo "")
+                if [ -n "$LATEST" ] && { [ -z "$DATE" ] || [[ "$LATEST" > "$DATE" ]]; }; then
+                  DATE="$LATEST"
+                fi
+              fi
+            done
+          fi
+
+          if [ -z "$DATE" ]; then
+            echo "No backup found!"
+            exit 1
+          fi
+
+          echo "date=${DATE}" >> $GITHUB_OUTPUT
+          echo "Backup date: ${DATE}"
+
+          # Kiem tra file ton tai
+          echo ""
+          echo "=== Available files ==="
+          for project in webphoto vietnet; do
+            if [ "${{ inputs.project }}" = "both" ] || [ "${{ inputs.project }}" = "$project" ]; then
+              if [ -d "${project}/${DATE}" ]; then
+                ls -lh ${project}/${DATE}/
+              else
+                echo "${project}/${DATE}/ — NOT FOUND"
+              fi
+            fi
+          done
+
+          # Quay lai main branch, giu backup files
+          mkdir -p /tmp/restore
+          for project in webphoto vietnet; do
+            if [ -d "${project}/${DATE}" ]; then
+              cp -r ${project}/${DATE} /tmp/restore/${project}
+            fi
+          done
+          git checkout main
+
+      # ── Upload backup len VPS ──
+      - name: Upload backup to VPS
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          DATE="${{ steps.resolve.outputs.date }}"
+
+          sshpass -e ssh -p $PORT $VPS "mkdir -p /tmp/restore"
+
+          for project in webphoto vietnet; do
+            if [ "${{ inputs.project }}" = "both" ] || [ "${{ inputs.project }}" = "$project" ]; then
+              if [ -d "/tmp/restore/${project}" ]; then
+                sshpass -e ssh -p $PORT $VPS "mkdir -p /tmp/restore/${project}"
+                sshpass -e scp -P $PORT /tmp/restore/${project}/* $VPS:/tmp/restore/${project}/
+                echo "Uploaded ${project} backup files"
+              else
+                echo "No backup files for ${project} — skip"
+              fi
+            fi
+          done
+
+      # ── Restore WebPhoto ──
+      - name: "[WebPhoto] Restore database"
+        if: >
+          inputs.restore_db &&
+          (inputs.project == 'webphoto' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            set -e
+            DUMP=/tmp/restore/webphoto/photo_storage.sql.gz
+            if [ ! -f \$DUMP ]; then
+              echo 'No DB dump found — skip'
+              exit 0
+            fi
+
+            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env | cut -d= -f2-)
+            MYSQL_PWD=\$(grep '^MYSQL_PASSWORD=' ${WEBPHOTO_DIR}/.env | cut -d= -f2-)
+
+            echo 'Restoring photo_storage database...'
+
+            # Dam bao DB + user ton tai
+            docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} <<EOSQL
+              CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+              CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '\${MYSQL_PWD}';
+              GRANT ALL PRIVILEGES ON photo_storage.* TO 'photo_user'@'%';
+              FLUSH PRIVILEGES;
+          EOSQL
+
+            # Drop + recreate de restore sach
+            docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE photo_storage; CREATE DATABASE photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+
+            # Import dump
+            gunzip -c \$DUMP | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} photo_storage
+            echo 'Database restored!'
+
+            # Verify
+            TABLES=\$(docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"photo_storage\"' 2>/dev/null)
+            echo \"Tables: \${TABLES}\"
+          "
+
+      - name: "[WebPhoto] Restore uploads"
+        if: >
+          inputs.restore_uploads &&
+          (inputs.project == 'webphoto' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            ZIP=/tmp/restore/webphoto/uploads.zip
+            if [ ! -f \$ZIP ]; then
+              echo 'No uploads backup — skip'
+              exit 0
+            fi
+
+            # Tim upload directory
+            WP_UPLOADS=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/uploads\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
+            if [ -z \"\$WP_UPLOADS\" ]; then
+              echo 'photo-api not running or no uploads mount — skip'
+              exit 0
+            fi
+
+            echo \"Restoring uploads to \$WP_UPLOADS...\"
+            mkdir -p \$WP_UPLOADS
+            unzip -qo \$ZIP -d \$WP_UPLOADS
+            echo \"Files: \$(find \$WP_UPLOADS -type f | wc -l)\"
+            echo 'Uploads restored!'
+          "
+
+      # ── Restore VietNet ──
+      - name: "[VietNet] Restore database"
+        if: >
+          inputs.restore_db &&
+          (inputs.project == 'vietnet' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            set -e
+            DUMP=/tmp/restore/vietnet/vietnet.sql.gz
+            if [ ! -f \$DUMP ]; then
+              echo 'No DB dump found — skip'
+              exit 0
+            fi
+
+            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env | cut -d= -f2-)
+            VIETNET_PWD=\$(grep '^VIETNET_DB_PASSWORD=' ${VIETNET_DIR}/.env | cut -d= -f2- 2>/dev/null || echo '')
+
+            echo 'Restoring vietnet database...'
+
+            # Dam bao DB + user ton tai
+            if [ -n \"\$VIETNET_PWD\" ]; then
+              docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} <<EOSQL
+                CREATE DATABASE IF NOT EXISTS vietnet CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+                CREATE USER IF NOT EXISTS 'vietnet'@'%' IDENTIFIED BY '\${VIETNET_PWD}';
+                GRANT ALL PRIVILEGES ON vietnet.* TO 'vietnet'@'%';
+                FLUSH PRIVILEGES;
+          EOSQL
+            fi
+
+            # Drop + recreate
+            docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'DROP DATABASE IF EXISTS vietnet; CREATE DATABASE vietnet CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+
+            # Import
+            gunzip -c \$DUMP | docker exec -i photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} vietnet
+            echo 'Database restored!'
+
+            TABLES=\$(docker exec photo-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\"vietnet\"' 2>/dev/null)
+            echo \"Tables: \${TABLES}\"
+          "
+
+      - name: "[VietNet] Restore uploads"
+        if: >
+          inputs.restore_uploads &&
+          (inputs.project == 'vietnet' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            ZIP=/tmp/restore/vietnet/uploads.zip
+            if [ ! -f \$ZIP ]; then
+              echo 'No uploads backup — skip'
+              exit 0
+            fi
+
+            VN_UPLOADS=\$(docker volume inspect vietnet_uploads --format '{{.Mountpoint}}' 2>/dev/null || echo '')
+            if [ -z \"\$VN_UPLOADS\" ]; then
+              echo 'vietnet_uploads volume not found — skip'
+              exit 0
+            fi
+
+            echo \"Restoring uploads to \$VN_UPLOADS...\"
+            mkdir -p \$VN_UPLOADS
+            unzip -qo \$ZIP -d \$VN_UPLOADS
+            echo \"Files: \$(find \$VN_UPLOADS -type f | wc -l)\"
+            echo 'Uploads restored!'
+          "
+
+      # ── DB Changelog — nang cap schema len version moi nhat ──
+      - name: "[WebPhoto] Run DB changelog"
+        if: >
+          inputs.run_changelog && inputs.restore_db &&
+          (inputs.project == 'webphoto' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          if [ ! -d "db/changelog" ]; then
+            echo "No WebPhoto changelog — skip"
+            exit 0
+          fi
+
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+          MYSQL_CMD="docker exec -i photo-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
+
+          # Init tracker table
+          for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
+            sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" > /dev/null 2>&1
+          done
+
+          # Get applied
+          APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
+
+          echo "=== WebPhoto DB Changelog ==="
+          PASS=0; SKIP=0; FAIL=0
+
+          for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
+            VER=$(basename "$ver_dir")
+            echo "── $VER ──"
+            for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
+              FNAME=$(basename "$f")
+              KEY="${VER}/${FNAME}"
+              if echo "$APPLIED" | grep -qF "$KEY"; then
+                echo "  $FNAME ... SKIP"
+                ((SKIP++)); continue
+              fi
+              echo -n "  $FNAME ... "
+              if sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1; then
+                DESC=$(echo "$FNAME" | sed 's/^[0-9]*__//; s/\.sql$//; s/_/ /g')
+                CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
+                sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"REPLACE INTO schema_changelog (version, filename, description, applied_by, checksum) VALUES ('$VER', '$FNAME', '$DESC', 'restore', '$CHECKSUM')\"" 2>/dev/null
+                echo "OK"; ((PASS++))
+              else
+                echo "FAILED"; ((FAIL++))
+              fi
+            done
+          done
+          echo "Result: $PASS applied, $SKIP skipped, $FAIL failed"
+          if [ $FAIL -gt 0 ]; then exit 1; fi
+
+      - name: "[VietNet] Run DB changelog"
+        if: >
+          inputs.run_changelog && inputs.restore_db &&
+          (inputs.project == 'vietnet' || inputs.project == 'both')
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          # VietNet changelog nam o repo VietNet — clone nhanh
+          echo "Fetching VietNet changelog..."
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/BHQUAN97/VietNet2026.git /tmp/vietnet-repo 2>/dev/null || {
+            echo "Cannot clone VietNet repo — skip changelog"
+            exit 0
+          }
+          cd /tmp/vietnet-repo
+          git sparse-checkout set db/changelog config/env 2>/dev/null
+
+          if [ ! -d "db/changelog" ]; then
+            echo "No VietNet changelog — skip"
+            exit 0
+          fi
+
+          VIETNET_PWD=$(grep '^VIETNET_DB_PASSWORD=' config/env | cut -d= -f2-)
+          MYSQL_CMD="docker exec -i photo-mysql mysql -u vietnet -p${VIETNET_PWD} vietnet"
+
+          # Init tracker table
+          for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
+            sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" > /dev/null 2>&1
+          done
+
+          APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
+
+          echo "=== VietNet DB Changelog ==="
+          PASS=0; SKIP=0; FAIL=0
+
+          for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
+            VER=$(basename "$ver_dir")
+            echo "── $VER ──"
+            for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
+              FNAME=$(basename "$f")
+              KEY="${VER}/${FNAME}"
+              if echo "$APPLIED" | grep -qF "$KEY"; then
+                echo "  $FNAME ... SKIP"
+                ((SKIP++)); continue
+              fi
+              echo -n "  $FNAME ... "
+              if sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1; then
+                DESC=$(echo "$FNAME" | sed 's/^[0-9]*__//; s/\.sql$//; s/_/ /g')
+                CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
+                sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"REPLACE INTO schema_changelog (version, filename, description, applied_by, checksum) VALUES ('$VER', '$FNAME', '$DESC', 'restore', '$CHECKSUM')\"" 2>/dev/null
+                echo "OK"; ((PASS++))
+              else
+                echo "FAILED"; ((FAIL++))
+              fi
+            done
+          done
+          echo "Result: $PASS applied, $SKIP skipped, $FAIL failed"
+          if [ $FAIL -gt 0 ]; then exit 1; fi
+
+      # ── Restart services ──
+      - name: Restart services
+        if: inputs.restore_db
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            if [ '${{ inputs.project }}' = 'webphoto' ] || [ '${{ inputs.project }}' = 'both' ]; then
+              if [ -f ${WEBPHOTO_DIR}/docker-compose.prod.yml ]; then
+                echo 'Restarting WebPhoto...'
+                cd ${WEBPHOTO_DIR} && docker compose -f docker-compose.prod.yml restart api worker 2>/dev/null && echo 'OK' || echo 'not deployed'
+              fi
+            fi
+
+            if [ '${{ inputs.project }}' = 'vietnet' ] || [ '${{ inputs.project }}' = 'both' ]; then
+              if [ -f ${VIETNET_DIR}/docker-compose.prod.yml ]; then
+                echo 'Restarting VietNet...'
+                cd ${VIETNET_DIR} && docker compose -f docker-compose.prod.yml restart backend frontend 2>/dev/null && echo 'OK' || echo 'not deployed'
+              fi
+            fi
+          "
+
+      # ── Cleanup + Health check ──
+      - name: Cleanup
+        if: always()
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/restore" 2>/dev/null || true
+
+      - name: Health check
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          sleep 5
+
+          if [ "${{ inputs.project }}" = "webphoto" ] || [ "${{ inputs.project }}" = "both" ]; then
+            sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" && echo " WebPhoto: OK" || echo " WebPhoto: DOWN (may not be deployed yet)"
+          fi
+
+          if [ "${{ inputs.project }}" = "vietnet" ] || [ "${{ inputs.project }}" = "both" ]; then
+            sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4100/api/health" && echo " VietNet: OK" || echo " VietNet: DOWN (may not be deployed yet)"
+          fi
+
+      - name: Summary
+        run: |
+          echo "======================================="
+          echo "Restore completed"
+          echo "  Project:   ${{ inputs.project }}"
+          echo "  Date:      ${{ steps.resolve.outputs.date }}"
+          echo "  DB:        ${{ inputs.restore_db }}"
+          echo "  Uploads:   ${{ inputs.restore_uploads }}"
+          echo "  Changelog: ${{ inputs.run_changelog }}"
+          echo "======================================="
