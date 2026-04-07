@@ -456,6 +456,26 @@ jobs:
           fi
           echo "[OK] Schema ($TABLE_COUNT tables)"
 
+      - name: Wait for API container ready
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          echo "Waiting for api container..."
+          for i in $(seq 1 30); do
+            STATUS=$(sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{.State.Status}}' photo-api 2>/dev/null" 2>&1)
+            if [ "$STATUS" = "running" ]; then
+              echo "  API container running (${i}s)"
+              sleep 2  # extra buffer for app init
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: API container not running after 30s (status=$STATUS)"
+              sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 20" 2>&1
+              exit 1
+            fi
+            sleep 1
+          done
+
       - name: Seed database
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
