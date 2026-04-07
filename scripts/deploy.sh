@@ -252,3 +252,4 @@ echo "    Logs:     $DC $COMPOSE_FILES logs -f"
 echo "    Stop:     $DC $COMPOSE_FILES down"
 echo "    Restart:  $DC $COMPOSE_FILES restart api worker"
 echo "=========================================="
+# 2026-04-07T16:43:39Z
