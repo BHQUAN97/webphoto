@@ -59,14 +59,18 @@ fi
 
 # 4. Lay certificate that tu Let's Encrypt (timeout 120s)
 echo "[4/5] Requesting SSL certificate..."
+
+# Xoa placeholder cert (certbot tu choi ghi de thu muc khong phai cua no)
+$DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c \
+  "rm -rf /etc/letsencrypt/live/${DOMAIN} /etc/letsencrypt/archive/${DOMAIN} /etc/letsencrypt/renewal/${DOMAIN}.conf" 2>/dev/null
+
 set +e
-timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot certbot certonly \
-  --webroot \
+timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot \
+  certbot certonly --webroot \
   --webroot-path /var/www/certbot \
   --email "$EMAIL" \
   --agree-tos \
   --no-eff-email \
-  --force-renewal \
   -d "$DOMAIN" \
   -d "api.$DOMAIN" \
   -d "ws.$DOMAIN"
