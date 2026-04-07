@@ -73,7 +73,7 @@ services:
   # Serve cả WebPhoto (bhquan.site) và VietNet (bhquan.store)
   nginx:
     image: nginx:alpine
-    container_name: photo-nginx
+    container_name: shared-nginx
     restart: always
     ports:
       - '80:80'
@@ -108,7 +108,7 @@ networks:
   backend:
     name: webphoto_backend
     external: true
-  # VietNet (bhquan.store) chạy cùng VPS — photo-nginx cần join network này
+  # VietNet (bhquan.store) chạy cùng VPS — shared-nginx cần join network này
   vietnet_frontend:
     name: vietnet_frontend
     external: true

@@ -260,8 +260,8 @@ jobs:
           # Upload full SSL nginx config va reload
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
           sshpass -e ssh -p $PORT $VPS "
-            docker exec photo-nginx nginx -t 2>&1 && \
-            docker exec photo-nginx nginx -s reload && \
+            docker exec shared-nginx nginx -t 2>&1 && \
+            docker exec shared-nginx nginx -s reload && \
             echo 'Nginx reloaded with SSL config' || \
             echo 'WARNING: Nginx SSL config test failed — keeping init config'
           "
@@ -321,7 +321,7 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
 
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf 2>/dev/null && {
-            sshpass -e ssh -p $PORT $VPS "docker exec photo-nginx nginx -t 2>&1 | tail -1 && docker exec photo-nginx nginx -s reload"
+            sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload"
             echo "Nginx config updated + reloaded"
           } || echo "Nginx config unchanged (skip)"
 

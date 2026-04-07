@@ -48,10 +48,10 @@ scp "$ROOT_DIR/photo-storage/server/package.json" "${VPS_HOST}:${APP_DIR}/photo-
 scp "$ROOT_DIR/photo-storage/server/package-lock.json" "${VPS_HOST}:${APP_DIR}/photo-storage/server/"
 log "Upload OK"
 
-# 3. Update Nginx config (Docker photo-nginx)
+# 3. Update Nginx config (Docker shared-nginx)
 step "3/5 — Update Nginx config"
 scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${APP_DIR}/nginx/conf.d/bhquan.site.conf" 2>/dev/null && {
-  ssh "${VPS_HOST}" "docker exec photo-nginx nginx -t 2>&1 | tail -1 && docker exec photo-nginx nginx -s reload"
+  ssh "${VPS_HOST}" "docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload"
   log "Nginx config updated + reloaded"
 } || {
   log "Nginx config unchanged (skip)"
@@ -66,7 +66,7 @@ ssh "${VPS_HOST}" "
   cd ${APP_DIR}
   docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
   docker compose -f docker-compose.prod.yml up -d api worker
-  docker exec photo-nginx nginx -s reload 2>/dev/null || true
+  docker exec shared-nginx nginx -s reload 2>/dev/null || true
   echo 'Restarted'
 "
 log "Containers restarted"
