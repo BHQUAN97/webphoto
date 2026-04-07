@@ -213,17 +213,33 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
+          echo "--- Building api + worker images ---"
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-
-            # Build api + worker images
-            docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -10
-
-            # Start all services
-            docker compose -f docker-compose.prod.yml up -d
-
-            echo 'All services started'
+            docker compose -f docker-compose.prod.yml build api worker 2>&1
           "
+          BUILD_EXIT=$?
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "ERROR: Docker build failed (exit=$BUILD_EXIT)"
+            exit 1
+          fi
+          echo "[OK] Images built"
+
+          echo "--- Starting all services ---"
+          sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml up -d 2>&1
+          "
+          START_EXIT=$?
+          if [ $START_EXIT -ne 0 ]; then
+            echo "ERROR: docker compose up failed (exit=$START_EXIT)"
+            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs --tail 20 2>&1"
+            exit 1
+          fi
+
+          echo "--- Container status ---"
+          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -15"
+          echo "[OK] All services started"
 
       - name: '[INIT] Setup SSL with Certbot'
         if: steps.detect.outputs.mode == 'init'
@@ -327,11 +343,26 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
+          echo "--- Building api + worker ---"
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml build api worker 2>&1 | tail -5
-            docker compose -f docker-compose.prod.yml up -d api worker
+            docker compose -f docker-compose.prod.yml build api worker 2>&1
           "
+          BUILD_EXIT=$?
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "ERROR: Docker build failed (exit=$BUILD_EXIT)"
+            exit 1
+          fi
+          echo "[OK] Images rebuilt"
+
+          echo "--- Restarting api + worker ---"
+          sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml up -d api worker 2>&1
+          "
+          echo "--- Container status ---"
+          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | head -10"
+          echo "[OK] Containers restarted"
 
       # ══════════════════════════════════════════
       # SHARED STEPS (both init and update)
@@ -344,7 +375,7 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/config"
           sshpass -e scp -P $PORT config/env $VPS:${APP_DIR}/config/env
           sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/config/env ${APP_DIR}/.env && chmod 600 ${APP_DIR}/.env"
-          echo "config/env synced to .env"
+          echo "[OK] config/env synced to .env"
 
       - name: Ensure DB + user exist
         run: |
@@ -354,39 +385,147 @@ jobs:
           MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
 
-          sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' <<EOSQL
+          echo "--- Checking shared-mysql container ---"
+          MYSQL_STATUS=$(sshpass -e ssh -p $PORT $VPS "docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'" 2>&1)
+          if [ -z "$MYSQL_STATUS" ]; then
+            echo "ERROR: shared-mysql container not running!"
+            sshpass -e ssh -p $PORT $VPS "docker ps -a --filter name=mysql --format '{{.Names}} {{.Status}}'"
+            exit 1
+          fi
+          echo "  $MYSQL_STATUS"
+
+          echo "--- Creating DB + user ---"
+          OUTPUT=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' <<EOSQL
             CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
             CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
             GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
             FLUSH PRIVILEGES;
-          EOSQL"
-          echo "DB photo_storage + user photo_user ready"
+            SELECT '[OK]' AS result;
+          EOSQL" 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT"
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Failed to create DB/user (exit=$EXIT_CODE)"
+            exit 1
+          fi
 
-      - name: Ensure DB schema (drizzle push + seed)
+          echo "--- Verifying connection as photo_user ---"
+          VERIFY=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -e 'SELECT DATABASE() AS db'" 2>&1)
+          VERIFY_EXIT=$?
+          if [ $VERIFY_EXIT -ne 0 ]; then
+            echo "ERROR: photo_user cannot access photo_storage (exit=$VERIFY_EXIT)"
+            echo "$VERIFY"
+            exit 1
+          fi
+          echo "[OK] DB photo_storage + user photo_user verified"
+
+      - name: Wait for API container ready
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
-          echo "--- Drizzle push ---"
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml exec -T api node -e \"
-              const { execSync } = require('child_process');
-              try {
-                execSync('npx drizzle-kit push --force', { stdio: 'inherit', cwd: '/app' });
-              } catch(e) {
-                console.log('drizzle-kit push note:', e.message);
-              }
-            \" 2>&1 | tail -10 || echo 'Schema push completed (or already up to date)'
-          "
+          echo "--- Checking api container ---"
+          for i in $(seq 1 30); do
+            STATUS=$(sshpass -e ssh -p $PORT $VPS "docker ps --filter name=photo-api --format '{{.Names}} {{.Status}}'" 2>&1)
+            if echo "$STATUS" | grep -q "Up"; then
+              echo "  $STATUS"
+              echo "[OK] API container is running (attempt $i)"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "ERROR: API container not running after 30s"
+              sshpass -e ssh -p $PORT $VPS "
+                echo '--- All containers ---'
+                docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -20
+                echo ''
+                echo '--- API container logs ---'
+                docker logs photo-api --tail 30 2>&1 || echo 'No photo-api container found'
+              "
+              exit 1
+            fi
+            sleep 1
+          done
 
-          echo "--- Seed ---"
-          sshpass -e ssh -p $PORT $VPS "
+          echo "--- Checking drizzle-kit available ---"
+          DRIZZLE_CHECK=$(sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1 | tail -5 || echo 'Seed completed (or already seeded)'
-          "
+            docker compose -f docker-compose.prod.yml exec -T api npx drizzle-kit --version 2>&1
+          ")
+          DRIZZLE_EXIT=$?
+          echo "  drizzle-kit: $DRIZZLE_CHECK (exit=$DRIZZLE_EXIT)"
+          if [ $DRIZZLE_EXIT -ne 0 ]; then
+            echo "WARNING: drizzle-kit not available in api container"
+            echo "--- Container file check ---"
+            sshpass -e ssh -p $PORT $VPS "
+              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/node_modules/.bin/drizzle-kit 2>&1 || echo 'drizzle-kit binary not found'
+              docker compose -f docker-compose.prod.yml exec -T api ls /app/package.json 2>&1 || echo 'package.json not found'
+              docker compose -f docker-compose.prod.yml exec -T api cat /app/package.json 2>&1 | head -5
+            "
+          fi
 
-      - name: Run DB Changelog (directory-versioned)
+      - name: Ensure DB schema (drizzle push)
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          echo "--- Running drizzle-kit push --force ---"
+          OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml exec -T api sh -c 'cd /app && npx drizzle-kit push --force 2>&1'
+          " 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT"
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "ERROR: drizzle-kit push failed (exit=$EXIT_CODE)"
+            echo "--- Diagnosing ---"
+            sshpass -e ssh -p $PORT $VPS "
+              cd ${APP_DIR}
+              echo 'Container env:'
+              docker compose -f docker-compose.prod.yml exec -T api sh -c 'echo DATABASE_URL=\$DATABASE_URL | sed \"s/:[^:@]*@/:***@/\"' 2>&1
+              echo ''
+              echo 'drizzle.config exists:'
+              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/drizzle.config.* 2>&1 || echo 'No drizzle config found'
+              echo ''
+              echo 'Schema file exists:'
+              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/dist/database/schema.js 2>&1 || echo 'Schema not found in dist'
+            "
+            exit 1
+          fi
+
+          echo ""
+          echo "--- Verifying tables created ---"
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+          TABLES=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -N -e 'SHOW TABLES'" 2>&1)
+          TABLE_COUNT=$(echo "$TABLES" | grep -c '[a-z]' || echo 0)
+          echo "  Tables ($TABLE_COUNT): $(echo "$TABLES" | tr '\n' ', ' | sed 's/,$//')"
+
+          if [ "$TABLE_COUNT" -lt 5 ]; then
+            echo "WARNING: Expected 14+ tables but found $TABLE_COUNT — drizzle push may have failed silently"
+          fi
+          echo "[OK] Schema push complete"
+
+      - name: Seed database
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          echo "--- Running seed ---"
+          OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1
+          " 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT" | tail -10
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "WARNING: Seed exited with $EXIT_CODE (may already be seeded)"
+          else
+            echo "[OK] Seed complete"
+          fi
+
+      - name: Run DB Changelog
         run: |
           set +e
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
@@ -397,82 +536,43 @@ jobs:
             exit 0
           fi
 
-          # --- Debug: Read password from VPS .env ---
-          echo "[1/5] Reading MYSQL_PASSWORD from VPS .env..."
-          MYSQL_PWD=$(sshpass -e ssh -p $PORT $VPS "grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env | cut -d= -f2-")
-          if [ -z "$MYSQL_PWD" ]; then
-            echo "ERROR: MYSQL_PASSWORD is empty! Check ${APP_DIR}/.env on VPS"
-            sshpass -e ssh -p $PORT $VPS "ls -la ${APP_DIR}/.env 2>&1; grep -c 'MYSQL_PASSWORD' ${APP_DIR}/.env 2>&1 || echo '.env not found'"
-            exit 1
-          fi
-          echo "  MYSQL_PASSWORD found (${#MYSQL_PWD} chars)"
-
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
           MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
-          # --- Debug: Test MySQL connection ---
-          echo "[2/5] Testing MySQL connection as photo_user..."
-          TEST_OUTPUT=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} -e 'SELECT 1 AS connection_ok'" 2>&1)
-          TEST_EXIT=$?
-          if [ $TEST_EXIT -ne 0 ]; then
-            echo "ERROR: Cannot connect to MySQL as photo_user (exit=$TEST_EXIT)"
-            echo "$TEST_OUTPUT"
-            echo ""
-            echo "--- Checking shared-mysql container ---"
-            sshpass -e ssh -p $PORT $VPS "docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'"
-            echo "--- Checking MySQL users ---"
-            MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
-            sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' -e \"SELECT User, Host FROM mysql.user; SHOW DATABASES;\"" 2>&1 || echo "(root login also failed)"
-            exit 1
-          fi
-          echo "  Connection OK"
-
-          # --- Debug: Test DB access ---
-          echo "[3/5] Testing photo_storage database access..."
-          DB_OUTPUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e 'SHOW TABLES'" 2>&1)
-          DB_EXIT=$?
-          if [ $DB_EXIT -ne 0 ]; then
-            echo "ERROR: Cannot access photo_storage database (exit=$DB_EXIT)"
-            echo "$DB_OUTPUT"
-            exit 1
-          fi
-          echo "  Tables in photo_storage: $(echo "$DB_OUTPUT" | tail -n +2 | wc -l)"
-
-          # Step 1: Ensure schema_changelog table exists (_init/)
-          echo "[4/5] Running _init scripts..."
+          # Step 1: _init scripts
+          echo "[1/3] Running _init scripts..."
           for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
-            echo "  Running $(basename $f)..."
+            echo "  $(basename $f)..."
             INIT_OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
             INIT_EXIT=$?
             if [ $INIT_EXIT -ne 0 ]; then
-              echo "  WARNING: $(basename $f) failed (exit=$INIT_EXIT)"
+              echo "    WARN: exit=$INIT_EXIT"
               echo "$INIT_OUT" | tail -3 | sed 's/^/    /'
             else
-              echo "  OK"
+              echo "    OK"
             fi
           done
 
-          # Step 2: Get already-applied migrations (version/filename)
+          # Step 2: Get applied
+          echo "[2/3] Checking applied migrations..."
           APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
-          echo "Already applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
+          echo "  Already applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
 
-          # Step 3: Run unapplied migrations per version directory
-          echo "[5/5] Running migrations..."
-          PASS=0
-          SKIP=0
-          FAIL=0
+          # Step 3: Run migrations
+          echo "[3/3] Running migrations..."
+          PASS=0; SKIP=0; FAIL=0
 
           for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
             VER=$(basename "$ver_dir")
             echo ""
-            echo "── Version $VER ──"
+            echo "── $VER ──"
 
             for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
               FNAME=$(basename "$f")
               KEY="${VER}/${FNAME}"
 
-              # Skip already applied
               if echo "$APPLIED" | grep -qF "$KEY"; then
-                echo "  $FNAME ... SKIP (already applied)"
+                echo "  $FNAME ... SKIP"
                 ((SKIP++))
                 continue
               fi
@@ -487,7 +587,6 @@ jobs:
               if [ $EXIT_CODE -eq 0 ]; then
                 DESC=$(echo "$FNAME" | sed 's/^[0-9]*__//; s/\.sql$//; s/_/ /g')
                 CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
-
                 sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"REPLACE INTO schema_changelog (version, filename, description, applied_by, checksum, execution_ms) VALUES ('$VER', '$FNAME', '$DESC', 'ci', '$CHECKSUM', $DURATION_MS)\"" 2>/dev/null
                 echo "OK (${DURATION_MS}ms)"
                 ((PASS++))
