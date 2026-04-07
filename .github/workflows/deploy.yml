@@ -371,6 +371,22 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/config/env ${APP_DIR}/.env && chmod 600 ${APP_DIR}/.env"
           echo "config/env synced to .env"
 
+      - name: Ensure DB + user exist
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+
+          sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' <<EOSQL
+            CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+            CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
+            GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
+            FLUSH PRIVILEGES;
+          EOSQL"
+          echo "DB photo_storage + user photo_user ready"
+
       - name: Run DB Changelog (directory-versioned)
         run: |
           set +e
