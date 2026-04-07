@@ -266,31 +266,6 @@ jobs:
             echo 'WARNING: Nginx SSL config test failed — keeping init config'
           "
 
-      - name: '[INIT] Push DB schema + Seed'
-        if: steps.detect.outputs.mode == 'init'
-        run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
-
-          # Chay drizzle-kit push + seed tu trong container
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            MYSQL_PWD=\$(grep '^MYSQL_PASSWORD=' .env | cut -d= -f2-)
-
-            # Push schema qua docker exec (connect den mysql container)
-            docker compose -f docker-compose.prod.yml exec -T api node -e \"
-              const { execSync } = require('child_process');
-              try {
-                execSync('npx drizzle-kit push --force', { stdio: 'inherit', cwd: '/app' });
-              } catch(e) {
-                console.log('drizzle-kit push note:', e.message);
-              }
-            \" 2>&1 | tail -5 || echo 'Schema push completed (or already up to date)'
-
-            # Seed
-            docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1 | tail -5 || echo 'Seed completed (or already seeded)'
-          "
-
       # ══════════════════════════════════════════
       # UPDATE DEPLOYMENT (existing VPS)
       # ══════════════════════════════════════════
@@ -387,11 +362,12 @@ jobs:
           EOSQL"
           echo "DB photo_storage + user photo_user ready"
 
-      - name: Ensure DB schema (drizzle push)
+      - name: Ensure DB schema (drizzle push + seed)
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
+          echo "--- Drizzle push ---"
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             docker compose -f docker-compose.prod.yml exec -T api node -e \"
@@ -402,6 +378,12 @@ jobs:
                 console.log('drizzle-kit push note:', e.message);
               }
             \" 2>&1 | tail -10 || echo 'Schema push completed (or already up to date)'
+          "
+
+          echo "--- Seed ---"
+          sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1 | tail -5 || echo 'Seed completed (or already seeded)'
           "
 
       - name: Run DB Changelog (directory-versioned)
