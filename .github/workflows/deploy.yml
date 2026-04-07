@@ -21,9 +21,9 @@ env:
   APP_DIR: /opt/webphoto
 
 jobs:
-  # CI phai pass truoc khi deploy
-  typecheck:
-    name: Type Check
+  # ── Parallel typechecks ──
+  typecheck-fe:
+    name: Typecheck Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,14 +33,27 @@ jobs:
           cache: npm
           cache-dependency-path: photo-storage/package-lock.json
       - run: cd photo-storage && npm ci && npx vue-tsc --noEmit
+
+  typecheck-be:
+    name: Typecheck Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: photo-storage/server/package-lock.json
       - run: cd photo-storage/server && npm ci && npx tsc --noEmit
 
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: typecheck
+    needs: [typecheck-fe, typecheck-be]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Load config/env
         run: |
@@ -48,6 +61,32 @@ jobs:
           PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
           echo "SSHPASS=${PASS}" >> $GITHUB_ENV
           echo "Config loaded"
+
+      - name: Detect changes
+        id: changes
+        run: |
+          DIFF=$(git diff --name-only HEAD~1 2>/dev/null || echo "FULL")
+          echo "Changed files:"
+          echo "$DIFF" | head -20
+
+          fe=false; be=false; infra=false; db=false; config=false
+
+          if [ "$DIFF" = "FULL" ]; then
+            fe=true; be=true; infra=true; db=true; config=true
+          else
+            echo "$DIFF" | grep -qE '^photo-storage/(src/|package|vite|index|tsconfig)' && fe=true
+            echo "$DIFF" | grep -qE '^photo-storage/server/' && be=true
+            echo "$DIFF" | grep -qE '^(docker-compose|infra/|nginx/|.*Dockerfile)' && infra=true
+            echo "$DIFF" | grep -qE '^(db/|photo-storage/server/src/database/schema|photo-storage/server/drizzle)' && db=true
+            echo "$DIFF" | grep -qE '^config/' && config=true
+          fi
+
+          echo "fe=$fe" >> $GITHUB_OUTPUT
+          echo "be=$be" >> $GITHUB_OUTPUT
+          echo "infra=$infra" >> $GITHUB_OUTPUT
+          echo "db=$db" >> $GITHUB_OUTPUT
+          echo "config=$config" >> $GITHUB_OUTPUT
+          echo "Changes: fe=$fe be=$be infra=$infra db=$db config=$config"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -57,12 +96,14 @@ jobs:
           cache-dependency-path: photo-storage/package-lock.json
 
       - name: Build Frontend
+        if: steps.changes.outputs.fe == 'true'
         run: |
           cd photo-storage
           npm ci
           npm run build
 
       - name: Build Backend
+        if: steps.changes.outputs.be == 'true'
         run: |
           cd photo-storage/server
           npm ci
@@ -74,7 +115,6 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      # Kiem tra VPS da co /opt/webphoto chua de phan biet first-time vs update
       - name: Detect deploy mode
         id: detect
         run: |
@@ -82,14 +122,14 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
           if sshpass -e ssh -p $PORT $VPS "test -f ${APP_DIR}/docker-compose.prod.yml"; then
             echo "mode=update" >> $GITHUB_OUTPUT
-            echo "Deploy mode: UPDATE (existing installation found)"
+            echo "Deploy mode: UPDATE"
           else
             echo "mode=init" >> $GITHUB_OUTPUT
-            echo "Deploy mode: INIT (first-time deployment)"
+            echo "Deploy mode: INIT (first-time)"
           fi
 
       # ══════════════════════════════════════════
-      # FIRST-TIME DEPLOYMENT
+      # FIRST-TIME DEPLOYMENT (all steps run)
       # ══════════════════════════════════════════
       - name: '[INIT] Upload full project to VPS'
         if: steps.detect.outputs.mode == 'init'
@@ -97,30 +137,22 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
-          # Tao thu muc tren VPS
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}"
 
-          # Upload docker-compose, Dockerfiles, nginx, scripts
           sshpass -e scp -P $PORT docker-compose.prod.yml $VPS:${APP_DIR}/
           sshpass -e scp -P $PORT docker-compose.tunnel.yml $VPS:${APP_DIR}/ 2>/dev/null || true
           sshpass -e scp -P $PORT .env.example $VPS:${APP_DIR}/
 
-          # Nginx config
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/nginx/conf.d"
           sshpass -e scp -P $PORT nginx/nginx.conf $VPS:${APP_DIR}/nginx/
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.init.conf.disabled $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
-          # Chi upload bhquan.store.conf neu VietNet da deploy (tranh nginx fail khi upstream chua co)
           if sshpass -e ssh -p $PORT $VPS "test -f /opt/vietnet/docker-compose.prod.yml"; then
             sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${APP_DIR}/nginx/conf.d/ 2>/dev/null || true
-          else
-            echo "VietNet not deployed yet — skipping bhquan.store.conf"
           fi
 
-          # Frontend dist
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/photo-storage"
           sshpass -e scp -P $PORT -r photo-storage/dist $VPS:${APP_DIR}/photo-storage/
 
-          # Backend dist + Dockerfiles + package files
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/photo-storage/server"
           sshpass -e scp -P $PORT -r photo-storage/server/dist $VPS:${APP_DIR}/photo-storage/server/
           sshpass -e scp -P $PORT photo-storage/server/package.json $VPS:${APP_DIR}/photo-storage/server/
@@ -128,26 +160,24 @@ jobs:
           sshpass -e scp -P $PORT photo-storage/server/Dockerfile $VPS:${APP_DIR}/photo-storage/server/
           sshpass -e scp -P $PORT photo-storage/server/Dockerfile.worker $VPS:${APP_DIR}/photo-storage/server/
 
-          # Scripts
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/scripts"
           sshpass -e scp -P $PORT scripts/deploy.sh $VPS:${APP_DIR}/scripts/ 2>/dev/null || true
 
-          # DB changelog
           if [ -d "db/changelog" ]; then
             sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/db/changelog"
             sshpass -e scp -P $PORT db/changelog/*.sql $VPS:${APP_DIR}/db/changelog/ 2>/dev/null || true
           fi
+          echo "[OK] Full project uploaded"
 
       - name: '[INIT] Upload config/env as .env'
         if: steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/config"
           sshpass -e scp -P $PORT config/env $VPS:${APP_DIR}/config/env
           sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/config/env ${APP_DIR}/.env && chmod 600 ${APP_DIR}/.env"
-          echo ".env created from config/env"
+          echo "[OK] .env created"
 
       - name: '[INIT] Start shared infrastructure (MySQL + Redis)'
         if: steps.detect.outputs.mode == 'init'
@@ -156,20 +186,15 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
           INFRA_DIR=/opt/infra
 
-          # Upload infra compose
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${INFRA_DIR}"
           sshpass -e scp -P $PORT infra/docker-compose.yml $VPS:${INFRA_DIR}/docker-compose.yml
 
-          # Tao .env cho infra (chi can MYSQL_ROOT_PASSWORD)
           MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
           sshpass -e ssh -p $PORT $VPS "echo 'MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PWD}' > ${INFRA_DIR}/.env && chmod 600 ${INFRA_DIR}/.env"
 
-          # Ensure shared network exists, then start infra
           sshpass -e ssh -p $PORT $VPS "
             docker network create webphoto_backend 2>/dev/null || true
             docker network create vietnet_frontend 2>/dev/null || true
-
-            # Xoa container cu (ten cu photo-* hoac orphan)
             docker rm -f photo-mysql photo-redis shared-mysql shared-redis 2>/dev/null || true
 
             cd ${INFRA_DIR}
@@ -182,20 +207,20 @@ jobs:
                 break
               fi
               if [ \$i -eq 60 ]; then
-                echo 'MySQL not ready after 60s'
+                echo 'ERROR: MySQL not ready after 60s'
                 docker logs shared-mysql --tail 20
                 exit 1
               fi
               sleep 1
             done
           "
+          echo "[OK] Infra started"
 
       - name: '[INIT] Create WebPhoto DB + user'
         if: steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
           MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
 
@@ -204,8 +229,8 @@ jobs:
             CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
             GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
             FLUSH PRIVILEGES;
-            SELECT '[OK] photo_storage database + photo_user ready' AS result;
           EOSQL"
+          echo "[OK] DB + user created"
 
       - name: '[INIT] Build & Start all services'
         if: steps.detect.outputs.mode == 'init'
@@ -213,32 +238,18 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
-          echo "--- Building api + worker images ---"
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml build api worker 2>&1
-          "
-          BUILD_EXIT=$?
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "ERROR: Docker build failed (exit=$BUILD_EXIT)"
-            exit 1
-          fi
-          echo "[OK] Images built"
+          echo "--- Building images ---"
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1"
+          if [ $? -ne 0 ]; then echo "ERROR: Docker build failed"; exit 1; fi
 
-          echo "--- Starting all services ---"
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml up -d 2>&1
-          "
-          START_EXIT=$?
-          if [ $START_EXIT -ne 0 ]; then
-            echo "ERROR: docker compose up failed (exit=$START_EXIT)"
+          echo "--- Starting services ---"
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d 2>&1"
+          if [ $? -ne 0 ]; then
             sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs --tail 20 2>&1"
             exit 1
           fi
 
-          echo "--- Container status ---"
-          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -15"
+          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | head -15"
           echo "[OK] All services started"
 
       - name: '[INIT] Setup SSL with Certbot'
@@ -246,25 +257,13 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-
-            echo 'Requesting SSL certificate...'
             docker compose -f docker-compose.prod.yml run --rm certbot certonly \
               --webroot -w /var/www/certbot \
               --email admin@bhquan.site --agree-tos --no-eff-email \
               -d bhquan.site -d api.bhquan.site -d ws.bhquan.site \
               2>&1 | tail -10
-
-            if [ -f /etc/letsencrypt/live/bhquan.site/fullchain.pem ] || \
-               docker compose -f docker-compose.prod.yml exec -T nginx test -f /etc/letsencrypt/live/bhquan.site/fullchain.pem 2>/dev/null; then
-              echo 'SSL certificate obtained!'
-            else
-              echo 'WARNING: SSL cert not found yet. May need manual certbot run.'
-              echo 'Continuing with HTTP-only config...'
-              exit 0
-            fi
           "
 
       - name: '[INIT] Switch to full SSL Nginx config'
@@ -272,52 +271,58 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
-          # Upload full SSL nginx config va reload
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
           sshpass -e ssh -p $PORT $VPS "
             docker exec shared-nginx nginx -t 2>&1 && \
             docker exec shared-nginx nginx -s reload && \
-            echo 'Nginx reloaded with SSL config' || \
-            echo 'WARNING: Nginx SSL config test failed — keeping init config'
+            echo '[OK] Nginx SSL config' || \
+            echo 'WARNING: SSL config test failed'
           "
 
       # ══════════════════════════════════════════
-      # UPDATE DEPLOYMENT (existing VPS)
+      # UPDATE DEPLOYMENT — conditional per change
       # ══════════════════════════════════════════
-      - name: '[UPDATE] Upload dist to VPS'
-        if: steps.detect.outputs.mode == 'update'
+      - name: '[UPDATE] Upload frontend dist'
+        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.fe == 'true'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
-          # Clean old dist, upload new
-          sshpass -e ssh -p $PORT $VPS "rm -rf ${APP_DIR}/photo-storage/dist ${APP_DIR}/photo-storage/server/dist"
+          sshpass -e ssh -p $PORT $VPS "rm -rf ${APP_DIR}/photo-storage/dist"
           sshpass -e scp -P $PORT -r photo-storage/dist $VPS:${APP_DIR}/photo-storage/
+          echo "[OK] Frontend dist uploaded"
+
+      - name: '[UPDATE] Upload backend dist'
+        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.be == 'true'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "rm -rf ${APP_DIR}/photo-storage/server/dist"
           sshpass -e scp -P $PORT -r photo-storage/server/dist $VPS:${APP_DIR}/photo-storage/server/
           sshpass -e scp -P $PORT photo-storage/server/package.json $VPS:${APP_DIR}/photo-storage/server/
           sshpass -e scp -P $PORT photo-storage/server/package-lock.json $VPS:${APP_DIR}/photo-storage/server/
-
-          # Sync Dockerfiles (co the da thay doi)
           sshpass -e scp -P $PORT photo-storage/server/Dockerfile $VPS:${APP_DIR}/photo-storage/server/
           sshpass -e scp -P $PORT photo-storage/server/Dockerfile.worker $VPS:${APP_DIR}/photo-storage/server/
+          echo "[OK] Backend dist uploaded"
 
-          # Sync docker-compose (co the da thay doi)
-          sshpass -e scp -P $PORT docker-compose.prod.yml $VPS:${APP_DIR}/
-
-      - name: '[UPDATE] Sync Nginx config'
+      - name: '[UPDATE] Sync deploy config'
         if: steps.detect.outputs.mode == 'update'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+          sshpass -e scp -P $PORT docker-compose.prod.yml $VPS:${APP_DIR}/
 
+      - name: '[UPDATE] Sync Nginx config'
+        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.infra == 'true'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf 2>/dev/null && {
             sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload"
-            echo "Nginx config updated + reloaded"
-          } || echo "Nginx config unchanged (skip)"
+            echo "[OK] Nginx updated"
+          } || echo "Nginx unchanged (skip)"
 
       - name: '[UPDATE] Sync shared infra'
-        if: steps.detect.outputs.mode == 'update'
+        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.infra == 'true'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
@@ -330,141 +335,110 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             docker network create webphoto_backend 2>/dev/null || true
             docker network create vietnet_frontend 2>/dev/null || true
-
-            # Xoa container cu (ten cu photo-* hoac orphan)
             docker rm -f photo-mysql photo-redis 2>/dev/null || true
-
             cd ${INFRA_DIR} && docker compose up -d
           "
+          echo "[OK] Infra synced"
 
-      - name: '[UPDATE] Rebuild & Restart containers'
-        if: steps.detect.outputs.mode == 'update'
+      - name: '[UPDATE] Rebuild API containers'
+        if: steps.detect.outputs.mode == 'update' && (steps.changes.outputs.be == 'true' || steps.changes.outputs.infra == 'true')
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
           echo "--- Building api + worker ---"
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml build api worker 2>&1
-          "
-          BUILD_EXIT=$?
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "ERROR: Docker build failed (exit=$BUILD_EXIT)"
-            exit 1
-          fi
-          echo "[OK] Images rebuilt"
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1"
+          if [ $? -ne 0 ]; then echo "ERROR: Docker build failed"; exit 1; fi
 
           echo "--- Restarting api + worker ---"
-          sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml up -d api worker 2>&1
-          "
-          echo "--- Container status ---"
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d api worker 2>&1"
           sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | head -10"
-          echo "[OK] Containers restarted"
+          echo "[OK] API containers rebuilt"
+
+      - name: '[UPDATE] Restart API (FE-only change)'
+        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.fe == 'true' && steps.changes.outputs.be != 'true' && steps.changes.outputs.infra != 'true'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+          # FE dist duoc serve boi API container — restart de pick up new files
+          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml restart api 2>&1"
+          echo "[OK] API restarted (FE-only change, no rebuild)"
 
       # ══════════════════════════════════════════
       # SHARED STEPS (both init and update)
       # ══════════════════════════════════════════
       - name: Sync config/env to .env on VPS
+        if: steps.changes.outputs.config == 'true' || steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/config"
           sshpass -e scp -P $PORT config/env $VPS:${APP_DIR}/config/env
           sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/config/env ${APP_DIR}/.env && chmod 600 ${APP_DIR}/.env"
-          echo "[OK] config/env synced to .env"
+          echo "[OK] config/env synced"
 
       - name: Ensure DB + user exist
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
           MYSQL_ROOT_PWD=$(grep '^MYSQL_ROOT_PASSWORD=' config/env | cut -d= -f2-)
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
 
-          echo "--- Checking shared-mysql container ---"
+          echo "--- Checking shared-mysql ---"
           MYSQL_STATUS=$(sshpass -e ssh -p $PORT $VPS "docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'" 2>&1)
           if [ -z "$MYSQL_STATUS" ]; then
-            echo "ERROR: shared-mysql container not running!"
+            echo "ERROR: shared-mysql not running!"
             sshpass -e ssh -p $PORT $VPS "docker ps -a --filter name=mysql --format '{{.Names}} {{.Status}}'"
             exit 1
           fi
           echo "  $MYSQL_STATUS"
 
-          echo "--- Creating DB + user ---"
+          echo "--- Ensuring DB + user ---"
           OUTPUT=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u root -p'${MYSQL_ROOT_PWD}' <<EOSQL
             CREATE DATABASE IF NOT EXISTS photo_storage CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
             CREATE USER IF NOT EXISTS 'photo_user'@'%' IDENTIFIED BY '${MYSQL_PWD}';
             GRANT ALL PRIVILEGES ON *.* TO 'photo_user'@'%';
             FLUSH PRIVILEGES;
-            SELECT '[OK]' AS result;
           EOSQL" 2>&1)
           EXIT_CODE=$?
-          echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Failed to create DB/user (exit=$EXIT_CODE)"
+            echo "ERROR: Failed (exit=$EXIT_CODE)"
+            echo "$OUTPUT"
             exit 1
           fi
 
-          echo "--- Verifying connection as photo_user ---"
-          VERIFY=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -e 'SELECT DATABASE() AS db'" 2>&1)
-          VERIFY_EXIT=$?
-          if [ $VERIFY_EXIT -ne 0 ]; then
-            echo "ERROR: photo_user cannot access photo_storage (exit=$VERIFY_EXIT)"
-            echo "$VERIFY"
-            exit 1
-          fi
-          echo "[OK] DB photo_storage + user photo_user verified"
+          echo "--- Verifying connection ---"
+          sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -e 'SELECT DATABASE() AS db'" 2>&1 || { echo "ERROR: connection failed"; exit 1; }
+          echo "[OK] DB + user verified"
 
-      - name: Ensure DB schema (drizzle push via SSH tunnel)
+      - name: Ensure DB schema (drizzle push)
+        if: steps.changes.outputs.db == 'true' || steps.detect.outputs.mode == 'init'
         run: |
           set +e
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
 
-          # Expose MySQL port tren VPS host (tam thoi)
-          echo "--- Exposing MySQL port on VPS ---"
-          sshpass -e ssh -p $PORT $VPS "
-            # Kiem tra shared-mysql container
-            echo 'MySQL container:'
-            docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'
-
-            # Lay IP cua shared-mysql trong Docker network
-            MYSQL_IP=\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' shared-mysql 2>&1)
-            echo \"MySQL container IP: \$MYSQL_IP\"
-          "
-
-          # SSH tunnel: forward CI localhost:13306 → VPS shared-mysql:3306
-          echo "--- Creating SSH tunnel ---"
+          # SSH tunnel to MySQL
           MYSQL_IP=$(sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' shared-mysql" 2>&1)
-          echo "  MySQL IP in Docker: $MYSQL_IP"
+          echo "  MySQL IP: $MYSQL_IP"
 
           sshpass -e ssh -p $PORT -L 13306:${MYSQL_IP}:3306 -N $VPS &
           TUNNEL_PID=$!
           sleep 2
 
-          # Test tunnel
-          echo "--- Testing tunnel connection ---"
           if ! mysql -h 127.0.0.1 -P 13306 -u photo_user -p"${MYSQL_PWD}" -e "SELECT 1" 2>&1; then
-            echo "ERROR: SSH tunnel to MySQL failed"
-            echo "  Tunnel PID: $TUNNEL_PID"
+            echo "ERROR: SSH tunnel failed"
             kill $TUNNEL_PID 2>/dev/null
             exit 1
           fi
-          echo "  Tunnel OK (localhost:13306 → VPS MySQL)"
+          echo "  Tunnel OK"
 
-          # Chay drizzle-kit push tu CI (co day du devDeps)
-          echo "--- Running drizzle-kit push --force ---"
+          echo "--- drizzle-kit push --force ---"
           cd photo-storage/server
           DATABASE_URL="mysql://photo_user:${MYSQL_PWD}@127.0.0.1:13306/photo_storage" npx drizzle-kit push --force 2>&1
           PUSH_EXIT=$?
           cd ../..
-
-          # Dong tunnel
           kill $TUNNEL_PID 2>/dev/null
 
           if [ $PUSH_EXIT -ne 0 ]; then
@@ -472,39 +446,34 @@ jobs:
             exit 1
           fi
 
-          # Verify tables
-          echo ""
           echo "--- Verifying tables ---"
           TABLES=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -N -e 'SHOW TABLES'" 2>&1)
           TABLE_COUNT=$(echo "$TABLES" | grep -c '[a-z]' || echo 0)
           echo "  Tables ($TABLE_COUNT): $(echo "$TABLES" | tr '\n' ', ' | sed 's/,$//')"
-
           if [ "$TABLE_COUNT" -lt 5 ]; then
-            echo "ERROR: Expected 14+ tables but found $TABLE_COUNT"
+            echo "ERROR: Expected 14+ tables, found $TABLE_COUNT"
             exit 1
           fi
-          echo "[OK] Schema push complete ($TABLE_COUNT tables)"
+          echo "[OK] Schema ($TABLE_COUNT tables)"
 
       - name: Seed database
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-
-          echo "--- Running seed ---"
           OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1
           " 2>&1)
           EXIT_CODE=$?
-          echo "$OUTPUT" | tail -10
-
+          echo "$OUTPUT" | tail -5
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "WARNING: Seed exited with $EXIT_CODE (may already be seeded)"
+            echo "WARNING: Seed exit=$EXIT_CODE (may already be seeded)"
           else
             echo "[OK] Seed complete"
           fi
 
       - name: Run DB Changelog
+        if: steps.changes.outputs.db == 'true' || steps.detect.outputs.mode == 'init'
         run: |
           set +e
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
@@ -518,32 +487,27 @@ jobs:
           MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
           MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
-          # Step 1: _init scripts
-          echo "[1/3] Running _init scripts..."
+          echo "[1/3] _init scripts..."
           for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
-            echo "  $(basename $f)..."
             INIT_OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
             INIT_EXIT=$?
             if [ $INIT_EXIT -ne 0 ]; then
-              echo "    WARN: exit=$INIT_EXIT"
+              echo "  $(basename $f) WARN: exit=$INIT_EXIT"
               echo "$INIT_OUT" | tail -3 | sed 's/^/    /'
             else
-              echo "    OK"
+              echo "  $(basename $f) OK"
             fi
           done
 
-          # Step 2: Get applied
-          echo "[2/3] Checking applied migrations..."
+          echo "[2/3] Checking applied..."
           APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
-          echo "  Already applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
+          echo "  Applied: $(echo "$APPLIED" | tr '\n' ', ' | sed 's/,$//' || echo 'none')"
 
-          # Step 3: Run migrations
           echo "[3/3] Running migrations..."
           PASS=0; SKIP=0; FAIL=0
 
           for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
             VER=$(basename "$ver_dir")
-            echo ""
             echo "── $VER ──"
 
             for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
@@ -551,9 +515,8 @@ jobs:
               KEY="${VER}/${FNAME}"
 
               if echo "$APPLIED" | grep -qF "$KEY"; then
-                echo "  $FNAME ... SKIP"
-                ((SKIP++))
-                continue
+                echo "  $FNAME SKIP"
+                ((SKIP++)); continue
               fi
 
               echo -n "  $FNAME ... "
@@ -577,7 +540,6 @@ jobs:
             done
           done
 
-          echo ""
           echo "Changelog: $PASS applied, $SKIP skipped, $FAIL failed"
           if [ $FAIL -gt 0 ]; then exit 1; fi
 
@@ -588,10 +550,10 @@ jobs:
           sleep 8
           RESULT=$(sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" 2>&1) && {
             echo "API healthy: $RESULT"
-            echo "Deploy successful! (mode: ${{ steps.detect.outputs.mode }})"
           } || {
             echo "WARNING: Health check failed"
             echo "Response: $RESULT"
             sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 20"
             exit 1
           }
+          echo "Deploy successful! (mode=${{ steps.detect.outputs.mode }}, fe=${{ steps.changes.outputs.fe }}, be=${{ steps.changes.outputs.be }})"
