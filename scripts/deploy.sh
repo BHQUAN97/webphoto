@@ -153,21 +153,30 @@ if [ "$MODE" != "tunnel" ]; then
     $DC $COMPOSE_FILES up -d nginx
     sleep 3
 
-    # Xoa placeholder cert (certbot tu choi ghi de thu muc khong phai cua no)
-    for D in ${DOMAIN} api.${DOMAIN} ws.${DOMAIN}; do
-      $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c \
-        "rm -rf /etc/letsencrypt/live/${DOMAIN} /etc/letsencrypt/archive/${DOMAIN} /etc/letsencrypt/renewal/${DOMAIN}.conf" 2>/dev/null
-      break  # Chi can xoa 1 lan cho domain chinh
-    done
+    # Xoa ALL cert files (bao gom -0001 variants tu certbot zombie)
+    $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c \
+      "rm -rf /etc/letsencrypt/live/${DOMAIN}* /etc/letsencrypt/archive/${DOMAIN}* /etc/letsencrypt/renewal/${DOMAIN}*.conf" 2>/dev/null
 
     # Request real cert tu Let's Encrypt (timeout 120s)
     set +e
     timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot \
       certbot certonly --webroot -w /var/www/certbot \
+      --non-interactive --cert-name ${DOMAIN} \
       --email admin@${DOMAIN} --agree-tos --no-eff-email \
       -d ${DOMAIN} -d api.${DOMAIN} -d ws.${DOMAIN}
     CERT_RC=$?
     set -e
+
+    # Neu certbot fail, tao lai placeholder de nginx khong crash
+    if [ $CERT_RC -ne 0 ]; then
+      $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c "
+        mkdir -p /etc/letsencrypt/live/${DOMAIN}
+        openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+          -keyout /etc/letsencrypt/live/${DOMAIN}/privkey.pem \
+          -out /etc/letsencrypt/live/${DOMAIN}/fullchain.pem \
+          -subj '/CN=${DOMAIN}' 2>/dev/null
+      "
+    fi
 
     if [ $CERT_RC -eq 0 ]; then
       echo "   SSL certificate installed!"

@@ -60,14 +60,15 @@ fi
 # 4. Lay certificate that tu Let's Encrypt (timeout 120s)
 echo "[4/5] Requesting SSL certificate..."
 
-# Xoa placeholder cert (certbot tu choi ghi de thu muc khong phai cua no)
+# Xoa ALL cert files (bao gom -0001 variants tu certbot zombie)
 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c \
-  "rm -rf /etc/letsencrypt/live/${DOMAIN} /etc/letsencrypt/archive/${DOMAIN} /etc/letsencrypt/renewal/${DOMAIN}.conf" 2>/dev/null
+  "rm -rf /etc/letsencrypt/live/${DOMAIN}* /etc/letsencrypt/archive/${DOMAIN}* /etc/letsencrypt/renewal/${DOMAIN}*.conf" 2>/dev/null
 
 set +e
 timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot \
   certbot certonly --webroot \
   --webroot-path /var/www/certbot \
+  --non-interactive --cert-name "$DOMAIN" \
   --email "$EMAIL" \
   --agree-tos \
   --no-eff-email \
@@ -76,6 +77,17 @@ timeout 120 $DC $COMPOSE_FILES run --rm --entrypoint "" certbot \
   -d "ws.$DOMAIN"
 CERT_RC=$?
 set -e
+
+# Neu certbot fail, tao lai placeholder de nginx khong crash
+if [ $CERT_RC -ne 0 ]; then
+  $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c "
+    mkdir -p /etc/letsencrypt/live/${DOMAIN}
+    openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+      -keyout /etc/letsencrypt/live/${DOMAIN}/privkey.pem \
+      -out /etc/letsencrypt/live/${DOMAIN}/fullchain.pem \
+      -subj '/CN=${DOMAIN}' 2>/dev/null
+  "
+fi
 
 if [ $CERT_RC -ne 0 ]; then
   echo ""

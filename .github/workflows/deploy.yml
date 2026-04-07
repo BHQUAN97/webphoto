@@ -290,41 +290,60 @@ jobs:
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
 
-          # Helper: xoa placeholder cert truoc khi certbot certonly
-          # Certbot tu choi ghi de vao thu muc khong phai cua no
-          CLEAN_AND_CERTONLY='
-            clean_placeholder() {
+          # Helper: xoa ALL cert files (bao gom -0001 variants) roi certbot certonly
+          # Neu certbot fail → tao lai placeholder de nginx khong crash
+          CERTBOT_HELPER='
+            get_real_cert() {
               local D=$1; shift
+              local DC="docker compose -f docker-compose.prod.yml"
               cd /opt/webphoto
-              docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot sh -c "
-                rm -rf /etc/letsencrypt/live/$D /etc/letsencrypt/archive/$D /etc/letsencrypt/renewal/$D.conf
+
+              echo "  Cleaning old certs for $D..."
+              $DC run --rm --entrypoint "" certbot sh -c "
+                rm -rf /etc/letsencrypt/live/${D}* /etc/letsencrypt/archive/${D}* /etc/letsencrypt/renewal/${D}*.conf
               "
-              timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+
+              echo "  Requesting cert for $D..."
+              timeout 120 $DC run --rm --entrypoint "" certbot \
                 certbot certonly --webroot -w /var/www/certbot \
+                --non-interactive --cert-name $D \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
                 "$@"
+
+              if [ $? -ne 0 ]; then
+                echo "  FAILED — regenerating placeholder so nginx can start..."
+                $DC run --rm --entrypoint "" certbot sh -c "
+                  mkdir -p /etc/letsencrypt/live/$D
+                  openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                    -keyout /etc/letsencrypt/live/$D/privkey.pem \
+                    -out /etc/letsencrypt/live/$D/fullchain.pem \
+                    -subj /CN=$D 2>/dev/null
+                "
+                return 1
+              fi
+              return 0
             }
           '
 
           # bhquan.site (timeout 120s)
           echo "--- Certbot: bhquan.site ---"
           sshpass -e ssh -p $PORT $VPS "
-            ${CLEAN_AND_CERTONLY}
-            clean_placeholder bhquan.site -d bhquan.site -d api.bhquan.site -d ws.bhquan.site
+            ${CERTBOT_HELPER}
+            get_real_cert bhquan.site -d bhquan.site -d api.bhquan.site -d ws.bhquan.site
           " && echo "[OK] bhquan.site cert" || echo "WARNING: bhquan.site cert failed"
 
-          # bhquan.store (only if VietNet deployed)
+          # bhquan.store
           echo "--- Certbot: bhquan.store ---"
           sshpass -e ssh -p $PORT $VPS "
             if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
-              ${CLEAN_AND_CERTONLY}
-              clean_placeholder bhquan.store -d bhquan.store -d www.bhquan.store
+              ${CERTBOT_HELPER}
+              get_real_cert bhquan.store -d bhquan.store -d www.bhquan.store
             else
               echo 'VietNet not running — skip bhquan.store'
             fi
           " 2>&1 || true
 
-          # Reload nginx with real certs
+          # Reload nginx
           sshpass -e ssh -p $PORT $VPS "
             docker exec shared-nginx nginx -t 2>&1 && \
             docker exec shared-nginx nginx -s reload && \
@@ -819,32 +838,46 @@ jobs:
           else
             echo "Requesting real SSL certs via Certbot (timeout 120s)..."
 
-            # Helper: xoa placeholder cert truoc khi certbot certonly
-            CLEAN_AND_CERTONLY='
-              clean_placeholder() {
+            CERTBOT_HELPER='
+              get_real_cert() {
                 local D=$1; shift
+                local DC="docker compose -f docker-compose.prod.yml"
                 cd /opt/webphoto
-                docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot sh -c "
-                  rm -rf /etc/letsencrypt/live/$D /etc/letsencrypt/archive/$D /etc/letsencrypt/renewal/$D.conf
+                echo "  Cleaning old certs for $D..."
+                $DC run --rm --entrypoint "" certbot sh -c "
+                  rm -rf /etc/letsencrypt/live/${D}* /etc/letsencrypt/archive/${D}* /etc/letsencrypt/renewal/${D}*.conf
                 "
-                timeout 120 docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+                echo "  Requesting cert for $D..."
+                timeout 120 $DC run --rm --entrypoint "" certbot \
                   certbot certonly --webroot -w /var/www/certbot \
+                  --non-interactive --cert-name $D \
                   --email admin@bhquan.site --agree-tos --no-eff-email \
                   "$@"
+                if [ $? -ne 0 ]; then
+                  echo "  FAILED — regenerating placeholder..."
+                  $DC run --rm --entrypoint "" certbot sh -c "
+                    mkdir -p /etc/letsencrypt/live/$D
+                    openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                      -keyout /etc/letsencrypt/live/$D/privkey.pem \
+                      -out /etc/letsencrypt/live/$D/fullchain.pem \
+                      -subj /CN=$D 2>/dev/null
+                  "
+                  return 1
+                fi
               }
             '
 
             # bhquan.site
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
-              ${CLEAN_AND_CERTONLY}
-              clean_placeholder bhquan.site -d bhquan.site -d api.bhquan.site -d ws.bhquan.site
+              ${CERTBOT_HELPER}
+              get_real_cert bhquan.site -d bhquan.site -d api.bhquan.site -d ws.bhquan.site
             " 2>&1 && echo "[OK] bhquan.site cert" || echo "WARNING: bhquan.site cert failed"
 
-            # bhquan.store (only if VietNet deployed)
+            # bhquan.store
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
               if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
-                ${CLEAN_AND_CERTONLY}
-                clean_placeholder bhquan.store -d bhquan.store -d www.bhquan.store
+                ${CERTBOT_HELPER}
+                get_real_cert bhquan.store -d bhquan.store -d www.bhquan.store
               else
                 echo 'VietNet not running — skip bhquan.store'
               fi
