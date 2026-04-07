@@ -145,7 +145,7 @@ jobs:
             docker-compose.tunnel.yml \
             .env.example \
             nginx/nginx.conf \
-            nginx/conf.d/bhquan.site.init.conf.disabled \
+            nginx/conf.d/bhquan.site.conf \
             nginx/conf.d/bhquan.store.conf \
             photo-storage/dist \
             photo-storage/server/dist \
@@ -154,14 +154,9 @@ jobs:
             photo-storage/server/Dockerfile \
             photo-storage/server/Dockerfile.worker \
             scripts/deploy.sh \
+            scripts/ssl-init.sh \
             db/changelog 2>/dev/null | \
             sshpass -e ssh -p $PORT $VPS "tar xzf - -C ${APP_DIR}/"
-
-          # Nginx init config
-          sshpass -e ssh -p $PORT $VPS "cp ${APP_DIR}/nginx/conf.d/bhquan.site.init.conf.disabled ${APP_DIR}/nginx/conf.d/bhquan.site.conf"
-          if sshpass -e ssh -p $PORT $VPS "test -f /opt/vietnet/docker-compose.prod.yml"; then
-            echo "VietNet detected — bhquan.store.conf included"
-          fi
 
           echo "[OK] Full project uploaded"
 
@@ -228,6 +223,36 @@ jobs:
           EOSQL"
           echo "[OK] DB + user created"
 
+      - name: '[INIT] Generate placeholder SSL certs'
+        if: steps.detect.outputs.mode == 'init'
+        run: |
+          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
+          PORT="${{ env.VPS_PORT }}"
+
+          # Tao self-signed placeholder certs de nginx start duoc voi full SSL config
+          # Cert that se duoc lay sau khi health check pass
+          sshpass -e ssh -p $PORT $VPS "
+            cd ${APP_DIR}
+            for DOMAIN in bhquan.site bhquan.store; do
+              CERT_EXISTS=\$(docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot \
+                test -f /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem 2>/dev/null && echo yes || echo no)
+              if [ \"\$CERT_EXISTS\" = 'no' ]; then
+                echo \"Generating placeholder cert for \${DOMAIN}...\"
+                docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot sh -c \"
+                  mkdir -p /etc/letsencrypt/live/\${DOMAIN}
+                  openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                    -keyout /etc/letsencrypt/live/\${DOMAIN}/privkey.pem \
+                    -out /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem \
+                    -subj '/CN=\${DOMAIN}' 2>/dev/null
+                \"
+                echo \"  OK\"
+              else
+                echo \"\${DOMAIN}: cert exists\"
+              fi
+            done
+          "
+          echo "[OK] SSL placeholders ready"
+
       - name: '[INIT] Build & Start all services'
         if: steps.detect.outputs.mode == 'init'
         run: |
@@ -259,31 +284,47 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | head -15"
           echo "[OK] All services started"
 
-      - name: '[INIT] Setup SSL with Certbot'
+      - name: '[INIT] Get real SSL certs + reload nginx'
         if: steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+
+          # bhquan.site (timeout 120s)
+          echo "--- Certbot: bhquan.site ---"
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+            timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
               --webroot -w /var/www/certbot \
               --email admin@bhquan.site --agree-tos --no-eff-email \
+              --force-renewal \
               -d bhquan.site -d api.bhquan.site -d ws.bhquan.site \
               2>&1 | tail -10
-          "
+          " && echo "[OK] bhquan.site cert" || echo "WARNING: bhquan.site cert failed — using placeholder"
 
-      - name: '[INIT] Switch to full SSL Nginx config'
-        if: steps.detect.outputs.mode == 'init'
-        run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
-          sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf
+          # bhquan.store (only if VietNet deployed)
+          echo "--- Certbot: bhquan.store ---"
+          sshpass -e ssh -p $PORT $VPS "
+            if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
+              cd ${APP_DIR}
+              timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+                --webroot -w /var/www/certbot \
+                --email admin@bhquan.site --agree-tos --no-eff-email \
+                --force-renewal \
+                -d bhquan.store -d www.bhquan.store \
+                2>&1 | tail -10
+              echo '[OK] bhquan.store cert'
+            else
+              echo 'VietNet not running — skip bhquan.store (using placeholder)'
+            fi
+          " 2>&1 || true
+
+          # Reload nginx with real certs
           sshpass -e ssh -p $PORT $VPS "
             docker exec shared-nginx nginx -t 2>&1 && \
             docker exec shared-nginx nginx -s reload && \
-            echo '[OK] Nginx SSL config' || \
-            echo 'WARNING: SSL config test failed'
+            echo '[OK] Nginx reloaded with SSL' || \
+            echo 'WARNING: Nginx reload failed'
           "
 
       # ══════════════════════════════════════════
@@ -324,8 +365,28 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-          sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${APP_DIR}/nginx/conf.d/bhquan.site.conf 2>/dev/null && {
-            sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload"
+
+          # Upload all nginx configs
+          tar czf - nginx/conf.d/ | sshpass -e ssh -p $PORT $VPS "tar xzf - -C ${APP_DIR}/" 2>/dev/null && {
+            # Ensure placeholder certs exist before reloading
+            sshpass -e ssh -p $PORT $VPS "
+              cd ${APP_DIR}
+              for DOMAIN in bhquan.site bhquan.store; do
+                CERT_EXISTS=\$(docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot \
+                  test -f /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem 2>/dev/null && echo yes || echo no)
+                if [ \"\$CERT_EXISTS\" = 'no' ]; then
+                  echo \"Placeholder cert for \${DOMAIN}...\"
+                  docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot sh -c \"
+                    mkdir -p /etc/letsencrypt/live/\${DOMAIN}
+                    openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                      -keyout /etc/letsencrypt/live/\${DOMAIN}/privkey.pem \
+                      -out /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem \
+                      -subj '/CN=\${DOMAIN}' 2>/dev/null
+                  \"
+                fi
+              done
+              docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload
+            "
             echo "[OK] Nginx updated"
           } || echo "Nginx unchanged (skip)"
 
@@ -640,42 +701,23 @@ jobs:
             exit 1
           fi
 
-          # Ensure SSL cert exists — neu chua co, dung init config (HTTP only)
+          # Ensure placeholder SSL certs exist so nginx can start
           sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
-            if [ ! -f /etc/letsencrypt/live/bhquan.site/fullchain.pem ] && \
-               docker volume inspect webphoto_certbot_data >/dev/null 2>&1; then
-              # Check inside certbot volume
-              CERT_EXISTS=\$(docker run --rm -v webphoto_certbot_data:/certs alpine test -f /certs/live/bhquan.site/fullchain.pem && echo yes || echo no)
+            cd ${APP_DIR}
+            for DOMAIN in bhquan.site bhquan.store; do
+              CERT_EXISTS=\$(docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot \
+                test -f /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem 2>/dev/null && echo yes || echo no)
               if [ \"\$CERT_EXISTS\" = 'no' ]; then
-                echo 'WARNING: SSL cert not found — switching to HTTP-only nginx config'
-                cp ${APP_DIR}/nginx/conf.d/bhquan.site.conf ${APP_DIR}/nginx/conf.d/bhquan.site.conf.ssl.bak 2>/dev/null || true
-                # Tao init config cho bhquan.site (HTTP only)
-                cat > ${APP_DIR}/nginx/conf.d/bhquan.site.conf <<'INITCONF'
-          server {
-              listen 80;
-              server_name bhquan.site api.bhquan.site ws.bhquan.site;
-              location /.well-known/acme-challenge/ { root /var/www/certbot; }
-              location / { root /usr/share/nginx/html; index index.html; try_files \$uri \$uri/ /index.html; }
-              location /api/ { proxy_pass http://api:4000; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_read_timeout 300s; }
-              location /socket.io/ { proxy_pass http://api:4001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection upgrade; proxy_read_timeout 86400; }
-          }
-          INITCONF
-                # Tam xoa bhquan.store SSL config
-                if [ -f ${APP_DIR}/nginx/conf.d/bhquan.store.conf ]; then
-                  mv ${APP_DIR}/nginx/conf.d/bhquan.store.conf ${APP_DIR}/nginx/conf.d/bhquan.store.conf.ssl.bak
-                  cat > ${APP_DIR}/nginx/conf.d/bhquan.store.conf <<'INITCONF2'
-          server {
-              listen 80;
-              server_name bhquan.store www.bhquan.store;
-              resolver 127.0.0.11 valid=30s ipv6=off;
-              location /.well-known/acme-challenge/ { root /var/www/certbot; }
-              location /api/ { set \$be http://vietnet-api:4000; proxy_pass \$be; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
-              location / { set \$fe http://vietnet-frontend:3000; proxy_pass \$fe; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
-          }
-          INITCONF2
-                fi
+                echo \"Generating placeholder cert for \${DOMAIN}...\"
+                docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot sh -c \"
+                  mkdir -p /etc/letsencrypt/live/\${DOMAIN}
+                  openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                    -keyout /etc/letsencrypt/live/\${DOMAIN}/privkey.pem \
+                    -out /etc/letsencrypt/live/\${DOMAIN}/fullchain.pem \
+                    -subj '/CN=\${DOMAIN}' 2>/dev/null
+                \"
               fi
-            fi
+            done
           " 2>&1 || true
 
           # Ensure nginx is running
@@ -750,71 +792,64 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
           SSH_OPTS="-o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3"
 
-          # Check cert trong certbot volume
-          CERT_EXISTS=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
-            docker run --rm -v webphoto_certbot_data:/certs alpine \
-              test -f /certs/live/bhquan.site/fullchain.pem 2>/dev/null && echo yes || echo no
+          # Check if real cert exists (not self-signed placeholder)
+          CERT_INFO=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
+            cd ${APP_DIR}
+            docker compose -f docker-compose.prod.yml run --rm --entrypoint '' certbot sh -c '
+              CERT=/etc/letsencrypt/live/bhquan.site/fullchain.pem
+              if [ ! -f \$CERT ]; then echo MISSING; exit 0; fi
+              ISSUER=\$(openssl x509 -in \$CERT -noout -issuer 2>/dev/null)
+              if echo \$ISSUER | grep -qi \"let.s encrypt\\|R3\\|R10\\|R11\\|E5\\|E6\"; then
+                echo REAL
+              else
+                echo PLACEHOLDER
+              fi
+            '
           " 2>&1)
 
-          if [ "$CERT_EXISTS" = "yes" ]; then
-            echo "SSL cert already exists — ensuring full SSL config"
-          else
-            echo "SSL cert not found — requesting via Certbot..."
+          echo "Cert status: $CERT_INFO"
 
-            # Certbot cho bhquan.site
+          if echo "$CERT_INFO" | grep -q "REAL"; then
+            echo "Real SSL cert exists — skip Certbot"
+          else
+            echo "Requesting real SSL certs via Certbot (timeout 120s)..."
+
+            # bhquan.site
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
               cd ${APP_DIR}
-              docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+              timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
                 --webroot -w /var/www/certbot \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
+                --force-renewal \
                 -d bhquan.site -d api.bhquan.site -d ws.bhquan.site \
                 2>&1 | tail -10
-            " 2>&1
-            CERTBOT_EXIT=$?
+            " 2>&1 && echo "[OK] bhquan.site cert" || echo "WARNING: bhquan.site cert failed — using placeholder"
 
-            if [ $CERTBOT_EXIT -ne 0 ]; then
-              echo "WARNING: Certbot failed for bhquan.site (exit=$CERTBOT_EXIT)"
-              echo "App is running on HTTP — SSL will be retried next deploy"
-              exit 0
-            fi
-            echo "[OK] SSL cert obtained for bhquan.site"
-
-            # Certbot cho bhquan.store (neu VietNet da deploy)
+            # bhquan.store (only if VietNet deployed)
             sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
-              if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api; then
+              if docker ps --filter name=vietnet-api --format '{{.Names}}' | grep -q vietnet-api 2>/dev/null; then
                 cd ${APP_DIR}
-                docker compose -f docker-compose.prod.yml run --rm certbot certonly \
+                timeout 120 docker compose -f docker-compose.prod.yml run --rm certbot certonly \
                   --webroot -w /var/www/certbot \
                   --email admin@bhquan.site --agree-tos --no-eff-email \
+                  --force-renewal \
                   -d bhquan.store -d www.bhquan.store \
                   2>&1 | tail -10
-                echo '[OK] SSL cert obtained for bhquan.store'
+                echo '[OK] bhquan.store cert'
               else
-                echo 'VietNet not running — skip bhquan.store cert'
+                echo 'VietNet not running — skip bhquan.store'
               fi
             " 2>&1 || true
           fi
 
-          # Restore full SSL nginx configs (neu co backup)
-          sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
-            if [ -f ${APP_DIR}/nginx/conf.d/bhquan.site.conf.ssl.bak ]; then
-              cp ${APP_DIR}/nginx/conf.d/bhquan.site.conf.ssl.bak ${APP_DIR}/nginx/conf.d/bhquan.site.conf
-              echo 'Restored bhquan.site SSL config'
-            fi
-            if [ -f ${APP_DIR}/nginx/conf.d/bhquan.store.conf.ssl.bak ]; then
-              cp ${APP_DIR}/nginx/conf.d/bhquan.store.conf.ssl.bak ${APP_DIR}/nginx/conf.d/bhquan.store.conf
-              echo 'Restored bhquan.store SSL config'
-            fi
-          " 2>&1
-
-          # Reload nginx voi SSL config
+          # Reload nginx with certs
           sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
             docker exec shared-nginx nginx -t 2>&1
             if [ \$? -eq 0 ]; then
               docker exec shared-nginx nginx -s reload
-              echo '[OK] Nginx reloaded with SSL'
+              echo '[OK] Nginx reloaded'
             else
-              echo 'ERROR: Nginx config test failed — keeping current config'
+              echo 'ERROR: Nginx config test failed'
               docker exec shared-nginx nginx -T 2>&1 | tail -20
             fi
           " 2>&1

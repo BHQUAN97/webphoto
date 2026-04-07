@@ -50,8 +50,28 @@ log "Upload OK"
 
 # 3. Update Nginx config (Docker shared-nginx)
 step "3/5 — Update Nginx config"
-scp "$ROOT_DIR/nginx/conf.d/bhquan.site.conf" "${VPS_HOST}:${APP_DIR}/nginx/conf.d/bhquan.site.conf" 2>/dev/null && {
-  ssh "${VPS_HOST}" "docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload"
+
+# Upload all nginx configs
+scp -r "$ROOT_DIR/nginx/conf.d/" "${VPS_HOST}:${APP_DIR}/nginx/" 2>/dev/null && {
+  # Ensure SSL certs exist before reloading (prevent nginx crash)
+  ssh "${VPS_HOST}" "
+    DOMAIN='bhquan.site'
+    for D in \${DOMAIN} bhquan.store; do
+      CERT_PATH=\"/etc/letsencrypt/live/\${D}/fullchain.pem\"
+      # Check cert exists inside certbot volume
+      if ! docker run --rm -v certbot_data:/etc/letsencrypt certbot/certbot test -f \${CERT_PATH} 2>/dev/null; then
+        echo \"  Placeholder cert for \${D}...\"
+        docker run --rm -v certbot_data:/etc/letsencrypt certbot/certbot sh -c \"
+          mkdir -p /etc/letsencrypt/live/\${D}
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout /etc/letsencrypt/live/\${D}/privkey.pem \
+            -out /etc/letsencrypt/live/\${D}/fullchain.pem \
+            -subj '/CN=\${D}' 2>/dev/null
+        \"
+      fi
+    done
+    docker exec shared-nginx nginx -t 2>&1 | tail -1 && docker exec shared-nginx nginx -s reload
+  "
   log "Nginx config updated + reloaded"
 } || {
   log "Nginx config unchanged (skip)"

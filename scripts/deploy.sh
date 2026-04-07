@@ -121,15 +121,73 @@ DATABASE_URL="mysql://photo_user:${MYSQL_PWD}@localhost:3306/photo_storage" npm 
 cd ../..
 echo "   Database OK"
 
-# 7. Start all services
+# 7. SSL Certificate (direct mode only)
+if [ "$MODE" != "tunnel" ]; then
+  echo ""
+  echo "[7/9] SSL certificate..."
+  DOMAIN="bhquan.site"
+
+  # Check if cert exists in Docker volume
+  CERT_EXISTS="no"
+  if $DC $COMPOSE_FILES run --rm --entrypoint "" certbot test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem 2>/dev/null; then
+    CERT_EXISTS="yes"
+  fi
+
+  if [ "$CERT_EXISTS" = "no" ]; then
+    echo "   SSL cert not found — generating placeholder + requesting real cert..."
+
+    # Tao self-signed placeholder cho moi domain co SSL config
+    # De nginx start duoc trong khi cho Certbot lay cert that
+    for D in ${DOMAIN} bhquan.store; do
+      $DC $COMPOSE_FILES run --rm --entrypoint "" certbot sh -c "
+        mkdir -p /etc/letsencrypt/live/${D}
+        openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+          -keyout /etc/letsencrypt/live/${D}/privkey.pem \
+          -out /etc/letsencrypt/live/${D}/fullchain.pem \
+          -subj '/CN=${D}' 2>/dev/null
+      "
+    done
+    echo "   Placeholder certs created"
+
+    # Start nginx (su dung placeholder cert)
+    $DC $COMPOSE_FILES up -d nginx
+    sleep 3
+
+    # Request real cert tu Let's Encrypt (timeout 120s)
+    set +e
+    timeout 120 $DC $COMPOSE_FILES run --rm certbot certonly \
+      --webroot -w /var/www/certbot \
+      --email admin@${DOMAIN} --agree-tos --no-eff-email \
+      --force-renewal \
+      -d ${DOMAIN} -d api.${DOMAIN} -d ws.${DOMAIN}
+    CERT_RC=$?
+    set -e
+
+    if [ $CERT_RC -eq 0 ]; then
+      echo "   SSL certificate installed!"
+      # Reload nginx to use real cert
+      $DC $COMPOSE_FILES exec -T nginx nginx -s reload 2>/dev/null || true
+    else
+      echo "   SSL cert failed (code $CERT_RC). Site chay voi self-signed cert."
+      echo "   Retry sau: bash scripts/ssl-init.sh"
+    fi
+  else
+    echo "   SSL certificate found"
+  fi
+else
+  echo ""
+  echo "[7/9] SSL skipped (tunnel mode)"
+fi
+
+# 8. Start all services
 echo ""
-echo "[7/8] Start all services..."
+echo "[8/9] Start all services..."
 $DC $COMPOSE_FILES up -d
 echo "   All services started"
 
-# 8. Health check
+# 9. Health check
 echo ""
-echo "[8/8] Health check..."
+echo "[9/9] Health check..."
 sleep 3
 
 # Try multiple ways to reach the API
