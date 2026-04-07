@@ -239,13 +239,24 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
 
           echo "--- Building images ---"
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1"
-          if [ $? -ne 0 ]; then echo "ERROR: Docker build failed"; exit 1; fi
+          BUILD_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1")
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Docker build failed"
+            echo "$BUILD_OUT" | tail -30
+            exit 1
+          fi
 
           echo "--- Starting services ---"
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d 2>&1"
+          START_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d 2>&1")
           if [ $? -ne 0 ]; then
-            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs --tail 20 2>&1"
+            echo "ERROR: docker compose up failed"
+            echo "$START_OUT"
+            echo ""
+            echo "=== Container status ==="
+            sshpass -e ssh -p $PORT $VPS "docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'photo|shared'" 2>&1
+            echo ""
+            echo "=== API logs ==="
+            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs --tail 30 --no-color" 2>&1
             exit 1
           fi
 
@@ -357,12 +368,30 @@ jobs:
           PORT="${{ env.VPS_PORT }}"
 
           echo "--- Building api + worker ---"
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1"
-          if [ $? -ne 0 ]; then echo "ERROR: Docker build failed"; exit 1; fi
+          BUILD_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml build api worker 2>&1")
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Docker build failed"
+            echo "$BUILD_OUT" | tail -30
+            exit 1
+          fi
 
           echo "--- Restarting api + worker ---"
-          sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d api worker 2>&1"
-          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | head -10"
+          UP_OUT=$(sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d api worker 2>&1")
+          if [ $? -ne 0 ]; then
+            echo "ERROR: docker compose up failed"
+            echo "$UP_OUT"
+            echo ""
+            echo "=== Container status ==="
+            sshpass -e ssh -p $PORT $VPS "docker ps -a --format 'table {{.Names}}\t{{.Status}}' | grep -E 'photo|shared'" 2>&1
+            echo ""
+            echo "=== API logs ==="
+            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 30 --no-color" 2>&1
+            exit 1
+          fi
+
+          echo "--- Verifying containers ---"
+          sleep 3
+          sshpass -e ssh -p $PORT $VPS "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'photo|shared'" 2>&1
           echo "[OK] API containers rebuilt"
 
       - name: '[UPDATE] Restart API (FE-only change)'
@@ -453,6 +482,13 @@ jobs:
 
           if [ $PUSH_EXIT -ne 0 ]; then
             echo "ERROR: drizzle-kit push failed (exit=$PUSH_EXIT)"
+            echo ""
+            echo "=== MySQL connection test ==="
+            mysql -h 127.0.0.1 -P 13306 -u photo_user -p"${MYSQL_PWD}" -e "SELECT DATABASE(), VERSION()" 2>&1 || echo "MySQL unreachable"
+            echo ""
+            echo "=== Current tables ==="
+            sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -N -e 'SHOW TABLES'" 2>&1
+            kill $TUNNEL_PID 2>/dev/null
             exit 1
           fi
 
@@ -475,12 +511,23 @@ jobs:
             STATUS=$(sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{.State.Status}}' photo-api 2>/dev/null" 2>&1)
             if [ "$STATUS" = "running" ]; then
               echo "  API container running (${i}s)"
-              sleep 2  # extra buffer for app init
+              sleep 2
               break
             fi
             if [ $i -eq 30 ]; then
               echo "ERROR: API container not running after 30s (status=$STATUS)"
-              sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 20" 2>&1
+              echo ""
+              echo "=== Container status ==="
+              sshpass -e ssh -p $PORT $VPS "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'photo|shared'" 2>&1
+              echo ""
+              echo "=== API logs ==="
+              sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 30 --no-color" 2>&1
+              echo ""
+              echo "=== Worker logs ==="
+              sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs worker --tail 15 --no-color" 2>&1
+              echo ""
+              echo "=== Redis policy ==="
+              sshpass -e ssh -p $PORT $VPS "docker exec shared-redis redis-cli CONFIG GET maxmemory-policy" 2>&1
               exit 1
             fi
             sleep 1
@@ -490,14 +537,21 @@ jobs:
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+          echo "Running seed..."
           OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1
           " 2>&1)
           EXIT_CODE=$?
-          echo "$OUTPUT" | tail -5
+          echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "WARNING: Seed exit=$EXIT_CODE (may already be seeded)"
+            echo ""
+            echo "WARNING: Seed exit=$EXIT_CODE"
+            echo "=== API container status ==="
+            sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{.State.Status}} ({{.State.ExitCode}})' photo-api" 2>&1
+            echo "=== API logs (last 10) ==="
+            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 10 --no-color" 2>&1
+            echo "(Seed failure is non-blocking — data may already exist)"
           else
             echo "[OK] Seed complete"
           fi
