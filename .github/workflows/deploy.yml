@@ -385,7 +385,7 @@ jobs:
           sshpass -e scp -P $PORT docker-compose.prod.yml $VPS:${APP_DIR}/
 
       - name: '[UPDATE] Sync Nginx config'
-        if: steps.detect.outputs.mode == 'update' && steps.changes.outputs.infra == 'true'
+        if: steps.detect.outputs.mode == 'update'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
