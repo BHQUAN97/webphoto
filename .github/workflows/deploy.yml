@@ -643,13 +643,62 @@ jobs:
             exit 1
           fi
 
-          # Ensure nginx is running (may have been missed by conditional steps)
+          # Ensure SSL cert exists — neu chua co, dung init config (HTTP only)
+          sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
+            if [ ! -f /etc/letsencrypt/live/bhquan.site/fullchain.pem ] && \
+               docker volume inspect webphoto_certbot_data >/dev/null 2>&1; then
+              # Check inside certbot volume
+              CERT_EXISTS=\$(docker run --rm -v webphoto_certbot_data:/certs alpine test -f /certs/live/bhquan.site/fullchain.pem && echo yes || echo no)
+              if [ \"\$CERT_EXISTS\" = 'no' ]; then
+                echo 'WARNING: SSL cert not found — switching to HTTP-only nginx config'
+                cp ${APP_DIR}/nginx/conf.d/bhquan.site.conf ${APP_DIR}/nginx/conf.d/bhquan.site.conf.ssl.bak 2>/dev/null || true
+                # Tao init config cho bhquan.site (HTTP only)
+                cat > ${APP_DIR}/nginx/conf.d/bhquan.site.conf <<'INITCONF'
+          server {
+              listen 80;
+              server_name bhquan.site api.bhquan.site ws.bhquan.site;
+              location /.well-known/acme-challenge/ { root /var/www/certbot; }
+              location / { root /usr/share/nginx/html; index index.html; try_files \$uri \$uri/ /index.html; }
+              location /api/ { proxy_pass http://api:4000; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_read_timeout 300s; }
+              location /socket.io/ { proxy_pass http://api:4001; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection upgrade; proxy_read_timeout 86400; }
+          }
+          INITCONF
+                # Tam xoa bhquan.store SSL config
+                if [ -f ${APP_DIR}/nginx/conf.d/bhquan.store.conf ]; then
+                  mv ${APP_DIR}/nginx/conf.d/bhquan.store.conf ${APP_DIR}/nginx/conf.d/bhquan.store.conf.ssl.bak
+                  cat > ${APP_DIR}/nginx/conf.d/bhquan.store.conf <<'INITCONF2'
+          server {
+              listen 80;
+              server_name bhquan.store www.bhquan.store;
+              resolver 127.0.0.11 valid=30s ipv6=off;
+              location /.well-known/acme-challenge/ { root /var/www/certbot; }
+              location /api/ { set \$be http://vietnet-api:4000; proxy_pass \$be; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
+              location / { set \$fe http://vietnet-frontend:3000; proxy_pass \$fe; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
+          }
+          INITCONF2
+                fi
+              fi
+            fi
+          " 2>&1 || true
+
+          # Ensure nginx is running
           sshpass -e ssh -p $PORT $SSH_OPTS $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml up -d nginx 2>&1" || true
+
+          # Ensure Redis noeviction policy
+          sshpass -e ssh -p $PORT $SSH_OPTS $VPS "
+            POLICY=\$(docker exec shared-redis redis-cli CONFIG GET maxmemory-policy 2>/dev/null | tail -1)
+            if [ \"\$POLICY\" != 'noeviction' ]; then
+              echo 'Fixing Redis eviction policy...'
+              docker exec shared-redis redis-cli CONFIG SET maxmemory-policy noeviction
+              docker exec shared-redis redis-cli CONFIG REWRITE 2>/dev/null || true
+              echo 'Redis policy set to noeviction'
+            fi
+          " 2>&1 || true
 
           echo "Waiting for API health..."
           set +e
           for i in $(seq 1 15); do
-            RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "docker exec photo-api curl -sf http://localhost:4000/api/health" 2>&1)
+            RESULT=$(sshpass -e ssh -p $PORT $SSH_OPTS $VPS "docker exec photo-api node -e \"fetch('http://localhost:4000/api/health').then(r=>r.text()).then(t=>{process.stdout.write(t);process.exit(0)}).catch(()=>process.exit(1))\"" 2>&1)
             SSH_EXIT=$?
             if [ $SSH_EXIT -eq 0 ] && [ -n "$RESULT" ]; then
               echo "API healthy (attempt $i): $RESULT"
