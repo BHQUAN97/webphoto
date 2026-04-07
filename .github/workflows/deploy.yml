@@ -70,7 +70,7 @@ jobs:
 
       - name: Setup SSH with sshpass
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass mysql-client > /dev/null
           mkdir -p ~/.ssh
           ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
@@ -419,92 +419,71 @@ jobs:
           fi
           echo "[OK] DB photo_storage + user photo_user verified"
 
-      - name: Wait for API container ready
+      - name: Ensure DB schema (drizzle push via SSH tunnel)
         run: |
+          set +e
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
+          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
 
-          echo "--- Checking api container ---"
-          for i in $(seq 1 30); do
-            STATUS=$(sshpass -e ssh -p $PORT $VPS "docker ps --filter name=photo-api --format '{{.Names}} {{.Status}}'" 2>&1)
-            if echo "$STATUS" | grep -q "Up"; then
-              echo "  $STATUS"
-              echo "[OK] API container is running (attempt $i)"
-              break
-            fi
-            if [ $i -eq 30 ]; then
-              echo "ERROR: API container not running after 30s"
-              sshpass -e ssh -p $PORT $VPS "
-                echo '--- All containers ---'
-                docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | head -20
-                echo ''
-                echo '--- API container logs ---'
-                docker logs photo-api --tail 30 2>&1 || echo 'No photo-api container found'
-              "
-              exit 1
-            fi
-            sleep 1
-          done
+          # Expose MySQL port tren VPS host (tam thoi)
+          echo "--- Exposing MySQL port on VPS ---"
+          sshpass -e ssh -p $PORT $VPS "
+            # Kiem tra shared-mysql container
+            echo 'MySQL container:'
+            docker ps --filter name=shared-mysql --format '{{.Names}} {{.Status}}'
 
-          echo "--- Checking drizzle-kit available ---"
-          DRIZZLE_CHECK=$(sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml exec -T api npx drizzle-kit --version 2>&1
-          ")
-          DRIZZLE_EXIT=$?
-          echo "  drizzle-kit: $DRIZZLE_CHECK (exit=$DRIZZLE_EXIT)"
-          if [ $DRIZZLE_EXIT -ne 0 ]; then
-            echo "WARNING: drizzle-kit not available in api container"
-            echo "--- Container file check ---"
-            sshpass -e ssh -p $PORT $VPS "
-              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/node_modules/.bin/drizzle-kit 2>&1 || echo 'drizzle-kit binary not found'
-              docker compose -f docker-compose.prod.yml exec -T api ls /app/package.json 2>&1 || echo 'package.json not found'
-              docker compose -f docker-compose.prod.yml exec -T api cat /app/package.json 2>&1 | head -5
-            "
+            # Lay IP cua shared-mysql trong Docker network
+            MYSQL_IP=\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' shared-mysql 2>&1)
+            echo \"MySQL container IP: \$MYSQL_IP\"
+          "
+
+          # SSH tunnel: forward CI localhost:13306 → VPS shared-mysql:3306
+          echo "--- Creating SSH tunnel ---"
+          MYSQL_IP=$(sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' shared-mysql" 2>&1)
+          echo "  MySQL IP in Docker: $MYSQL_IP"
+
+          sshpass -e ssh -p $PORT -L 13306:${MYSQL_IP}:3306 -N $VPS &
+          TUNNEL_PID=$!
+          sleep 2
+
+          # Test tunnel
+          echo "--- Testing tunnel connection ---"
+          if ! mysql -h 127.0.0.1 -P 13306 -u photo_user -p"${MYSQL_PWD}" -e "SELECT 1" 2>&1; then
+            echo "ERROR: SSH tunnel to MySQL failed"
+            echo "  Tunnel PID: $TUNNEL_PID"
+            kill $TUNNEL_PID 2>/dev/null
+            exit 1
           fi
+          echo "  Tunnel OK (localhost:13306 → VPS MySQL)"
 
-      - name: Ensure DB schema (drizzle push)
-        run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
-
+          # Chay drizzle-kit push tu CI (co day du devDeps)
           echo "--- Running drizzle-kit push --force ---"
-          OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
-            cd ${APP_DIR}
-            docker compose -f docker-compose.prod.yml exec -T api sh -c 'cd /app && npx drizzle-kit push --force 2>&1'
-          " 2>&1)
-          EXIT_CODE=$?
-          echo "$OUTPUT"
+          cd photo-storage/server
+          DATABASE_URL="mysql://photo_user:${MYSQL_PWD}@127.0.0.1:13306/photo_storage" npx drizzle-kit push --force 2>&1
+          PUSH_EXIT=$?
+          cd ../..
 
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo ""
-            echo "ERROR: drizzle-kit push failed (exit=$EXIT_CODE)"
-            echo "--- Diagnosing ---"
-            sshpass -e ssh -p $PORT $VPS "
-              cd ${APP_DIR}
-              echo 'Container env:'
-              docker compose -f docker-compose.prod.yml exec -T api sh -c 'echo DATABASE_URL=\$DATABASE_URL | sed \"s/:[^:@]*@/:***@/\"' 2>&1
-              echo ''
-              echo 'drizzle.config exists:'
-              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/drizzle.config.* 2>&1 || echo 'No drizzle config found'
-              echo ''
-              echo 'Schema file exists:'
-              docker compose -f docker-compose.prod.yml exec -T api ls -la /app/dist/database/schema.js 2>&1 || echo 'Schema not found in dist'
-            "
+          # Dong tunnel
+          kill $TUNNEL_PID 2>/dev/null
+
+          if [ $PUSH_EXIT -ne 0 ]; then
+            echo "ERROR: drizzle-kit push failed (exit=$PUSH_EXIT)"
             exit 1
           fi
 
+          # Verify tables
           echo ""
-          echo "--- Verifying tables created ---"
-          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+          echo "--- Verifying tables ---"
           TABLES=$(sshpass -e ssh -p $PORT $VPS "docker exec -i shared-mysql mysql -u photo_user -p'${MYSQL_PWD}' photo_storage -N -e 'SHOW TABLES'" 2>&1)
           TABLE_COUNT=$(echo "$TABLES" | grep -c '[a-z]' || echo 0)
           echo "  Tables ($TABLE_COUNT): $(echo "$TABLES" | tr '\n' ', ' | sed 's/,$//')"
 
           if [ "$TABLE_COUNT" -lt 5 ]; then
-            echo "WARNING: Expected 14+ tables but found $TABLE_COUNT — drizzle push may have failed silently"
+            echo "ERROR: Expected 14+ tables but found $TABLE_COUNT"
+            exit 1
           fi
-          echo "[OK] Schema push complete"
+          echo "[OK] Schema push complete ($TABLE_COUNT tables)"
 
       - name: Seed database
         run: |
