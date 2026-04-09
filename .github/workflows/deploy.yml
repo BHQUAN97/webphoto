@@ -65,7 +65,13 @@ jobs:
       - name: Detect changes
         id: changes
         run: |
-          DIFF=$(git diff --name-only HEAD~1 2>/dev/null || echo "FULL")
+          # Dung github.event.before thay HEAD~1 — chinh xac voi squash merge
+          BEFORE="${{ github.event.before }}"
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
+            DIFF="FULL"
+          else
+            DIFF=$(git diff --name-only "$BEFORE" "${{ github.sha }}" 2>/dev/null || echo "FULL")
+          fi
           echo "Changed files:"
           echo "$DIFF" | head -20
 
@@ -680,11 +686,20 @@ jobs:
             sleep 1
           done
 
-      - name: Seed database
+      - name: Seed database (INIT only)
+        if: steps.detect.outputs.mode == 'init'
         run: |
           VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
           PORT="${{ env.VPS_PORT }}"
-          echo "Running seed..."
+
+          echo "Waiting for API to be ready..."
+          for i in $(seq 1 30); do
+            sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" > /dev/null 2>&1 && break
+            [ $i -eq 30 ] && { echo "API not ready — skip seed"; exit 0; }
+            sleep 2
+          done
+
+          echo "Seeding (first-time only)..."
           OUTPUT=$(sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             docker compose -f docker-compose.prod.yml exec -T api node dist/database/seed.js 2>&1
@@ -692,13 +707,7 @@ jobs:
           EXIT_CODE=$?
           echo "$OUTPUT"
           if [ $EXIT_CODE -ne 0 ]; then
-            echo ""
-            echo "WARNING: Seed exit=$EXIT_CODE"
-            echo "=== API container status ==="
-            sshpass -e ssh -p $PORT $VPS "docker inspect -f '{{.State.Status}} ({{.State.ExitCode}})' photo-api" 2>&1
-            echo "=== API logs (last 10) ==="
-            sshpass -e ssh -p $PORT $VPS "cd ${APP_DIR} && docker compose -f docker-compose.prod.yml logs api --tail 10 --no-color" 2>&1
-            echo "(Seed failure is non-blocking — data may already exist)"
+            echo "WARNING: Seed exit=$EXIT_CODE (non-blocking — data may already exist)"
           else
             echo "[OK] Seed complete"
           fi
