@@ -57,8 +57,11 @@ jobs:
 
       - name: Load config/env
         run: |
-          grep -v '^#' config/env | grep -v '^$' | grep '=' >> $GITHUB_ENV
-          PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            [[ "$line" == *=* ]] && echo "$line" >> $GITHUB_ENV
+          done < config/env
+          PASS=$(sed -n 's/^VPS_PASSWORD=//p' config/env)
           echo "SSHPASS=${PASS}" >> $GITHUB_ENV
           echo "Config loaded"
 
