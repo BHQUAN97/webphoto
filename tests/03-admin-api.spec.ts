@@ -24,7 +24,16 @@ test.describe('TC03 — Admin API Endpoints', () => {
 
   test('TC03.3 — User detail', async ({ request }) => {
     const token = await getAdminToken(request)
-    const res = await request.get(`${API_BASE}/api/admin/users/01KMF9GFSYGJ2V0MQJ16RX7FX7`, {
+    // Lay ID user dau tien tu list thay vi hardcode — tranh test-data drift
+    const listRes = await request.get(`${API_BASE}/api/admin/users?limit=1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    expect(listRes.ok()).toBeTruthy()
+    const listBody = await listRes.json()
+    const firstUserId = listBody.items?.[0]?.id
+    expect(firstUserId).toBeTruthy()
+
+    const res = await request.get(`${API_BASE}/api/admin/users/${firstUserId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     expect(res.ok()).toBeTruthy()

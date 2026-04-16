@@ -25,9 +25,8 @@ test.describe('TC01 — Trang cong khai (Public Pages)', () => {
 
   test('TC01.4 — Trang 404 hien thi dung', async ({ page }) => {
     await page.goto('/khong-ton-tai-xyz')
-    const body = await page.locator('body').textContent()
-    const is404 = body!.includes('404') || body!.includes('Không tìm thấy') || body!.includes('Not Found')
-    expect(is404).toBeTruthy()
+    // expect().toContainText auto-waits cho Vue mount xong (toi da 5s)
+    await expect(page.locator('body')).toContainText(/404|Không tìm thấy|tồn tại|Not Found/i)
   })
 
   test('TC01.5 — Login sai password hien thong bao loi', async ({ page }) => {
