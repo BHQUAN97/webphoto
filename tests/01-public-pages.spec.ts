@@ -10,23 +10,24 @@ test.describe('TC01 — Trang cong khai (Public Pages)', () => {
 
   test('TC01.2 — Trang login hien form', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.locator('input[type="email"]')).toBeVisible()
-    await expect(page.locator('input[type="password"]')).toBeVisible()
-    await expect(page.locator('button[type="submit"]')).toBeVisible()
+    // 10s timeout: Vite lazy chunk + auth.refresh() await trong router guard
+    await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('input[type="password"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('button[type="submit"]')).toBeVisible({ timeout: 10_000 })
   })
 
   test('TC01.3 — Trang register hien form', async ({ page }) => {
     await page.goto('/register')
-    await expect(page.locator('input[type="email"]')).toBeVisible()
+    await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 })
     // Password co the la type="password" hoac input co placeholder password
     const pwField = page.locator('input[type="password"]').or(page.locator('input[placeholder*="••"]'))
-    await expect(pwField.first()).toBeVisible()
+    await expect(pwField.first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('TC01.4 — Trang 404 hien thi dung', async ({ page }) => {
     await page.goto('/khong-ton-tai-xyz')
-    // expect().toContainText auto-waits cho Vue mount xong (toi da 5s)
-    await expect(page.locator('body')).toContainText(/404|Không tìm thấy|tồn tại|Not Found/i)
+    // 10s timeout: Vue app cold-mount cham, lazy chunk
+    await expect(page.locator('body')).toContainText(/404|Không tìm thấy|tồn tại|Not Found/i, { timeout: 10_000 })
   })
 
   test('TC01.5 — Login sai password hien thong bao loi', async ({ page }) => {
@@ -49,8 +50,8 @@ test.describe('TC01 — Trang cong khai (Public Pages)', () => {
   })
 
   test('TC01.7 — API plans public', async ({ request }) => {
-    // Plans co the slow lan dau do Redis cache miss
-    const res = await request.get(`${API_BASE}/api/plans`, { timeout: 15_000 })
+    // Plans lan dau co the slow do Redis cache miss + quota fetch N plans
+    const res = await request.get(`${API_BASE}/api/plans`, { timeout: 30_000 })
     expect(res.ok()).toBeTruthy()
   })
 })

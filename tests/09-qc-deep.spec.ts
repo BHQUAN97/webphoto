@@ -49,8 +49,10 @@ test.describe('TC09 — QC Deep: IP rate-limit', () => {
 
   test('TC09.1 — /auth/login qua IP rate-limit (100/60s) → 429 sau N requests', async ({ request }) => {
     // Gui 120 requests song song voi password sai (limit = 100/60s)
+    // x-forwarded-for giai localhost bypass (dev/test)
     const promises = Array.from({ length: 120 }, (_, i) =>
       request.post(`${API_BASE}/api/auth/login`, {
+        headers: { 'x-forwarded-for': '203.0.113.41' },
         data: { email: `rl_${i}@qc.test`, password: 'wrong' },
       }),
     )
@@ -66,15 +68,17 @@ test.describe('TC09 — QC Deep: IP rate-limit', () => {
   })
 
   test('TC09.2 — /auth/register qua IP rate-limit (20/60s) → 429', async ({ request }) => {
+    // Giai localhost bypass bang x-forwarded-for: middleware uu tien header nay de tinh IP
     const promises = Array.from({ length: 30 }, (_, i) =>
       request.post(`${API_BASE}/api/auth/register`, {
+        headers: { 'x-forwarded-for': '203.0.113.42' },
         data: { email: `rlreg_${Date.now()}_${i}@qc.test`, password: 'Passw0rd!', displayName: 'RL' },
       }),
     )
     const results = await Promise.all(promises)
     const statuses = results.map(r => r.status())
     for (const s of statuses) expect(s).toBeLessThan(500)
-    // Limit 20 — voi 30 request song song thuong se co 429
+    // Limit 30/min — voi 30 parallel thuong se co vai 429 neu trigger dung
     const got429 = statuses.filter(s => s === 429).length
     expect(got429).toBeGreaterThanOrEqual(0) // assert mem: chi can khong 5xx
   })

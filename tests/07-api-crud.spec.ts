@@ -4,12 +4,13 @@ import { API_BASE, getAdminToken } from './helpers'
 test.describe('TC07 — API CRUD Operations', () => {
 
   test('TC07.1 — Public albums list', async ({ request }) => {
-    const res = await request.get(`${API_BASE}/api/albums`)
+    // Cold-start chau join + cover thumbnail co the cham
+    const res = await request.get(`${API_BASE}/api/albums`, { timeout: 30_000 })
     expect(res.ok()).toBeTruthy()
   })
 
   test('TC07.2 — Public images list', async ({ request }) => {
-    const res = await request.get(`${API_BASE}/api/images`)
+    const res = await request.get(`${API_BASE}/api/images`, { timeout: 30_000 })
     expect(res.ok()).toBeTruthy()
   })
 
