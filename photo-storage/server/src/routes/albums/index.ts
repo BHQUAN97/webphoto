@@ -7,6 +7,7 @@ import { albums, images, users, userPlans, plans, albumShareTokens } from '../..
 import { eq, and, desc, sql, lt } from 'drizzle-orm'
 import { requireAuth, requirePlan } from '../../middleware/auth.js'
 import { rateLimit } from '../../middleware/rateLimit.js'
+import { ipRateLimit } from '../../middleware/ipRateLimit.js'
 import { feedCache } from '../../utils/redis.js'
 import { storageFor, getStorageBackendSync } from '../../utils/storage/index.js'
 import { sanitizeText, isValidUlid } from '../../utils/validate.js'
@@ -481,8 +482,8 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   })
 }))
 
-// POST /:id/verify-password — verify album password for shared view
-router.post('/:id/verify-password', asyncHandler(async (req, res) => {
+// POST /:id/verify-password — verify album password for shared view (rate-limit chong brute-force)
+router.post('/:id/verify-password', ipRateLimit('album:verify', 20, 60), asyncHandler(async (req, res) => {
   const id = req.params.id as string
   const { password } = req.body
 
@@ -561,13 +562,31 @@ router.post('/:id/share', async (req, res) => {
     .where(eq(albumShareTokens.albumId, id)).limit(1)
 
   if (existing) {
+    // Update permissions neu request moi yeu cau khac — truoc day tra token cu voi permission cu,
+    // gay khong nhat quan khi user re-share voi setting khac.
+    const newAllowLike = allowLike ?? existing.allowLike
+    const newAllowComment = allowComment ?? existing.allowComment
+    const newAllowDownload = allowDownload ?? existing.allowDownload
+
+    if (
+      newAllowLike !== existing.allowLike
+      || newAllowComment !== existing.allowComment
+      || newAllowDownload !== existing.allowDownload
+    ) {
+      await db.update(albumShareTokens).set({
+        allowLike: newAllowLike,
+        allowComment: newAllowComment,
+        allowDownload: newAllowDownload,
+      }).where(eq(albumShareTokens.id, existing.id))
+    }
+
     return res.json({
       token: existing.token,
       expiresAt: existing.expiresAt,
       permissions: {
-        allowLike: existing.allowLike,
-        allowComment: existing.allowComment,
-        allowDownload: existing.allowDownload,
+        allowLike: newAllowLike,
+        allowComment: newAllowComment,
+        allowDownload: newAllowDownload,
       },
     })
   }

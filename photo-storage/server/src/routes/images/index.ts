@@ -147,6 +147,12 @@ router.get('/', async (req, res) => {
 // POST /upload-url — get presigned multipart URLs
 router.post('/upload-url', rateLimit('upload', 60, 60), async (req, res) => {
   const user = requireAuth(req)
+
+  // Guard khi client khong set Content-Type hoac gui body khong phai JSON object
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ message: 'Body phai la JSON object' })
+  }
+
   const { filename, size, albumId, mimeType } = req.body
 
   // Validate required fields
@@ -290,10 +296,29 @@ router.post('/upload-zip', express.raw({ limit: '500mb', type: ['application/zip
   let failCount = 0
   const imageIds: string[] = []
 
+  // Zip-slip / zip-bomb guards
+  const MAX_ENTRIES = 2000
+  const MAX_TOTAL_UNCOMPRESSED = 10 * 1024 * 1024 * 1024 // 10GB tong uncompressed
+  let totalUncompressed = 0
+  let entryCount = 0
+
   try {
     const directory = await unzipper.Open.buffer(req.body)
 
+    if (directory.files.length > MAX_ENTRIES) {
+      return res.status(400).json({ message: `ZIP vuot qua ${MAX_ENTRIES} entries` })
+    }
+
     for (const entry of directory.files) {
+      entryCount++
+      if (entryCount > MAX_ENTRIES) break
+
+      // Zip-slip guard: chan path traversal
+      if (entry.path.includes('..') || entry.path.startsWith('/') || entry.path.startsWith('\\')) {
+        skipCount++
+        continue
+      }
+
       // Skip directories and hidden files
       if (entry.type === 'Directory') continue
       const filename = path.basename(entry.path)
@@ -310,6 +335,13 @@ router.post('/upload-zip', express.raw({ limit: '500mb', type: ['application/zip
         if (buffer.length === 0 || buffer.length > maxBytes) {
           skipCount++
           continue
+        }
+
+        // Zip-bomb guard: chan tong uncompressed vuot nguong
+        totalUncompressed += buffer.length
+        if (totalUncompressed > MAX_TOTAL_UNCOMPRESSED) {
+          logger.warn(`[ZIP Upload] Total uncompressed exceeded ${MAX_TOTAL_UNCOMPRESSED} bytes`, { userId: user.sub, albumId })
+          break
         }
 
         // Check quota

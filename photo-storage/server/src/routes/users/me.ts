@@ -83,11 +83,7 @@ router.patch('/me', async (req, res) => {
 // POST /api/users/me/avatar — upload avatar via server (base64)
 router.post('/me/avatar', async (req, res) => {
   const user = requireAuth(req)
-  const { mimeType, data: base64Data } = req.body
-
-  if (!mimeType || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
-    return res.status(400).json({ message: 'Chỉ hỗ trợ JPEG, PNG, WebP' })
-  }
+  const { data: base64Data } = req.body ?? {}
 
   if (!base64Data) {
     return res.status(400).json({ message: 'Thiếu dữ liệu ảnh' })
@@ -95,15 +91,21 @@ router.post('/me/avatar', async (req, res) => {
 
   const buffer = Buffer.from(base64Data, 'base64')
 
-  // Validate size server-side (5MB max for avatar)
   if (buffer.length > 5 * 1024 * 1024) {
     return res.status(400).json({ message: 'Ảnh tối đa 5MB' })
   }
 
-  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
+  // Verify magic bytes thay vi trust MIME string client gui (chan SVG/polyglot)
+  const { detectImageMime } = await import('../../utils/magicBytes.js')
+  const realMime = detectImageMime(buffer)
+  if (!realMime) {
+    return res.status(400).json({ message: 'File khong phai JPEG/PNG/WebP hop le' })
+  }
+
+  const ext = realMime === 'image/png' ? 'png' : realMime === 'image/webp' ? 'webp' : 'jpg'
   const key = `avatars/${user.sub}/${ulid()}.${ext}`
 
-  await storage().uploadBuffer(key, buffer, mimeType)
+  await storage().uploadBuffer(key, buffer, realMime)
 
   res.json({ key })
 })

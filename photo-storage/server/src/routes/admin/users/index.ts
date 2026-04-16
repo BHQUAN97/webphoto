@@ -150,6 +150,18 @@ router.delete('/:id', async (req, res) => {
   const admin = requireAdmin(req)
   const { id } = req.params
 
+  // Chan admin tu xoa chinh minh — tranh lock-out va data loss
+  if (id === admin.sub) {
+    return res.status(400).json({ message: 'Không thể tự xóa tài khoản admin' })
+  }
+
+  // Verify target user exists
+  const [targetUser] = await db.select({ id: users.id, role: users.role })
+    .from(users).where(eq(users.id, id)).limit(1)
+  if (!targetUser) {
+    return res.status(404).json({ message: 'User không tồn tại' })
+  }
+
   // Cascade delete
   await db.delete(comments).where(eq(comments.userId, id))
   await db.delete(likes).where(eq(likes.userId, id))
@@ -168,7 +180,14 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/grant-plan', async (req, res) => {
   const admin = requireAdmin(req)
   const { id } = req.params
-  const { planCode, durationDays, days: daysAlias } = req.body
+  const { planCode, durationDays, days: daysAlias } = req.body ?? {}
+
+  if (!planCode) return res.status(400).json({ message: 'Thiếu planCode' })
+
+  // Verify user exists truoc khi grant
+  const [targetUser] = await db.select().from(users)
+    .where(eq(users.id, id)).limit(1)
+  if (!targetUser) return res.status(404).json({ message: 'User không tồn tại' })
 
   const [plan] = await db.select().from(plans)
     .where(eq(plans.code, planCode)).limit(1)

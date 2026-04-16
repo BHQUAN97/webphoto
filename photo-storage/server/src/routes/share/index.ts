@@ -6,6 +6,18 @@ import { eq, and, desc, sql, lt } from 'drizzle-orm'
 import { clampInt, isValidUlid } from '../../utils/validate.js'
 import { storage, storageFor } from '../../utils/storage/index.js'
 import { sanitizeText } from '../../utils/validate.js'
+import { redis } from '../../utils/redis.js'
+
+// De-dup guest like theo IP+imageId — tranh spam inflated likeCount
+async function markGuestLike(ip: string, imageId: string): Promise<boolean> {
+  try {
+    const key = `guestLike:${ip}:${imageId}`
+    const set = await redis.set(key, '1', { NX: true, EX: 3600 * 24 })
+    return set === 'OK'
+  } catch {
+    return true // fail-open
+  }
+}
 
 const router = Router()
 
@@ -121,6 +133,16 @@ router.post('/:token/images/:imageId/like', async (req, res) => {
   const imgResult = await validateSharedImage(imageId, share.albumId)
   if (imgResult.error) return res.status(imgResult.error.status).json({ message: imgResult.error.message })
   const image = imgResult.image!
+
+  // De-dup theo IP — 1 guest chi like 1 lan cho moi imageId (TTL 24h)
+  const guestIp = (req.headers['cf-connecting-ip'] as string)
+    || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress
+    || 'unknown'
+  const firstLike = await markGuestLike(guestIp, imageId)
+  if (!firstLike) {
+    return res.status(200).json({ ok: true, likeCount: image.likeCount, deduped: true })
+  }
 
   await db.update(images).set({ likeCount: sql`like_count + 1` }).where(eq(images.id, imageId))
   res.json({ ok: true, likeCount: image.likeCount + 1 })

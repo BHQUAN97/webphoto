@@ -13,6 +13,7 @@ import { getSetting } from './utils/settings-cache.js'
 import { mailService } from './utils/mailService.js'
 import { validateDriveConfig } from './utils/googleDrive.js'
 import { globalErrorHandler } from './utils/asyncHandler.js'
+import { ipRateLimit } from './middleware/ipRateLimit.js'
 
 // Auth routes
 import registerRoute from './routes/auth/register.js'
@@ -80,7 +81,10 @@ app.use((_req, res, next) => {
   next()
 })
 
-// Middleware
+// Middleware — fail-fast neu prod thieu CORS_ORIGIN (tranh rang nham open CORS)
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
+  throw new Error('CORS_ORIGIN phai duoc set trong production')
+}
 app.use(cors({
   origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
     .split(',')
@@ -106,7 +110,11 @@ app.get('/api/health', (_req, res) => {
 })
 
 
-// Public auth routes
+// Public auth routes — IP rate-limit chong brute-force (budget du cho SPA phien lam viec binh thuong
+// va test suite; attacker brute force 300+/phut se bi chan. Can xem xet them captcha + progressive delay.)
+app.use('/api/auth/register', ipRateLimit('auth:register', 30, 60))
+app.use('/api/auth/login', ipRateLimit('auth:login', 300, 60))
+app.use('/api/auth/refresh', ipRateLimit('auth:refresh', 300, 60))
 app.use('/api/auth', registerRoute)
 app.use('/api/auth', loginRoute)
 app.use('/api/auth', logoutRoute)
@@ -145,8 +153,8 @@ app.use('/api/vouchers', voucherRoutes)
 // Referral routes
 app.use('/api/referrals', referralRoutes)
 
-// Share routes (public album sharing, no auth)
-app.use('/api/share', shareRoutes)
+// Share routes (public album sharing, no auth) — IP rate-limit chong abuse guest like/comment
+app.use('/api/share', ipRateLimit('share', 60, 60), shareRoutes)
 
 // Cron routes
 app.use('/api/cron', cronRoutes)
@@ -171,7 +179,23 @@ app.use(async (err: Error & { statusCode?: number; code?: string }, req: express
     meta.stack = err.stack
     // Include request context for debugging 5xx
     if (req.body && !Buffer.isBuffer(req.body)) {
-      try { meta.reqBody = JSON.stringify(req.body).slice(0, 1000) } catch { /* skip */ }
+      try {
+        // Redact sensitive keys truoc khi log (password, token, secret, authorization)
+        const redacted = JSON.parse(JSON.stringify(req.body))
+        const SENSITIVE = ['password', 'passwordHash', 'token', 'accessToken', 'refreshToken', 'secret', 'authorization', 'apiKey']
+        const redact = (obj: unknown): void => {
+          if (!obj || typeof obj !== 'object') return
+          for (const k of Object.keys(obj as Record<string, unknown>)) {
+            if (SENSITIVE.some(s => k.toLowerCase().includes(s.toLowerCase()))) {
+              (obj as Record<string, unknown>)[k] = '[REDACTED]'
+            } else {
+              redact((obj as Record<string, unknown>)[k])
+            }
+          }
+        }
+        redact(redacted)
+        meta.reqBody = JSON.stringify(redacted).slice(0, 1000)
+      } catch { /* skip */ }
     }
     if (req.query && Object.keys(req.query).length > 0) {
       meta.query = req.query

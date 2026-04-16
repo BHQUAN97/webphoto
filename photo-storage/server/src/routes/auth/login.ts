@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import { ulid } from 'ulid'
-import { hash } from 'bcryptjs'
 import { db } from '../../utils/db.js'
 import { users, userPlans, plans, refreshTokens } from '../../database/schema.js'
 import { eq, and } from 'drizzle-orm'
 import { verifyPassword } from '../../utils/hash.js'
 import { jwtUtils } from '../../utils/jwt.js'
 import { accessTokenCookie, refreshTokenCookie } from '../../utils/cookie.js'
+import { hashRefreshToken } from '../../utils/refreshTokenHash.js'
 
 const router = Router()
 
@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
   })
 
   const refreshTokenValue = ulid()
-  const tokenHash = await hash(refreshTokenValue, 6)
+  const tokenHash = hashRefreshToken(refreshTokenValue)
   await db.insert(refreshTokens).values({
     id: ulid(), userId: user.id, tokenHash,
     expiresAt: new Date(Date.now() + 7 * 86400_000),

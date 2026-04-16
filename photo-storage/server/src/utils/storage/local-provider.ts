@@ -83,7 +83,7 @@ export class LocalStorageProvider implements StorageProvider {
     // Create a signed token for download
     const { SignJWT } = await import('jose')
     const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
-    const token = await new SignJWT({ key, filename })
+    const token = await new SignJWT({ key, filename, purpose: 'download' })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime(`${expiresIn}s`)
       .sign(secret)

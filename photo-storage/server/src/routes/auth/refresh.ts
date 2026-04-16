@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import { ulid } from 'ulid'
-import { hash, compare } from 'bcryptjs'
 import { db } from '../../utils/db.js'
 import { users, userPlans, plans, refreshTokens } from '../../database/schema.js'
 import { eq, and, gt } from 'drizzle-orm'
 import { jwtUtils } from '../../utils/jwt.js'
 import { accessTokenCookie, refreshTokenCookie } from '../../utils/cookie.js'
+import { hashRefreshToken } from '../../utils/refreshTokenHash.js'
 
 const router = Router()
 
@@ -15,19 +15,14 @@ router.post('/refresh', async (req, res) => {
     return res.status(401).json({ message: 'Không có refresh token' })
   }
 
-  // Find valid refresh tokens (not expired)
-  const validTokens = await db.select().from(refreshTokens)
-    .where(gt(refreshTokens.expiresAt, new Date()))
-
-  // Check if any token matches
-  let matchedToken: typeof validTokens[0] | null = null
-  for (const rt of validTokens) {
-    const isMatch = await compare(token, rt.tokenHash)
-    if (isMatch) {
-      matchedToken = rt
-      break
-    }
-  }
+  // Lookup truc tiep theo tokenHash (unique index) — O(1) thay vi O(N) bcrypt scan
+  const incomingHash = hashRefreshToken(token)
+  const [matchedToken] = await db.select().from(refreshTokens)
+    .where(and(
+      eq(refreshTokens.tokenHash, incomingHash),
+      gt(refreshTokens.expiresAt, new Date())
+    ))
+    .limit(1)
 
   if (!matchedToken) {
     return res.status(401).json({ message: 'Refresh token không hợp lệ' })
@@ -55,7 +50,7 @@ router.post('/refresh', async (req, res) => {
   await db.delete(refreshTokens).where(eq(refreshTokens.id, matchedToken.id))
 
   const newRefreshToken = ulid()
-  const tokenHash = await hash(newRefreshToken, 6)
+  const tokenHash = hashRefreshToken(newRefreshToken)
   await db.insert(refreshTokens).values({
     id: ulid(), userId: user.id, tokenHash,
     expiresAt: new Date(Date.now() + 7 * 86400_000),

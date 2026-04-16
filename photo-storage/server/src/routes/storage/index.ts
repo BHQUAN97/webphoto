@@ -43,7 +43,7 @@ router.put('/upload-public', express.raw({ limit: '5mb', type: '*/*' }), async (
   res.json({ ok: true })
 })
 
-// GET /download — serve private file with JWT token
+// GET /download — serve private file with JWT token (yeu cau purpose=download va verify key ownership)
 router.get('/download', async (req, res) => {
   const { token } = req.query
   if (!token) return res.status(400).json({ message: 'Thieu token' })
@@ -51,7 +51,21 @@ router.get('/download', async (req, res) => {
   try {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
     const { payload } = await jwtVerify(token as string, secret)
-    const { key, filename } = payload as { key: string; filename: string }
+    const { key, filename, purpose } = payload as { key?: string; filename?: string; purpose?: string }
+
+    // Chi chap nhan token duoc cap voi purpose=download — chan reuse access_token
+    if (purpose !== 'download') {
+      return res.status(403).json({ message: 'Token sai muc dich' })
+    }
+
+    if (!key || typeof key !== 'string' || !filename) {
+      return res.status(403).json({ message: 'Token thieu truong bat buoc' })
+    }
+
+    // Ngan path traversal tren key
+    if (key.includes('..') || key.startsWith('/')) {
+      return res.status(403).json({ message: 'Key khong hop le' })
+    }
 
     const stream = await storage().getStream(key)
     res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`)

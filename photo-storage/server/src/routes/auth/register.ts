@@ -122,8 +122,8 @@ router.post('/register', async (req, res) => {
   })
 
   const refreshToken = ulid()
-  const { hash } = await import('bcryptjs')
-  const tokenHash = await hash(refreshToken, 6)
+  const { hashRefreshToken } = await import('../../utils/refreshTokenHash.js')
+  const tokenHash = hashRefreshToken(refreshToken)
   await db.insert((await import('../../database/schema.js')).refreshTokens).values({
     id: ulid(), userId, tokenHash,
     expiresAt: new Date(Date.now() + 7 * 86400_000),

@@ -4,14 +4,15 @@ import { db } from '../../utils/db.js'
 import { vouchers, voucherUsages, plans, userPlans, storageAddons } from '../../database/schema.js'
 import { eq, and, sql, lte, or, isNull } from 'drizzle-orm'
 import { requireAuth } from '../../middleware/auth.js'
+import { ipRateLimit } from '../../middleware/ipRateLimit.js'
 import { quotaUtils } from '../../utils/quota.js'
 import { quotaRedis } from '../../utils/redis.js'
 import { asyncHandler, ok, fail } from '../../utils/asyncHandler.js'
 
 const router = Router()
 
-// POST /activate — user activates a voucher code
-router.post('/activate', asyncHandler(async (req, res) => {
+// POST /activate — user activates a voucher code (rate-limit chong brute-force voucher codes)
+router.post('/activate', ipRateLimit('voucher:activate', 20, 60), asyncHandler(async (req, res) => {
   const user = requireAuth(req)
   const { code } = req.body
 

@@ -102,7 +102,7 @@ router.get('/export', async (req, res) => {
 router.post('/:id/approve', async (req, res) => {
   const admin = requireAdmin(req)
   const { id } = req.params
-  const { deliveryInfo, adminNote } = req.body
+  const { deliveryInfo, adminNote } = req.body ?? {}
 
   const [payment] = await db.select().from(payments)
     .where(and(eq(payments.id, id), eq(payments.status, 'awaiting_confirm'))).limit(1)
@@ -156,7 +156,7 @@ router.post('/:id/approve', async (req, res) => {
 router.post('/:id/reject', async (req, res) => {
   const admin = requireAdmin(req)
   const { id } = req.params
-  const { adminNote } = req.body
+  const { adminNote } = req.body ?? {}
 
   const [payment] = await db.select().from(payments).where(eq(payments.id, id)).limit(1)
   if (!payment) return res.status(404).json({ message: 'Đơn không tồn tại' })
