@@ -1,105 +1,139 @@
 # PHOTO STORAGE — DEPLOYMENT GUIDE
 
-> Domain: bhquan.site | VPS: <your-vps-ip> | Cập nhật: 2026-03-25
+> Domain: bhquan.site | VPS: 134.122.21.251 | Stack: Express.js + React + MySQL + Redis + Cloudflare R2
 
 ---
 
-## Tổng quan kiến trúc Production
-
-> **Lưu ý quan trọng**: Dự án này hỗ trợ deploy qua **GitHub Actions** sử dụng **User/Password**. Không bắt buộc phải cấu hình SSH Key trên VPS nếu bạn sử dụng quy trình CI/CD.
+## Kiến trúc Production
 
 ```
   Browser (https://bhquan.site)
        │
        ▼
-  Cloudflare DNS (DNS only / grey cloud)
-       │
-       ▼
-  VPS Ubuntu (<your-vps-ip>)
+  VPS Ubuntu (134.122.21.251)
   ┌──────────────────────────────────────────────┐
-  │  Nginx (BT Panel — host)                    │
-  │  ├─ :80  → redirect HTTPS                   │
-  │  ├─ :443 → SSL (Let's Encrypt)              │
-  │  │   ├─ /              → SPA static files    │
-  │  │   ├─ /api/*         → proxy :4000 (API)   │
-  │  │   ├─ /socket.io/*   → proxy :4001 (WS)    │
-  │  │   └─ /storage/public → proxy :4000        │
-  │  │                                           │
-  │  │  client_max_body_size 500m                │
-  │  │                                           │
-  │  └─ Frontend dist: /opt/webphoto/photo-      │
-  │     storage/dist/                            │
-  │                                              │
-  │  Docker Containers                           │
-  │  ┌─────────────────────────────────────┐     │
-  │  │ photo-api    :4000 (Express.js 5)   │     │
-  │  │ photo-worker       (BullMQ jobs)    │     │
-  │  │ shared-mysql  :3306 (MySQL 8)        │     │
-  │  │ shared-redis  :6379 (Redis 7)        │     │
-  │  └─────────────────────────────────────┘     │
+  │  shared-nginx (Docker) :80/:443               │
+  │  ├─ bhquan.site  → photo-api + static        │
+  │  └─ bhquan.store → VietNet (project khác)    │
+  │                                               │
+  │  WebPhoto (/opt/webphoto)                     │
+  │  ├─ photo-api     :4000 (Express.js)          │
+  │  └─ photo-worker       (BullMQ jobs)          │
+  │                                               │
+  │  Shared infra (/opt/infra)                    │
+  │  ├─ shared-mysql  :3306 (MySQL 8)             │
+  │  │   └─ DB: photo_storage                     │
+  │  ├─ shared-redis  :6379 (Redis 7)             │
+  │  └─ shared-nginx  (certbot, SSL volume)       │
+  │                                               │
+  │  Docker Networks                              │
+  │  ├─ webphoto_backend  (mysql, redis, api)     │
+  │  └─ webphoto_frontend (nginx, photo-api)      │
   └──────────────────────────────────────────────┘
        │
        ▼
   Cloudflare R2 (Object Storage)
   ├─ webphoto        (private: originals/RAW)
-  └─ webphoto-public (public: thumbnails/previews/avatars)
-      CDN: ${CDN_URL}
+  └─ webphoto-public (public: thumbnails/CDN)
 ```
-
-### Đặc điểm kiến trúc
-
-- **Nginx chạy trên host** (BT Panel) — không Docker, tương thích aaPanel
-- **Frontend** serve bằng Nginx static (`/opt/webphoto/photo-storage/dist/`)
-- **API + Worker** chạy trong Docker, expose port `4000`, `4001` ra host
-- **SSL** bằng certbot trên host (auto-renew via systemd timer)
-- **Upload bảo mật**: Tất cả upload (ảnh, avatar, QR) đều qua server → R2. Client không bao giờ gọi trực tiếp R2 (không dùng presigned URL)
 
 ---
 
-## Deploy tự động (Khuyên dùng)
+## GitHub Actions Secrets
 
-### Yêu cầu
+Secrets được lưu trong **repo settings** — không commit lên git.
 
-- VPS: Ubuntu 22.04 / 24.04
-- Docker + Docker Compose đã cài
-- Nginx đã cài (hoặc BT Panel / aaPanel)
-- **User & Password SSH** của VPS (để cấu hình GitHub Secrets)
+| Secret | Mô tả |
+|--------|-------|
+| `VPS_HOST` | IP VPS: `134.122.21.251` |
+| `VPS_PORT` | SSH port: `22` |
+| `VPS_USER` | SSH user: `root` |
+| `VPS_PASSWORD` | Mật khẩu SSH VPS |
+| `VPS_DEPLOY_PATH` | Path deploy trên VPS: `/opt/webphoto` |
+| `MYSQL_ROOT_PASSWORD` | Root password shared-mysql |
+| `MYSQL_PASSWORD` | Password user `photo_storage` trong MySQL |
+| `JWT_SECRET` | JWT signing secret |
+| `R2_ENDPOINT` | Cloudflare R2 endpoint URL |
+| `R2_ACCESS_KEY` | R2 access key ID |
+| `R2_SECRET_KEY` | R2 secret access key |
+| `RESEND_API_KEY` | Resend email API key |
+| `CRON_SECRET` | Secret header cho cron endpoints |
+| `BACKUP_ENCRYPT_KEY` | GPG passphrase để encrypt backup |
 
-### Bước 1: Cấu hình GitHub Secrets
+### Thêm/cập nhật secret nhanh qua CLI
 
-Để deploy tự động, hãy vào Repo GitHub > Settings > Secrets > Actions và thêm:
-- `HOST`: IP của VPS
-- `USERNAME`: root (hoặc user có quyền sudo)
-- `PASSWORD`: Mật khẩu SSH của VPS
-- `ENV_FILE`: Nội dung file `.env` thực tế
+```bash
+# Không cần vào GitHub UI — dùng gh CLI
+gh secret set VPS_PASSWORD --body "mat_khau_moi" --repo BHQUAN97/WebPhoto
 
-### Bước 2: Deploy
+# Thêm từ biến môi trường
+gh secret set R2_SECRET_KEY --body "$R2_KEY" --repo BHQUAN97/WebPhoto
 
-Chỉ cần **Push code** lên nhánh `main` hoặc `master`. GitHub Actions sẽ tự động:
-1. Build Frontend & Backend trên GitHub Runner.
-2. Đẩy file lên VPS qua SCP (sử dụng Password).
-3. Khởi động Docker containers trên VPS.
+# Xem danh sách secrets (chỉ thấy tên, không thấy giá trị)
+gh secret list --repo BHQUAN97/WebPhoto
+```
 
 ---
 
-## Deploy thủ công từ máy Local (Dùng Password)
+## Deploy
 
-Nếu bạn muốn chạy script từ máy local mà không dùng SSH Key, bạn cần cài đặt `sshpass`:
-- Ubuntu/Debian: `sudo apt install sshpass`
-- Mac: `brew install sshpass`
-- Windows: Dùng WSL hoặc Git Bash.
+### Tự động (Khuyên dùng)
+
+Push lên nhánh `main` → GitHub Actions tự động chạy:
+1. Upload source lên VPS qua SCP/tar
+2. Build Docker images trên VPS
+3. Start containers
+4. Health check
+
+### Backup tự động
+
+- Chạy hàng ngày lúc **4:00 AM UTC+7** (cron `0 21 * * *`)
+- Backup DB (photo_storage + vietnet) + uploads → encrypt AES-256 → push lên branch `backups`
+- Giữ 7 ngày, xoá backup cũ tự động
+
+### Restore từ backup
+
+Chạy workflow `restore.yml` thủ công từ GitHub Actions tab.
+
+---
+
+## Quản lý trên VPS
 
 ```bash
-# Cấu hình password tạm thời
-export SSHPASS="mat_khau_vps"
+ssh root@134.122.21.251
+cd /opt/webphoto
 
-# Chạy script deploy (Script sẽ tự dùng sshpass nếu có biến SSHPASS)
-bash scripts/quick-deploy.sh <VPS_IP> <DOMAIN>
+# Xem logs
+docker logs photo-api --tail 50 -f
+docker logs photo-worker --tail 50 -f
+
+# Restart
+docker compose -f docker-compose.prod.yml restart api worker
+
+# Nginx config
+cat /opt/webphoto/nginx/conf.d/bhquan.site.conf
+docker exec shared-nginx nginx -t && docker exec shared-nginx nginx -s reload
+
+# Xem disk usage
+docker system df
+du -sh /opt/webphoto/
 ```
 
-### Cập nhật code (các lần sau)
+---
+
+## Troubleshooting
 
 ```bash
-export SSHPASS="mat_khau_vps"
-bash scripts/update-deploy.sh <VPS_IP>
+# API không start — xem logs
+docker logs photo-api --tail 30
+
+# 502 Bad Gateway — kiểm tra network
+docker inspect shared-nginx --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+# Phải có: webphoto_frontend
+# Nếu thiếu:
+docker network connect webphoto_frontend shared-nginx
+docker exec shared-nginx nginx -s reload
+
+# SSL cert hết hạn
+# Chạy workflow ssl-renew.yml từ GitHub Actions tab
 ```
