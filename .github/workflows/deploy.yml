@@ -3,10 +3,33 @@ name: Deploy to VPS
 on:
   push:
     branches: [ main, master ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.github/workflows/backup.yml'
+      - '.github/workflows/cron.yml'
+      - '.github/workflows/restore.yml'
+      - '.github/workflows/vps-setup.yml'
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+env:
+  APP_DIR: /opt/webphoto
+  REGISTRY: ghcr.io
+  IMAGE_API: ghcr.io/bhquan97/webphoto-api
+  IMAGE_WORKER: ghcr.io/bhquan97/webphoto-worker
 
 jobs:
-  deploy:
+  build-and-push:
+    name: "1. Build & Push Images"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -17,50 +40,157 @@ jobs:
           cache: 'npm'
           cache-dependency-path: photo-storage/package-lock.json
 
-      - name: Install & Build Backend
-        run: |
-          cd photo-storage/server
-          npm install
-          npm run build
-
-      - name: Install & Build Frontend
+      - name: Install & Build Frontend (static)
         run: |
           cd photo-storage
-          npm install
+          npm ci
           npm run build
 
-      - name: Prepare Deployment Files
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_API }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & Push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./photo-storage/server
+          push: true
+          tags: |
+            ${{ env.IMAGE_API }}:sha-${{ github.sha }}
+            ${{ env.IMAGE_API }}:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_API }}:latest
+          cache-to: type=inline
+
+      - name: Build & Push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./photo-storage/server
+          file: ./photo-storage/server/Dockerfile.worker
+          push: true
+          tags: |
+            ${{ env.IMAGE_WORKER }}:sha-${{ github.sha }}
+            ${{ env.IMAGE_WORKER }}:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_WORKER }}:latest
+          cache-to: type=inline
+
+  deploy:
+    name: "2. Deploy to VPS"
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
         run: |
-          mkdir -p deploy_tmp/photo-storage/server
-          # Copy Frontend build
-          cp -r photo-storage/dist deploy_tmp/photo-storage/
-          # Copy Backend build & config
-          cp -r photo-storage/server/dist deploy_tmp/photo-storage/server/
-          cp photo-storage/server/package*.json deploy_tmp/photo-storage/server/
-          cp photo-storage/server/Dockerfile deploy_tmp/photo-storage/server/
-          # Copy Docker Compose Prod & Env
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Build .env from config + secrets
+        run: |
+          grep -v '^\s*#' config/env | grep -v '^\s*$' > /tmp/prod.env
+          cat >> /tmp/prod.env << 'SECRETS_EOF'
+MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+R2_ENDPOINT=${{ secrets.R2_ENDPOINT }}
+R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }}
+R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }}
+RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+CRON_SECRET=${{ secrets.CRON_SECRET }}
+CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+SECRETS_EOF
+
+      - name: Prepare deploy files
+        run: |
+          mkdir -p deploy_tmp
           cp docker-compose.prod.yml deploy_tmp/docker-compose.yml
-          echo "${{ secrets.ENV_FILE }}" > deploy_tmp/.env
+          cp /tmp/prod.env deploy_tmp/.env
+          # Copy built frontend static files
+          mkdir -p deploy_tmp/photo-storage
+          cp -r photo-storage/dist deploy_tmp/photo-storage/
 
-      - name: Copy files to VPS (via Password)
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          password: ${{ secrets.PASSWORD }}
-          source: "deploy_tmp/*"
-          target: "/opt/webphoto"
-          strip_components: 1
+      - name: Copy files to VPS
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}"
+          sshpass -e scp -P $PORT -r deploy_tmp/* $VPS:${APP_DIR}/
+          sshpass -e ssh -p $PORT $VPS "chmod 600 ${APP_DIR}/.env"
 
-      - name: Execute Remote Commands (via Password)
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          password: ${{ secrets.PASSWORD }}
-          script: |
-            cd /opt/webphoto
-            # Chạy docker-compose với file prod
-            docker compose -f docker-compose.yml up -d --build
-            # Dọn dẹp các image thừa để tránh đầy ổ cứng VPS
+      - name: Pull images & restart on VPS
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          SHA="${{ github.sha }}"
+          sshpass -e ssh -p $PORT $VPS "
+            # Login to GHCR
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null
+
+            cd ${APP_DIR}
+
+            # Override image tags to pinned SHA in this deploy
+            export IMAGE_API=${IMAGE_API}:sha-${SHA}
+            export IMAGE_WORKER=${IMAGE_WORKER}:sha-${SHA}
+
+            # Pull new images
+            docker pull \${IMAGE_API} 2>&1
+            docker pull \${IMAGE_WORKER} 2>&1
+
+            # Update compose to use pre-built images (no --build)
+            sed -i 's|image: ghcr.io/bhquan97/webphoto-api:.*|image: '\${IMAGE_API}'|g' docker-compose.yml 2>/dev/null || true
+            sed -i 's|image: ghcr.io/bhquan97/webphoto-worker:.*|image: '\${IMAGE_WORKER}'|g' docker-compose.yml 2>/dev/null || true
+
+            docker compose -f docker-compose.yml up -d --no-build --wait --wait-timeout 120
             docker image prune -f
+          "
+        env:
+          IMAGE_API: ${{ env.IMAGE_API }}
+          IMAGE_WORKER: ${{ env.IMAGE_WORKER }}
+
+  verify:
+    name: "3. Health Check"
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    steps:
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: API health check
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          for i in $(seq 1 15); do
+            sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" && { echo "API: OK"; exit 0; }
+            echo "  Attempt $i/15..."
+            sleep 4
+          done
+          echo "::error::API health check failed after 60s"
+          sshpass -e ssh -p $PORT $VPS "docker logs photo-api --tail 30"
+          exit 1
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          echo "=== Containers ==="
+          sshpass -e ssh -p $PORT $VPS "docker ps --filter 'name=photo-' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'" 2>/dev/null || true
+          echo "SHA: ${{ github.sha }}"

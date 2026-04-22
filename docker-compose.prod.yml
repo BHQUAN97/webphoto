@@ -8,9 +8,7 @@ services:
   # ─── API Server ─────────────────────────
   # MySQL + Redis nam trong /opt/infra/docker-compose.yml (shared voi VietNet)
   api:
-    build:
-      context: ./photo-storage/server
-      dockerfile: Dockerfile
+    image: ghcr.io/bhquan97/webphoto-api:latest
     container_name: photo-api
     restart: always
     environment:
@@ -37,15 +35,24 @@ services:
       CORS_ORIGIN: https://bhquan.site
       SOCKET_PORT: 4001
       CRON_SECRET: ${CRON_SECRET}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/api/health || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 768M
     networks:
       - backend
       - frontend
 
   # ─── Worker (image processing) ──────────
   worker:
-    build:
-      context: ./photo-storage/server
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/bhquan97/webphoto-worker:latest
     container_name: photo-worker
     restart: always
     environment:
@@ -66,6 +73,17 @@ services:
       SUPPORT_PHONE: ${SUPPORT_PHONE:-0123456789}
       SUPPORT_EMAIL: support@bhquan.site
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@bhquan.site}
+    healthcheck:
+      test: ['CMD-SHELL', 'pgrep -f "node dist/workers" || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - backend
 
