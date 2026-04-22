@@ -11,31 +11,31 @@ jobs:
     if: github.event.schedule == '0 19 * * *'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Run expire-images cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          source config/env
           curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "${API_URL}/api/cron/expire-images"
+            "https://bhquan.site/api/cron/expire-images"
 
   reconcile-quota:
     if: github.event.schedule == '0 20 * * *'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Run reconcile-quota cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          source config/env
           curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "${API_URL}/api/cron/reconcile-quota"
+            "https://bhquan.site/api/cron/reconcile-quota"
 
   remind-payments:
     if: github.event.schedule == '0 * * * *'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Run remind-payments cron
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          source config/env
           curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "${API_URL}/api/cron/remind-payments"
+            "https://bhquan.site/api/cron/remind-payments"

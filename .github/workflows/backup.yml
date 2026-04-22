@@ -20,23 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Load config/env
-        run: |
-          grep -v '^#' config/env | grep -v '^$' | grep '=' >> $GITHUB_ENV
-          PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
-          echo "SSHPASS=${PASS}" >> $GITHUB_ENV
-          echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
-
       - name: Setup SSH
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
           mkdir -p ~/.ssh
-          ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+          echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
 
       - name: Create backups on VPS
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
           DATE="${{ env.DATE }}"
 
           sshpass -e ssh -p $PORT $VPS "
@@ -132,8 +127,8 @@ jobs:
 
       - name: Download backups from VPS
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
           DATE="${{ env.DATE }}"
 
           mkdir -p /tmp/backups
@@ -144,9 +139,9 @@ jobs:
 
       - name: Encrypt backups
         run: |
-          ENCRYPT_KEY=$(grep '^BACKUP_ENCRYPT_KEY=' config/env | cut -d= -f2-)
+          ENCRYPT_KEY="${{ secrets.BACKUP_ENCRYPT_KEY }}"
           if [ -z "$ENCRYPT_KEY" ]; then
-            echo "WARNING: BACKUP_ENCRYPT_KEY not set in config/env — skipping encryption"
+            echo "WARNING: BACKUP_ENCRYPT_KEY not set — skipping encryption"
             exit 0
           fi
 
@@ -226,8 +221,8 @@ jobs:
       - name: Cleanup VPS temp
         if: always()
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-*" 2>/dev/null || true
 
       - name: Summary

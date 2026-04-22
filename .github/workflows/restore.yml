@@ -34,17 +34,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Load config/env
-        run: |
-          grep -v '^#' config/env | grep -v '^$' | grep '=' >> $GITHUB_ENV
-          PASS=$(grep '^VPS_PASSWORD=' config/env | cut -d= -f2-)
-          echo "SSHPASS=${PASS}" >> $GITHUB_ENV
-
       - name: Setup SSH
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
           mkdir -p ~/.ssh
-          ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
 
       # ── Tim backup date ──
       - name: Resolve backup date
@@ -84,7 +79,7 @@ jobs:
       # ── Decrypt backup files (neu co encrypt) ──
       - name: Decrypt backups
         run: |
-          ENCRYPT_KEY=$(grep '^BACKUP_ENCRYPT_KEY=' config/env | cut -d= -f2-)
+          ENCRYPT_KEY="${{ secrets.BACKUP_ENCRYPT_KEY }}"
           GPG_COUNT=$(find /tmp/restore -name '*.gpg' -type f 2>/dev/null | wc -l)
           if [ "$GPG_COUNT" -eq 0 ]; then
             echo "No encrypted files — skip"
@@ -105,8 +100,8 @@ jobs:
       # ── Upload backup len VPS ──
       - name: Upload backup to VPS
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
 
           sshpass -e ssh -p $PORT $VPS "mkdir -p /tmp/restore/webphoto"
           sshpass -e scp -P $PORT /tmp/restore/webphoto/* $VPS:/tmp/restore/webphoto/
@@ -116,8 +111,8 @@ jobs:
       - name: Restore database
         if: inputs.restore_db
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
 
           sshpass -e ssh -p $PORT $VPS "
             set -e
@@ -176,8 +171,8 @@ jobs:
       - name: Restore uploads
         if: inputs.restore_uploads
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
 
           sshpass -e ssh -p $PORT $VPS "
             ZIP=/tmp/restore/webphoto/uploads.zip
@@ -203,15 +198,15 @@ jobs:
       - name: Run DB changelog
         if: inputs.run_changelog && inputs.restore_db
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
 
           if [ ! -d "db/changelog" ]; then
             echo "No changelog directory — skip"
             exit 0
           fi
 
-          MYSQL_PWD=$(grep '^MYSQL_PASSWORD=' config/env | cut -d= -f2-)
+          MYSQL_PWD=${{ secrets.MYSQL_PASSWORD }}
           MYSQL_CMD="docker exec -i shared-mysql mysql -u photo_user -p${MYSQL_PWD} photo_storage"
 
           # Init tracker table
@@ -253,8 +248,8 @@ jobs:
       - name: Restart services
         if: inputs.restore_db
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
 
           sshpass -e ssh -p $PORT $VPS "
             if [ -f ${APP_DIR}/docker-compose.prod.yml ]; then
@@ -269,14 +264,14 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/restore" 2>/dev/null || true
 
       - name: Health check
         run: |
-          VPS="${{ env.VPS_USER }}@${{ env.VPS_HOST }}"
-          PORT="${{ env.VPS_PORT }}"
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
           sleep 5
           sshpass -e ssh -p $PORT $VPS "curl -sf http://localhost:4000/api/health" && echo " WebPhoto: OK" || echo " WebPhoto: DOWN"
 
