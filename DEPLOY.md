@@ -75,6 +75,16 @@ gh secret list --repo BHQUAN97/WebPhoto
 
 ---
 
+## Checklist trước khi deploy
+
+- [ ] `gh secret list --repo BHQUAN97/WebPhoto` hiện đủ 13 secrets
+- [ ] Push code lên `main` → Actions chạy tự động
+- [ ] Xem progress: `gh run watch --repo BHQUAN97/WebPhoto`
+
+> Đổi VPS password: `bash /e/DEVELOP/.claude-shared/secrets-infra/scripts/set-all-secrets.sh --shared`
+
+---
+
 ## Deploy
 
 ### Tự động (Khuyên dùng)
