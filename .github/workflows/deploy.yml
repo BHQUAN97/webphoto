@@ -169,6 +169,7 @@ jobs:
         env:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
         run: |
+          set +e
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
           [ ! -d "db/changelog" ] && exit 0
