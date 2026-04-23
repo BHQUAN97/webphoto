@@ -210,7 +210,9 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             DC='docker compose -f docker-compose.yml'
-            for DOMAIN in bhquan.site; do
+            # Create placeholder certs for ALL domains served by shared-nginx
+            # (bhquan.site = WebPhoto, bhquan.store = VietNet — both need certs before nginx can start)
+            for DOMAIN in bhquan.site bhquan.store; do
               CERT_EXISTS=\$(\$DC run --rm --entrypoint '' certbot \
                 test -f /etc/letsencrypt/live/\$DOMAIN/fullchain.pem 2>/dev/null && echo yes || echo no)
               if [ \"\$CERT_EXISTS\" = 'no' ]; then
@@ -282,7 +284,11 @@ jobs:
               }
             done
             # Reload nginx with final cert
-            docker exec shared-nginx nginx -t 2>&1 | tail -2 && docker exec shared-nginx nginx -s reload
+            if docker exec shared-nginx nginx -t 2>&1 | tail -2; then
+              docker exec shared-nginx nginx -s reload && echo 'Nginx reloaded OK'
+            else
+              echo '::warning::nginx config test failed — keeping current config'
+            fi
           "
 
   # ─── STAGE 3: VERIFY ─────────────────────────────────
