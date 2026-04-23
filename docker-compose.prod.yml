@@ -8,7 +8,10 @@ services:
   # ─── API Server ─────────────────────────
   # MySQL + Redis nam trong /opt/infra/docker-compose.yml (shared voi VietNet)
   api:
-    image: ghcr.io/bhquan97/webphoto-api:latest
+    build:
+      context: ./photo-storage/server
+      dockerfile: Dockerfile
+    image: webphoto-api:local
     container_name: photo-api
     restart: always
     environment:
@@ -52,7 +55,10 @@ services:
 
   # ─── Worker (image processing) ──────────
   worker:
-    image: ghcr.io/bhquan97/webphoto-worker:latest
+    build:
+      context: ./photo-storage/server
+      dockerfile: Dockerfile.worker
+    image: webphoto-worker:local
     container_name: photo-worker
     restart: always
     environment:
