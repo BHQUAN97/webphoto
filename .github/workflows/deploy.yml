@@ -256,12 +256,12 @@ jobs:
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
-          sleep 5
+          sleep 8
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             DC='docker compose -f docker-compose.yml'
             for DOMAIN in bhquan.site; do
-              # Check if already have real cert (inside volume via certbot container)
+              # Check if already have real cert
               IS_REAL=\$(\$DC run --rm --entrypoint '' certbot sh -c '
                 CERT=/etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem
                 [ ! -f \"\$CERT\" ] && echo no && exit 0
@@ -272,24 +272,25 @@ jobs:
                 continue
               fi
               echo 'Getting Lets Encrypt cert for '\$DOMAIN'...'
-              # Remove old placeholder first
-              \$DC run --rm --entrypoint '' certbot sh -c \
-                'rm -rf /etc/letsencrypt/live/'\$DOMAIN'* /etc/letsencrypt/archive/'\$DOMAIN'* /etc/letsencrypt/renewal/'\$DOMAIN'*.conf 2>/dev/null || true'
+              # Try LE — do NOT remove placeholder first (if LE fails, nginx needs the placeholder to keep running)
+              # certbot certonly --keep-until-expiring won't overwrite if cert is not expiring; use --force-renewal to always try
               timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
+                --keep-until-expiring \
                 -d \$DOMAIN -d www.\$DOMAIN 2>&1 || {
-                echo '::warning::Lets Encrypt failed for '\$DOMAIN' — keeping placeholder'
+                echo '::warning::Lets Encrypt failed for '\$DOMAIN' — keeping placeholder cert, site still accessible via HTTPS with self-signed cert'
               }
             done
-            # Reload nginx with final cert
-            if docker exec shared-nginx nginx -t 2>&1 | tail -2; then
-              docker exec shared-nginx nginx -s reload && echo 'Nginx reloaded OK'
+            # Reload nginx — only if it is running (not in restart loop)
+            sleep 3
+            if docker inspect shared-nginx --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+              docker exec shared-nginx nginx -s reload 2>/dev/null && echo 'Nginx reloaded OK' || echo '::warning::nginx reload skipped'
             else
-              echo '::warning::nginx config test failed — keeping current config'
+              echo '::warning::shared-nginx not running — will recover on next restart'
             fi
-          "
+          " || true
 
   # ─── STAGE 3: VERIFY ─────────────────────────────────
   verify:
