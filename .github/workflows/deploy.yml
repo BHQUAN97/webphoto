@@ -214,20 +214,21 @@ jobs:
             DC='docker compose -f docker-compose.yml'
             # Validate cert using openssl — file existence is not enough (may be corrupt/empty)
             for DOMAIN in bhquan.site bhquan.store shop.bhquan.store lqd.bhquan.store; do
+              # checkend 3600: fail if cert expires within 1h (catches expired placeholder)
               CERT_VALID=\$(\$DC run --rm --entrypoint '' certbot sh -c \
-                'openssl x509 -in /etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem -noout 2>/dev/null && echo yes || echo no' \
+                'openssl x509 -in /etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem -noout -checkend 3600 2>/dev/null && echo yes || echo no' \
                 2>/dev/null || echo no)
               if [ \"\$CERT_VALID\" = 'no' ]; then
-                echo 'Creating/fixing placeholder cert for '\$DOMAIN'...'
+                echo 'Creating/refreshing placeholder cert for '\$DOMAIN'...'
                 \$DC run --rm --entrypoint '' certbot sh -c \"
                   mkdir -p /etc/letsencrypt/live/\$DOMAIN && \
-                  openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+                  openssl req -x509 -nodes -days 90 -newkey rsa:2048 \
                     -keyout /etc/letsencrypt/live/\$DOMAIN/privkey.pem \
                     -out /etc/letsencrypt/live/\$DOMAIN/fullchain.pem \
-                    -subj '/CN=\$DOMAIN' && echo 'OK'
+                    -subj '/CN=\$DOMAIN' && echo 'Placeholder OK'
                 \" || echo '::error::Failed to create placeholder cert for '\$DOMAIN
               else
-                echo 'Valid cert already exists for '\$DOMAIN
+                echo 'Cert still valid for '\$DOMAIN
               fi
             done
           "
@@ -281,35 +282,45 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             cd ${APP_DIR}
             DC='docker compose -f docker-compose.yml'
-            for DOMAIN in bhquan.site; do
-              # Check if already have real cert
+            # WebPhoto owns certbot — request LE certs for all active domains
+            for DOMAIN in bhquan.site bhquan.store; do
+              # Skip if already have a valid real LE cert (not near expiry)
               IS_REAL=\$(\$DC run --rm --entrypoint '' certbot sh -c '
                 CERT=/etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem
                 [ ! -f \"\$CERT\" ] && echo no && exit 0
+                openssl x509 -in \"\$CERT\" -noout -checkend 2592000 2>/dev/null || { echo no; exit 0; }
                 openssl x509 -in \"\$CERT\" -noout -issuer 2>/dev/null | grep -qiE \"let.s encrypt|R3|R10|R11|E5|E6\" && echo yes || echo no
               ' 2>/dev/null || echo no)
               if [ \"\$IS_REAL\" = 'yes' ]; then
-                echo 'Real cert already exists for '\$DOMAIN' — skip'
+                echo 'LE cert valid (>30d) for '\$DOMAIN' — skip'
                 continue
               fi
-              echo 'Getting Lets Encrypt cert for '\$DOMAIN'...'
-              # Try LE — do NOT remove placeholder first (if LE fails, nginx needs the placeholder to keep running)
-              # certbot certonly --keep-until-expiring won't overwrite if cert is not expiring; use --force-renewal to always try
-              timeout 120 \$DC run --rm --entrypoint '' certbot \
+              echo 'Requesting LE cert for '\$DOMAIN'...'
+              # Try with www. first — fall back to domain-only if www. DNS not configured
+              if timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
                 --keep-until-expiring \
-                -d \$DOMAIN -d www.\$DOMAIN 2>&1 || {
-                echo '::warning::Lets Encrypt failed for '\$DOMAIN' — keeping placeholder cert, site still accessible via HTTPS with self-signed cert'
-              }
+                -d \$DOMAIN -d www.\$DOMAIN 2>&1; then
+                echo 'LE cert OK for '\$DOMAIN' (with www.)'
+              elif timeout 120 \$DC run --rm --entrypoint '' certbot \
+                certbot certonly --webroot -w /var/www/certbot \
+                --non-interactive --cert-name \$DOMAIN \
+                --email admin@bhquan.site --agree-tos --no-eff-email \
+                --keep-until-expiring \
+                -d \$DOMAIN 2>&1; then
+                echo 'LE cert OK for '\$DOMAIN' (without www.)'
+              else
+                echo '::warning::LE failed for '\$DOMAIN' — placeholder cert active (HTTPS works with warning)'
+              fi
             done
-            # Reload nginx — only if it is running (not in restart loop)
+            # Reload nginx with latest certs
             sleep 3
             if docker inspect shared-nginx --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-              docker exec shared-nginx nginx -s reload 2>/dev/null && echo 'Nginx reloaded OK' || echo '::warning::nginx reload skipped'
+              docker exec shared-nginx nginx -s reload 2>/dev/null && echo 'Nginx reloaded with latest certs' || echo '::warning::nginx reload skipped'
             else
-              echo '::warning::shared-nginx not running — will recover on next restart'
+              echo '::warning::shared-nginx not running'
             fi
           " || true
 
@@ -363,4 +374,19 @@ jobs:
           echo "=========================================="
           sshpass -e ssh -p $PORT $VPS "
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'photo-|shared-' 2>/dev/null || true
-          "
+            echo ''
+            echo '--- SSL cert status ---'
+            cd /opt/webphoto
+            DC='docker compose -f docker-compose.yml'
+            for DOMAIN in bhquan.site bhquan.store; do
+              INFO=\$(\$DC run --rm --entrypoint '' certbot sh -c '
+                CERT=/etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem
+                [ ! -f \"\$CERT\" ] && echo MISSING && exit 0
+                ISSUER=\$(openssl x509 -in \"\$CERT\" -noout -issuer 2>/dev/null)
+                EXPIRY=\$(openssl x509 -in \"\$CERT\" -noout -enddate 2>/dev/null | cut -d= -f2)
+                echo \$ISSUER | grep -qiE \"let.s encrypt|R3|R10|R11|E5|E6\" && TYPE=LE || TYPE=PLACEHOLDER
+                echo \$TYPE — \$EXPIRY
+              ' 2>/dev/null || echo ERROR)
+              echo \"  \$DOMAIN: \$INFO\"
+            done
+          " 2>/dev/null || true
