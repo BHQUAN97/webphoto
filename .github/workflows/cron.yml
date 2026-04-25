@@ -5,10 +5,20 @@ on:
     - cron: '0 19 * * *'   # 2:00 AM UTC+7 — expire images
     - cron: '0 20 * * *'   # 3:00 AM UTC+7 — reconcile quota
     - cron: '0 * * * *'    # Every hour — remind payments
+    - cron: '0 20 * * 1'   # 3:00 AM UTC+7 Monday — SSL renewal
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task to run'
+        required: true
+        default: 'ssl-renew'
+        type: choice
+        options:
+          - ssl-renew
 
 jobs:
   expire-images:
-    if: github.event.schedule == '0 19 * * *'
+    if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Run expire-images cron
@@ -19,7 +29,7 @@ jobs:
             "https://bhquan.site/api/cron/expire-images"
 
   reconcile-quota:
-    if: github.event.schedule == '0 20 * * *'
+    if: github.event_name == 'schedule' && github.event.schedule == '0 20 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Run reconcile-quota cron
@@ -30,7 +40,7 @@ jobs:
             "https://bhquan.site/api/cron/reconcile-quota"
 
   remind-payments:
-    if: github.event.schedule == '0 * * * *'
+    if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Run remind-payments cron
@@ -39,3 +49,51 @@ jobs:
         run: |
           curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
             "https://bhquan.site/api/cron/remind-payments"
+
+  # ─── SSL Renewal ─────────────────────────────────────
+  # certbot container tu renew nhung KHONG reload nginx sau khi renew
+  # Job nay: request/renew LE certs + reload nginx
+  # Chay hang tuan Mon 3AM UTC+7, hoac manual via workflow_dispatch
+  ssl-renew:
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 20 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'ssl-renew')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Request / renew LE certs + reload nginx
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "
+            cd /opt/webphoto
+            DC='docker compose -f docker-compose.yml'
+
+            echo '=== Requesting / renewing Let'\''s Encrypt certs ==='
+            for DOMAIN in bhquan.site bhquan.store; do
+              echo \"--- \$DOMAIN ---\"
+              timeout 120 \$DC run --rm --entrypoint '' certbot \
+                certbot certonly --webroot -w /var/www/certbot \
+                --non-interactive --cert-name \$DOMAIN \
+                --email admin@bhquan.site --agree-tos --no-eff-email \
+                --keep-until-expiring \
+                -d \$DOMAIN -d www.\$DOMAIN 2>&1 || echo '::warning::LE failed for '\$DOMAIN
+            done
+
+            echo '=== Reloading nginx ==='
+            if docker inspect shared-nginx --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+              docker exec shared-nginx nginx -s reload && echo 'Nginx reloaded OK'
+            else
+              echo '::error::shared-nginx not running'
+            fi
+
+            echo '=== Cert status ==='
+            \$DC run --rm --entrypoint '' certbot certbot certificates 2>&1 \
+              | grep -E 'Domains:|Expiry Date|VALID|INVALID' || true
+          "
