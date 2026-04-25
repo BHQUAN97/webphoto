@@ -296,19 +296,21 @@ jobs:
                 continue
               fi
               echo 'Requesting LE cert for '\$DOMAIN'...'
+              # --force-renewal: cert is placeholder, bypass certbot expiry check
+              # IS_REAL check above prevents burning LE quota when real cert exists
               # Try with www. first — fall back to domain-only if www. DNS not configured
               if timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
-                --keep-until-expiring \
+                --force-renewal \
                 -d \$DOMAIN -d www.\$DOMAIN 2>&1; then
                 echo 'LE cert OK for '\$DOMAIN' (with www.)'
               elif timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
-                --keep-until-expiring \
+                --force-renewal \
                 -d \$DOMAIN 2>&1; then
                 echo 'LE cert OK for '\$DOMAIN' (without www.)'
               else
