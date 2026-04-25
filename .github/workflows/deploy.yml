@@ -211,7 +211,7 @@ jobs:
             cd ${APP_DIR}
             DC='docker compose -f docker-compose.yml'
             # Validate cert using openssl — file existence is not enough (may be corrupt/empty)
-            for DOMAIN in bhquan.site bhquan.store; do
+            for DOMAIN in bhquan.site bhquan.store shop.bhquan.store; do
               CERT_VALID=\$(\$DC run --rm --entrypoint '' certbot sh -c \
                 'openssl x509 -in /etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem -noout 2>/dev/null && echo yes || echo no' \
                 2>/dev/null || echo no)
