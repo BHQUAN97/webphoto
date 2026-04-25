@@ -112,6 +112,8 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             chmod 600 ${APP_DIR}/.env
             cd ${APP_DIR}
+            # Clear stale nginx conf files BEFORE extracting — WebPhoto owns shared-nginx conf.d
+            rm -f ${APP_DIR}/nginx/conf.d/*.conf
             tar xzf /tmp/webphoto-build.tar.gz
             rm -f /tmp/webphoto-build.tar.gz
             cp docker-compose.prod.yml docker-compose.yml
@@ -211,7 +213,7 @@ jobs:
             cd ${APP_DIR}
             DC='docker compose -f docker-compose.yml'
             # Validate cert using openssl — file existence is not enough (may be corrupt/empty)
-            for DOMAIN in bhquan.site bhquan.store shop.bhquan.store; do
+            for DOMAIN in bhquan.site bhquan.store shop.bhquan.store lqd.bhquan.store; do
               CERT_VALID=\$(\$DC run --rm --entrypoint '' certbot sh -c \
                 'openssl x509 -in /etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem -noout 2>/dev/null && echo yes || echo no' \
                 2>/dev/null || echo no)
