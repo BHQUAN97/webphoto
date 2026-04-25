@@ -296,25 +296,36 @@ jobs:
                 continue
               fi
               echo 'Requesting LE cert for '\$DOMAIN'...'
-              # --force-renewal: cert is placeholder, bypass certbot expiry check
-              # IS_REAL check above prevents burning LE quota when real cert exists
+              # Clean up placeholder + any stale certbot variants (e.g., bhquan.site-0002)
+              # so certbot saves cert at correct path /etc/letsencrypt/live/$DOMAIN/
+              \$DC run --rm --entrypoint '' certbot sh -c \"
+                rm -rf /etc/letsencrypt/live/\$DOMAIN  /etc/letsencrypt/live/\$DOMAIN-*
+                rm -rf /etc/letsencrypt/archive/\$DOMAIN /etc/letsencrypt/archive/\$DOMAIN-*
+                rm -f  /etc/letsencrypt/renewal/\$DOMAIN.conf /etc/letsencrypt/renewal/\$DOMAIN-*.conf
+              \"
               # Try with www. first — fall back to domain-only if www. DNS not configured
+              # No --force-renewal needed: we deleted old cert so certbot always issues fresh
               if timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
-                --force-renewal \
                 -d \$DOMAIN -d www.\$DOMAIN 2>&1; then
                 echo 'LE cert OK for '\$DOMAIN' (with www.)'
               elif timeout 120 \$DC run --rm --entrypoint '' certbot \
                 certbot certonly --webroot -w /var/www/certbot \
                 --non-interactive --cert-name \$DOMAIN \
                 --email admin@bhquan.site --agree-tos --no-eff-email \
-                --force-renewal \
                 -d \$DOMAIN 2>&1; then
                 echo 'LE cert OK for '\$DOMAIN' (without www.)'
               else
-                echo '::warning::LE failed for '\$DOMAIN' — placeholder cert active (HTTPS works with warning)'
+                echo '::warning::LE failed for '\$DOMAIN' — recreating placeholder'
+                \$DC run --rm --entrypoint '' certbot sh -c \"
+                  mkdir -p /etc/letsencrypt/live/\$DOMAIN
+                  openssl req -x509 -nodes -days 90 -newkey rsa:2048 \
+                    -keyout /etc/letsencrypt/live/\$DOMAIN/privkey.pem \
+                    -out /etc/letsencrypt/live/\$DOMAIN/fullchain.pem \
+                    -subj '/CN=\$DOMAIN' 2>/dev/null
+                \" || true
               fi
             done
             # Reload nginx with latest certs
