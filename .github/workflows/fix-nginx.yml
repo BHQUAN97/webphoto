@@ -104,6 +104,42 @@ jobs:
             docker exec shared-nginx nginx -s reload 2>&1 || true
           "
 
+      - name: Diagnose 502 - check nginx error logs + DNS + conf.d
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          echo "=== nginx error log (last 30 lines) ==="
+          sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx cat /var/log/nginx/error.log 2>&1 | tail -30 || echo 'no error log'"
+
+          echo ""
+          echo "=== conf.d contents ==="
+          sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx ls -la /etc/nginx/conf.d/ 2>&1"
+
+          echo ""
+          echo "=== DNS resolution test from nginx container ==="
+          sshpass -e ssh -p $PORT $VPS "
+            echo 'Resolve api (photo-api alias):'
+            docker exec shared-nginx nslookup api 127.0.0.11 2>&1 | tail -5 || echo 'nslookup not available'
+            echo 'Resolve lqd-api:'
+            docker exec shared-nginx nslookup lqd-api 127.0.0.11 2>&1 | tail -5 || echo 'nslookup not available'
+            echo 'Resolve fashionecom-api:'
+            docker exec shared-nginx nslookup fashionecom-api 127.0.0.11 2>&1 | tail -5 || echo 'nslookup not available'
+          "
+
+          echo ""
+          echo "=== Connectivity test from nginx to backends ==="
+          sshpass -e ssh -p $PORT $VPS "
+            echo 'lqd-api:4000:'
+            docker exec shared-nginx wget -T3 -qO- http://lqd-api:4000/api/health 2>&1 | head -3 || echo 'FAIL'
+            echo 'lqd-frontend:3000:'
+            docker exec shared-nginx wget -T3 -qO- http://lqd-frontend:3000 2>&1 | head -1 || echo 'FAIL'
+          "
+
+          echo ""
+          echo "=== Certs in /etc/letsencrypt/live/ ==="
+          sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx ls /etc/letsencrypt/live/ 2>&1"
+
       - name: Test all sites
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
