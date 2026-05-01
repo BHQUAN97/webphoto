@@ -1,0 +1,119 @@
+name: Fix Nginx (Emergency)
+
+on:
+  workflow_dispatch:
+
+env:
+  INFRA_DIR: /opt/infra
+
+jobs:
+  fix:
+    name: "Recreate shared-nginx"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Fix infra nginx config dir + upload correct files
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          echo "=== Fix: remove incorrectly created nginx.conf directory ==="
+          sshpass -e ssh -p $PORT $VPS "
+            mkdir -p ${INFRA_DIR}/nginx/conf.d
+            # Docker may have created nginx.conf as a directory — remove it
+            if [ -d ${INFRA_DIR}/nginx/nginx.conf ]; then
+              rm -rf ${INFRA_DIR}/nginx/nginx.conf
+              echo 'Removed nginx.conf directory'
+            else
+              echo 'nginx.conf is a file or missing — OK'
+            fi
+            ls -la ${INFRA_DIR}/nginx/ 2>&1
+          "
+
+          echo ""
+          echo "=== Upload nginx.conf ==="
+          sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
+
+          echo ""
+          echo "=== Verify upload ==="
+          sshpass -e ssh -p $PORT $VPS "ls -la ${INFRA_DIR}/nginx/ && head -3 ${INFRA_DIR}/nginx/nginx.conf"
+
+      - name: Recreate shared-nginx
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          echo "=== Ensure static dir + remove stale container ==="
+          sshpass -e ssh -p $PORT $VPS "
+            mkdir -p /opt/webphoto/photo-storage/dist
+            docker rm -f shared-nginx 2>/dev/null || echo 'Already gone'
+          "
+
+          echo ""
+          echo "=== Start nginx (webphoto_certbot_data has real LE certs) ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker run -d \
+              --name shared-nginx \
+              --restart always \
+              -p 80:80 \
+              -p 443:443 \
+              -v ${INFRA_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+              -v ${INFRA_DIR}/nginx/conf.d:/etc/nginx/conf.d:ro \
+              -v /opt/webphoto/photo-storage/dist:/usr/share/nginx/html:ro \
+              -v webphoto_certbot_data:/etc/letsencrypt:ro \
+              -v certbot_webroot:/var/www/certbot:ro \
+              --network webphoto_backend \
+              nginx:1.27-alpine 2>&1
+          "
+
+          sleep 8
+
+          echo ""
+          echo "=== nginx status ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker inspect shared-nginx --format 'Status: {{.State.Status}} | Running: {{.State.Running}}' 2>&1
+            docker logs shared-nginx --tail 15 2>&1 || true
+          "
+
+      - name: Connect nginx to all project networks + reload
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            docker network connect webphoto_frontend shared-nginx 2>/dev/null || echo 'webphoto_frontend: already connected or missing'
+            docker network connect lqd_frontend shared-nginx 2>/dev/null || echo 'lqd_frontend: already connected or missing'
+            docker network connect fashionecom_fashionecom-net shared-nginx 2>/dev/null || echo 'fashionecom_fashionecom-net: already connected or missing'
+            echo ''
+            echo 'Networks nginx is on:'
+            docker inspect shared-nginx --format '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' 2>&1
+          "
+
+          echo ""
+          echo "=== nginx config test + reload ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker exec shared-nginx nginx -t 2>&1
+            docker exec shared-nginx nginx -s reload 2>&1 || true
+          "
+
+      - name: Test all sites
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          sleep 5
+
+          sshpass -e ssh -p $PORT $VPS "
+            echo -n 'bhquan.site:           '; curl -sk -o /dev/null -w '%{http_code}\n' https://bhquan.site/
+            echo -n 'lqd.bhquan.store:      '; curl -sk -o /dev/null -w '%{http_code}\n' https://lqd.bhquan.store/
+            echo -n 'template.bhquan.store: '; curl -sk -o /dev/null -w '%{http_code}\n' https://template.bhquan.store/
+            echo -n 'shop.bhquan.store:     '; curl -sk -o /dev/null -w '%{http_code}\n' https://shop.bhquan.store/
+          "
