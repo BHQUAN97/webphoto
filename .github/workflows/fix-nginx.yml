@@ -37,15 +37,32 @@ jobs:
           "
 
           echo ""
-          echo "=== Upload nginx.conf + all conf.d files ==="
+          echo "=== Upload nginx.conf + ALL conf.d files ==="
           sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.site.conf
           sshpass -e scp -P $PORT nginx/conf.d/lqd.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/lqd.bhquan.store.conf
+          sshpass -e scp -P $PORT nginx/conf.d/shop.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/shop.bhquan.store.conf
+          sshpass -e scp -P $PORT nginx/conf.d/template.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/template.bhquan.store.conf
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.store.conf
 
           echo ""
           echo "=== Verify conf.d ==="
           sshpass -e ssh -p $PORT $VPS "ls -la ${INFRA_DIR}/nginx/conf.d/"
+
+      - name: Ensure all Docker networks exist
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          sshpass -e ssh -p $PORT $VPS "
+            docker network create webphoto_backend 2>/dev/null || echo 'webphoto_backend: exists'
+            docker network create webphoto_frontend 2>/dev/null || echo 'webphoto_frontend: exists'
+            docker network create lqd_frontend 2>/dev/null || echo 'lqd_frontend: exists'
+            docker network create webtemplate_frontend 2>/dev/null || echo 'webtemplate_frontend: exists'
+            echo ''
+            echo 'All project networks:'
+            docker network ls --format '{{.Name}}' | grep -vE '^(bridge|host|none)$'
+          "
 
       - name: Recreate shared-nginx
         run: |
@@ -93,6 +110,7 @@ jobs:
             docker network connect webphoto_frontend shared-nginx 2>/dev/null || echo 'webphoto_frontend: already connected or missing'
             docker network connect lqd_frontend shared-nginx 2>/dev/null || echo 'lqd_frontend: already connected or missing'
             docker network connect fashionecom_fashionecom-net shared-nginx 2>/dev/null || echo 'fashionecom_fashionecom-net: already connected or missing'
+            docker network connect webtemplate_frontend shared-nginx 2>/dev/null || echo 'webtemplate_frontend: already connected or missing'
             echo ''
             echo 'Networks nginx is on:'
             docker inspect shared-nginx --format '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' 2>&1
@@ -105,35 +123,47 @@ jobs:
             docker exec shared-nginx nginx -s reload 2>&1 || true
           "
 
-      - name: Diagnose - resolv.conf + conf.d + error log
+      - name: Fix fashionecom-frontend if unhealthy
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
 
-          echo "=== /etc/resolv.conf inside nginx ==="
-          sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx cat /etc/resolv.conf 2>&1"
+          sshpass -e ssh -p $PORT $VPS "
+            FE_STATUS=\$(docker inspect fashionecom-frontend --format '{{.State.Health.Status}}' 2>/dev/null || echo 'missing')
+            FE_RUNNING=\$(docker inspect fashionecom-frontend --format '{{.State.Running}}' 2>/dev/null || echo 'false')
+            echo \"fashionecom-frontend: status=\$FE_STATUS running=\$FE_RUNNING\"
 
-          echo ""
-          echo "=== conf.d contents ==="
+            if [ \"\$FE_STATUS\" = 'unhealthy' ] || [ \"\$FE_RUNNING\" = 'false' ] && [ \"\$FE_STATUS\" != 'missing' ]; then
+              echo 'Restarting fashionecom-frontend...'
+              docker restart fashionecom-frontend 2>&1 || echo 'restart failed'
+              sleep 15
+              docker inspect fashionecom-frontend --format 'After restart: {{.State.Health.Status}} running={{.State.Running}}' 2>&1
+            elif [ \"\$FE_STATUS\" = 'missing' ]; then
+              echo 'fashionecom-frontend not found — run FashionEcom deploy workflow'
+            else
+              echo 'fashionecom-frontend is healthy — OK'
+            fi
+
+            echo ''
+            echo 'fashionecom-frontend logs (last 15):'
+            docker logs fashionecom-frontend --tail 15 2>&1 || echo 'no logs'
+          "
+
+      - name: Diagnose - conf.d + error log + containers
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          echo "=== conf.d inside nginx container ==="
           sshpass -e ssh -p $PORT $VPS "docker exec shared-nginx ls -la /etc/nginx/conf.d/ 2>&1"
 
           echo ""
-          echo "=== nginx error log tail (2s timeout) ==="
+          echo "=== nginx error log tail ==="
           sshpass -e ssh -o ConnectTimeout=10 -p $PORT $VPS "timeout 3 docker exec shared-nginx tail -20 /var/log/nginx/error.log 2>&1 || echo 'no error log'"
 
           echo ""
           echo "=== All containers current status ==="
           sshpass -e ssh -p $PORT $VPS "docker ps -a --format 'table {{.Names}}\t{{.Status}}'"
-
-          echo ""
-          echo "=== lqd-api direct IP test (bypass DNS) ==="
-          sshpass -e ssh -p $PORT $VPS "
-            LQD_IP=\$(docker inspect lqd-api --format '{{.NetworkSettings.Networks.lqd_frontend.IPAddress}}' 2>/dev/null)
-            echo 'lqd-api IP on lqd_frontend:' \$LQD_IP
-            if [ -n \"\$LQD_IP\" ]; then
-              timeout 5 docker exec shared-nginx wget -T3 -qO- http://\${LQD_IP}:4000/api/health 2>&1 | head -3 || echo 'direct IP: FAIL'
-            fi
-          "
 
       - name: Test all sites
         run: |
@@ -143,8 +173,9 @@ jobs:
           sleep 5
 
           sshpass -e ssh -p $PORT $VPS "
-            echo -n 'bhquan.site:           '; curl -sk -o /dev/null -w '%{http_code}\n' https://bhquan.site/
-            echo -n 'lqd.bhquan.store:      '; curl -sk -o /dev/null -w '%{http_code}\n' https://lqd.bhquan.store/
-            echo -n 'template.bhquan.store: '; curl -sk -o /dev/null -w '%{http_code}\n' https://template.bhquan.store/
-            echo -n 'shop.bhquan.store:     '; curl -sk -o /dev/null -w '%{http_code}\n' https://shop.bhquan.store/
+            echo -n 'bhquan.site:             '; curl -sk -o /dev/null -w '%{http_code}\n' https://bhquan.site/
+            echo -n 'lqd.bhquan.store:        '; curl -sk -o /dev/null -w '%{http_code}\n' https://lqd.bhquan.store/
+            echo -n 'shop.bhquan.store:       '; curl -sk -o /dev/null -w '%{http_code}\n' https://shop.bhquan.store/
+            echo -n 'template.bhquan.store:   '; curl -sk -o /dev/null -w '%{http_code}\n' https://template.bhquan.store/
+            echo -n 'bhquan.store:            '; curl -sk -o /dev/null -w '%{http_code}\n' https://bhquan.store/ || echo '(VietNet not deployed)'
           "
