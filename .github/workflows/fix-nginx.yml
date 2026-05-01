@@ -59,6 +59,7 @@ jobs:
             docker network create webphoto_frontend 2>/dev/null || echo 'webphoto_frontend: exists'
             docker network create lqd_frontend 2>/dev/null || echo 'lqd_frontend: exists'
             docker network create webtemplate_frontend 2>/dev/null || echo 'webtemplate_frontend: exists'
+            docker network create vietnet_frontend 2>/dev/null || echo 'vietnet_frontend: exists'
             echo ''
             echo 'All project networks:'
             docker network ls --format '{{.Name}}' | grep -vE '^(bridge|host|none)$'
@@ -111,6 +112,7 @@ jobs:
             docker network connect lqd_frontend shared-nginx 2>/dev/null || echo 'lqd_frontend: already connected or missing'
             docker network connect fashionecom_fashionecom-net shared-nginx 2>/dev/null || echo 'fashionecom_fashionecom-net: already connected or missing'
             docker network connect webtemplate_frontend shared-nginx 2>/dev/null || echo 'webtemplate_frontend: already connected or missing'
+            docker network connect vietnet_frontend shared-nginx 2>/dev/null || echo 'vietnet_frontend: already connected or missing'
             echo ''
             echo 'Networks nginx is on:'
             docker inspect shared-nginx --format '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}} {{end}}' 2>&1
