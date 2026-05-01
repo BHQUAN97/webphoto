@@ -20,7 +20,7 @@ jobs:
           ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
           echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Fix infra nginx config dir + upload correct files
+      - name: Fix infra nginx config dir + upload all conf files
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
@@ -28,23 +28,24 @@ jobs:
           echo "=== Fix: remove incorrectly created nginx.conf directory ==="
           sshpass -e ssh -p $PORT $VPS "
             mkdir -p ${INFRA_DIR}/nginx/conf.d
-            # Docker may have created nginx.conf as a directory — remove it
             if [ -d ${INFRA_DIR}/nginx/nginx.conf ]; then
               rm -rf ${INFRA_DIR}/nginx/nginx.conf
               echo 'Removed nginx.conf directory'
             else
               echo 'nginx.conf is a file or missing — OK'
             fi
-            ls -la ${INFRA_DIR}/nginx/ 2>&1
           "
 
           echo ""
-          echo "=== Upload nginx.conf ==="
+          echo "=== Upload nginx.conf + all conf.d files ==="
           sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
+          sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.site.conf
+          sshpass -e scp -P $PORT nginx/conf.d/lqd.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/lqd.bhquan.store.conf
+          sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.store.conf
 
           echo ""
-          echo "=== Verify upload ==="
-          sshpass -e ssh -p $PORT $VPS "ls -la ${INFRA_DIR}/nginx/ && head -3 ${INFRA_DIR}/nginx/nginx.conf"
+          echo "=== Verify conf.d ==="
+          sshpass -e ssh -p $PORT $VPS "ls -la ${INFRA_DIR}/nginx/conf.d/"
 
       - name: Recreate shared-nginx
         run: |
