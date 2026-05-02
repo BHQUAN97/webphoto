@@ -1,0 +1,13 @@
+# ──────────────────────────────────────────
+# WebPhoto — System crontab (/etc/cron.d/webphoto)
+# Install: sudo cp /opt/webphoto/scripts/crontab.example /etc/cron.d/webphoto
+#          sudo chmod 644 /etc/cron.d/webphoto
+# Note: DB backup handled by GitHub Actions backup.yml (daily 4 AM UTC+7).
+#       VPS crontab chỉ cần Docker cleanup.
+# ──────────────────────────────────────────
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Docker cleanup — weekly Sunday 2:30 AM (trước VietNet 3:00 AM 30 phút)
+30 2 * * 0 root docker image prune -af --filter "until=168h" >> /var/log/webphoto-cleanup.log 2>&1 && docker container prune -f --filter "until=24h" >> /var/log/webphoto-cleanup.log 2>&1 && docker volume prune -f >> /var/log/webphoto-cleanup.log 2>&1 && docker builder prune -f --filter "until=168h" >> /var/log/webphoto-cleanup.log 2>&1

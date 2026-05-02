@@ -356,6 +356,29 @@ jobs:
             fi
           " || true
 
+      - name: Install crontab (idempotent)
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR}/scripts"
+          sshpass -e scp -P $PORT scripts/crontab.example $VPS:${APP_DIR}/scripts/crontab.example
+          sshpass -e ssh -p $PORT $VPS "
+            if [ ! -f /etc/cron.d/webphoto ]; then
+              if cp ${APP_DIR}/scripts/crontab.example /etc/cron.d/webphoto 2>/dev/null; then
+                chmod 644 /etc/cron.d/webphoto
+                chown root:root /etc/cron.d/webphoto 2>/dev/null || true
+                echo 'Crontab installed: /etc/cron.d/webphoto'
+                ls -la /etc/cron.d/webphoto
+              else
+                echo '::warning::Cannot write /etc/cron.d/webphoto — manual install needed:'
+                echo '  sudo cp ${APP_DIR}/scripts/crontab.example /etc/cron.d/webphoto && sudo chmod 644 /etc/cron.d/webphoto'
+              fi
+            else
+              echo 'Crontab already exists — skip (/etc/cron.d/webphoto)'
+              ls -la /etc/cron.d/webphoto
+            fi
+          "
+
   # ─── STAGE 3: VERIFY ─────────────────────────────────
   verify:
     name: "3. Health Check"
