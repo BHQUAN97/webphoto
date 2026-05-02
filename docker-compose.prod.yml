@@ -1,12 +1,13 @@
 # ============================================
 # PRODUCTION — docker-compose -f docker-compose.prod.yml up -d
 # Domain: bhquan.site
+# Nginx + Certbot are managed by /opt/infra/docker-compose.yml (shared infrastructure)
 # ============================================
 
 services:
 
   # ─── API Server ─────────────────────────
-  # MySQL + Redis nam trong /opt/infra/docker-compose.yml (shared voi VietNet)
+  # MySQL + Redis + Nginx nam trong /opt/infra/docker-compose.yml (shared)
   api:
     build:
       context: ./photo-storage/server
@@ -93,46 +94,10 @@ services:
     networks:
       - backend
 
-  # ─── Nginx Reverse Proxy + SSL ──────────
-  # Serve cả WebPhoto (bhquan.site) và VietNet (bhquan.store)
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: shared-nginx
-    restart: always
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./photo-storage/dist:/usr/share/nginx/html:ro
-      - certbot_data:/etc/letsencrypt:ro
-      - certbot_www:/var/www/certbot:ro
-    depends_on:
-      - api
-    networks:
-      - frontend
-      - vietnet_frontend
-
-  # ─── Certbot (SSL) ──────────────────────
-  certbot:
-    image: certbot/certbot
-    container_name: photo-certbot
-    volumes:
-      - certbot_data:/etc/letsencrypt
-      - certbot_www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-
-volumes:
-  certbot_data:
-  certbot_www:
-
 networks:
   frontend:
+    name: webphoto_frontend
+    external: true    # managed by deploy — created before up -d, shared-nginx connects to it
   backend:
     name: webphoto_backend
-    external: true
-  # VietNet (bhquan.store) chạy cùng VPS — shared-nginx cần join network này
-  vietnet_frontend:
-    name: vietnet_frontend
     external: true

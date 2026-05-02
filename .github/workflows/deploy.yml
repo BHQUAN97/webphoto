@@ -132,6 +132,7 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "
             export PATH=\$PATH:/usr/local/bin
             docker network create webphoto_backend 2>/dev/null || true
+            docker network create webphoto_frontend 2>/dev/null || true
             # Copy infra compose from extracted tar
             cp ${APP_DIR}/infra/docker-compose.yml ${INFRA_DIR}/docker-compose.yml
 
@@ -194,6 +195,24 @@ jobs:
             docker exec shared-mysql rm -f /tmp/create_photo.sql
             rm -f /tmp/create_photo.sql
           "
+
+      - name: Apply base schema (idempotent)
+        env:
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          [ ! -d "db/schema/tables" ] && exit 0
+          printf '%s' "$MYSQL_PASSWORD" > /tmp/photo_db_pass.txt
+          sshpass -e scp -P $PORT /tmp/photo_db_pass.txt $VPS:/tmp/photo_db_pass.txt
+          rm -f /tmp/photo_db_pass.txt
+          MYSQL_CMD="MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i shared-mysql mysql -u photo_user photo_storage"
+          for f in $(find db/schema/tables -name '*.sql' -type f | sort); do
+            echo -n "  $(basename $f) ... "
+            OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
+            [ $? -eq 0 ] && echo "OK" || { echo "WARN: $OUT" | head -c 200; }
+          done
+          sshpass -e ssh -p $PORT $VPS "rm -f /tmp/photo_db_pass.txt"
 
       - name: Run DB migrations
         env:

@@ -25,8 +25,12 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://bhquan.site/api/cron/expire-images"
+          HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "https://bhquan.site/api/cron/expire-images")
+          BODY=$(cat /tmp/resp 2>/dev/null)
+          echo "HTTP: $HTTP | Body: $BODY"
+          [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::expire-images HTTP $HTTP: $BODY"; exit 1; }
 
   reconcile-quota:
     if: github.event_name == 'schedule' && github.event.schedule == '0 20 * * *'
@@ -36,8 +40,12 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://bhquan.site/api/cron/reconcile-quota"
+          HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "https://bhquan.site/api/cron/reconcile-quota")
+          BODY=$(cat /tmp/resp 2>/dev/null)
+          echo "HTTP: $HTTP | Body: $BODY"
+          [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::reconcile-quota HTTP $HTTP: $BODY"; exit 1; }
 
   remind-payments:
     if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
@@ -47,8 +55,12 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -s --max-time 30 -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://bhquan.site/api/cron/remind-payments"
+          HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "https://bhquan.site/api/cron/remind-payments")
+          BODY=$(cat /tmp/resp 2>/dev/null)
+          echo "HTTP: $HTTP | Body: $BODY"
+          [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::remind-payments HTTP $HTTP: $BODY"; exit 1; }
 
   # ─── SSL Renewal ─────────────────────────────────────
   # certbot container tu renew nhung KHONG reload nginx sau khi renew
@@ -72,19 +84,12 @@ jobs:
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "
-            cd /opt/webphoto
-            DC='docker compose -f docker-compose.yml'
+            export PATH=\$PATH:/usr/local/bin
+            DC='docker compose -f /opt/infra/docker-compose.yml'
 
-            echo '=== Requesting / renewing Let'\''s Encrypt certs ==='
-            for DOMAIN in bhquan.site bhquan.store; do
-              echo \"--- \$DOMAIN ---\"
-              timeout 120 \$DC run --rm --entrypoint '' certbot \
-                certbot certonly --webroot -w /var/www/certbot \
-                --non-interactive --cert-name \$DOMAIN \
-                --email admin@bhquan.site --agree-tos --no-eff-email \
-                --keep-until-expiring \
-                -d \$DOMAIN -d www.\$DOMAIN 2>&1 || echo '::warning::LE failed for '\$DOMAIN
-            done
+            echo '=== Renewing Let'\''s Encrypt certs (all domains) ==='
+            timeout 180 \$DC run --rm --entrypoint '' certbot \
+              certbot renew 2>&1 || echo '::warning::certbot renew failed'
 
             echo '=== Reloading nginx ==='
             if docker inspect shared-nginx --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
@@ -95,5 +100,5 @@ jobs:
 
             echo '=== Cert status ==='
             \$DC run --rm --entrypoint '' certbot certbot certificates 2>&1 \
-              | grep -E 'Domains:|Expiry Date|VALID|INVALID' || true
+              | grep -E 'Certificate Name:|Domains:|Expiry Date:|VALID|INVALID' || true
           "
