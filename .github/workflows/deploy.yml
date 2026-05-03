@@ -209,8 +209,11 @@ jobs:
           MYSQL_CMD="MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i shared-mysql mysql -u photo_user photo_storage"
           for f in $(find db/schema/tables -name '*.sql' -type f | sort); do
             echo -n "  $(basename $f) ... "
-            OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
-            [ $? -eq 0 ] && echo "OK" || { echo "WARN: $OUT" | head -c 200; }
+            if OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1); then
+              echo "OK"
+            else
+              echo "WARN: $(echo "$OUT" | head -c 200)"
+            fi
           done
           sshpass -e ssh -p $PORT $VPS "rm -f /tmp/photo_db_pass.txt"
 
