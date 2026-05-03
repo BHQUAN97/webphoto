@@ -11,6 +11,7 @@ on:
       - '.github/workflows/restore.yml'
       - '.github/workflows/vps-setup.yml'
       - '.github/workflows/fix-nginx.yml'
+  workflow_dispatch:
 
 concurrency:
   group: deploy

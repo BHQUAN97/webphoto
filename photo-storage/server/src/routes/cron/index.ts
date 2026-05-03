@@ -116,18 +116,34 @@ router.get('/remind-payments', asyncHandler(async (req, res) => {
       gt(payments.expiresAt, new Date()),
     ))
 
+  let reminded = 0
+  const failed: string[] = []
+
   for (const { p, u } of pendingOrders) {
     const hoursLeft = Math.max(0, Math.floor((p.expiresAt!.getTime() - Date.now()) / 3600_000))
-    await mailService.send({
-      to: u.email, template: 'order_reminder',
-      data: {
-        orderId: p.referenceCode, paymentId: p.id,
-        amountVnd: p.amountVnd, referenceCode: p.referenceCode, hoursLeft,
-      },
-    })
+    try {
+      await mailService.send({
+        to: u.email, template: 'order_reminder',
+        data: {
+          orderId: p.referenceCode, paymentId: p.id,
+          amountVnd: p.amountVnd, referenceCode: p.referenceCode, hoursLeft,
+        },
+      })
+      reminded++
+    } catch (err) {
+      failed.push(p.id)
+      logger.warn('[Cron:RemindPayments] Failed to send reminder email', {
+        source: 'cron',
+        paymentId: p.id,
+        referenceCode: p.referenceCode,
+        userId: u.id,
+        email: u.email,
+        error: (err as Error).message,
+      })
+    }
   }
 
-  res.json({ reminded: pendingOrders.length })
+  res.json({ checked: pendingOrders.length, reminded, failed: failed.length, failedPaymentIds: failed })
 }))
 
 // GET /cleanup-logs — delete old logs from DB + files

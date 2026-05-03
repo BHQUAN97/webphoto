@@ -11,14 +11,20 @@ on:
       task:
         description: 'Task to run'
         required: true
-        default: 'ssl-renew'
+        default: 'remind-payments'
         type: choice
         options:
+          - all
+          - expire-images
+          - reconcile-quota
+          - remind-payments
           - ssl-renew
 
 jobs:
   expire-images:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 19 * * *'
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'expire-images' || github.event.inputs.task == 'all'))
     runs-on: ubuntu-latest
     steps:
       - name: Run expire-images cron
@@ -33,7 +39,9 @@ jobs:
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::expire-images HTTP $HTTP: $BODY"; exit 1; }
 
   reconcile-quota:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 20 * * *'
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 20 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'reconcile-quota' || github.event.inputs.task == 'all'))
     runs-on: ubuntu-latest
     steps:
       - name: Run reconcile-quota cron
@@ -48,7 +56,9 @@ jobs:
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::reconcile-quota HTTP $HTTP: $BODY"; exit 1; }
 
   remind-payments:
-    if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 * * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'remind-payments' || github.event.inputs.task == 'all'))
     runs-on: ubuntu-latest
     steps:
       - name: Run remind-payments cron
@@ -69,7 +79,7 @@ jobs:
   ssl-renew:
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 20 * * 1') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'ssl-renew')
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'ssl-renew' || github.event.inputs.task == 'all'))
     runs-on: ubuntu-latest
     steps:
       - name: Setup SSH
