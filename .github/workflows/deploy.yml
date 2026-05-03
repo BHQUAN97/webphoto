@@ -214,10 +214,10 @@ jobs:
               exit 0
             fi
 
-            MYSQL_CMD='MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i shared-mysql mysql -u photo_user photo_storage'
+            MYSQL_PWD_VALUE=\$(cat /tmp/photo_db_pass.txt)
             for f in \$(find '${APP_DIR}/db/schema/tables' -name '*.sql' -type f | sort); do
               echo -n \"  \$(basename \$f) ... \"
-              if cat \"\$f\" | eval \"\$MYSQL_CMD\" 2>/tmp/base-schema.err; then
+              if docker exec -i -e MYSQL_PWD=\"\$MYSQL_PWD_VALUE\" shared-mysql mysql -u photo_user photo_storage < \"\$f\" 2>/tmp/base-schema.err; then
                 echo 'OK'
               else
                 echo 'FAILED'
@@ -228,7 +228,7 @@ jobs:
             done
 
             for table in users payments app_logs; do
-              if ! eval \"\$MYSQL_CMD -N -e \\\"SHOW TABLES LIKE '\$table'\\\"\" | grep -qx \"\$table\"; then
+              if ! docker exec -e MYSQL_PWD=\"\$MYSQL_PWD_VALUE\" shared-mysql mysql -u photo_user photo_storage -N -e \"SHOW TABLES LIKE '\$table'\" | grep -qx \"\$table\"; then
                 echo \"::error::Missing required table: \$table\"
                 rm -f /tmp/photo_db_pass.txt
                 exit 1
