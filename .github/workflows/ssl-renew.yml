@@ -1,0 +1,89 @@
+name: SSL Renew
+
+on:
+  workflow_dispatch:
+
+env:
+  INFRA_DIR: /opt/infra
+
+jobs:
+  ssl:
+    name: "Renew SSL cert (bhquan.site)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Get SSL cert for bhquan.site
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+
+          echo "=== Current certs in volume ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker exec shared-nginx ls -la /etc/letsencrypt/live/ 2>&1 || echo 'No cert dir'
+            docker exec shared-nginx ls -la /etc/letsencrypt/live/bhquan.site/ 2>&1 || echo 'No bhquan.site cert'
+          "
+
+          echo ""
+          echo "=== Removing old/placeholder cert from volume ==="
+          sshpass -e ssh -p $PORT $VPS "
+            CERT_VOL=\$(docker inspect shared-nginx --format '{{range .Mounts}}{{if eq .Destination \"/etc/letsencrypt\"}}{{.Source}}{{end}}{{end}}')
+            echo \"Cert volume/path: \$CERT_VOL\"
+            docker run --rm -v \${CERT_VOL}:/etc/letsencrypt alpine sh -c '
+              rm -rf /etc/letsencrypt/live/bhquan.site*
+              rm -rf /etc/letsencrypt/archive/bhquan.site*
+              rm -rf /etc/letsencrypt/renewal/bhquan.site*.conf
+              echo Cleaned
+            '
+          "
+
+          echo ""
+          echo "=== Stopping nginx to free port 80 ==="
+          sshpass -e ssh -p $PORT $VPS "docker stop shared-nginx 2>/dev/null || true"
+
+          echo ""
+          echo "=== Running certbot standalone into Docker volume ==="
+          sshpass -e ssh -p $PORT $VPS "
+            CERT_VOL=\$(docker inspect shared-nginx --format '{{range .Mounts}}{{if eq .Destination \"/etc/letsencrypt\"}}{{.Name}}{{end}}{{end}}')
+            echo \"Using volume: \$CERT_VOL\"
+
+            docker run --rm \
+              -v \${CERT_VOL}:/etc/letsencrypt \
+              -p 80:80 \
+              certbot/certbot certonly --standalone \
+              --non-interactive \
+              --cert-name bhquan.site \
+              --email admin@bhquan.site \
+              --agree-tos --no-eff-email \
+              -d bhquan.site -d www.bhquan.site \
+              2>&1
+          "
+
+          echo ""
+          echo "=== Upload nginx config BEFORE starting nginx ==="
+          sshpass -e ssh -p $PORT $VPS "mkdir -p /opt/infra/nginx/conf.d"
+          sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf \
+            $VPS:/opt/infra/nginx/conf.d/bhquan.site.conf
+
+          echo ""
+          echo "=== Start nginx (reads fresh config with new cert) ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker start shared-nginx
+            sleep 3
+          "
+
+          echo ""
+          echo "=== Verify cert served by nginx ==="
+          sshpass -e ssh -p $PORT $VPS "
+            docker exec shared-nginx ls /etc/letsencrypt/live/bhquan.site/ 2>&1
+            docker exec shared-nginx nginx -t 2>&1
+            echo '--- Cert being served ---'
+            echo | openssl s_client -connect localhost:443 -servername bhquan.site 2>/dev/null | openssl x509 -noout -subject -dates 2>/dev/null || echo 'cert check skipped'
+          " 2>&1 || true

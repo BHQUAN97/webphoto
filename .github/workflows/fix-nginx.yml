@@ -37,13 +37,14 @@ jobs:
           "
 
           echo ""
-          echo "=== Upload nginx.conf + ALL conf.d files ==="
+          echo "=== Upload nginx.conf + WebPhoto own conf only ==="
+          echo "(Other projects' confs stay as-is on VPS — each project owns its own conf)"
           sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
           sshpass -e scp -P $PORT nginx/conf.d/bhquan.site.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.site.conf
-          sshpass -e scp -P $PORT nginx/conf.d/lqd.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/lqd.bhquan.store.conf
-          sshpass -e scp -P $PORT nginx/conf.d/shop.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/shop.bhquan.store.conf
-          sshpass -e scp -P $PORT nginx/conf.d/template.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/template.bhquan.store.conf
-          sshpass -e scp -P $PORT nginx/conf.d/bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/bhquan.store.conf
+
+          echo ""
+          echo "=== Verify conf.d on VPS ==="
+          sshpass -e ssh -p $PORT $VPS "ls -la ${INFRA_DIR}/nginx/conf.d/"
 
           echo ""
           echo "=== Verify conf.d ==="
