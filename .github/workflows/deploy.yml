@@ -203,20 +203,40 @@ jobs:
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
-          [ ! -d "db/schema/tables" ] && exit 0
           printf '%s' "$MYSQL_PASSWORD" > /tmp/photo_db_pass.txt
           sshpass -e scp -P $PORT /tmp/photo_db_pass.txt $VPS:/tmp/photo_db_pass.txt
           rm -f /tmp/photo_db_pass.txt
-          MYSQL_CMD="MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i shared-mysql mysql -u photo_user photo_storage"
-          for f in $(find db/schema/tables -name '*.sql' -type f | sort); do
-            echo -n "  $(basename $f) ... "
-            if OUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1); then
-              echo "OK"
-            else
-              echo "WARN: $(echo "$OUT" | head -c 200)"
+          sshpass -e ssh -p $PORT $VPS "
+            set -e
+            if [ ! -d '${APP_DIR}/db/schema/tables' ]; then
+              echo 'No base schema directory found at ${APP_DIR}/db/schema/tables'
+              rm -f /tmp/photo_db_pass.txt
+              exit 0
             fi
-          done
-          sshpass -e ssh -p $PORT $VPS "rm -f /tmp/photo_db_pass.txt"
+
+            MYSQL_CMD='MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i shared-mysql mysql -u photo_user photo_storage'
+            for f in \$(find '${APP_DIR}/db/schema/tables' -name '*.sql' -type f | sort); do
+              echo -n \"  \$(basename \$f) ... \"
+              if cat \"\$f\" | eval \"\$MYSQL_CMD\" 2>/tmp/base-schema.err; then
+                echo 'OK'
+              else
+                echo 'FAILED'
+                cat /tmp/base-schema.err | tail -20
+                rm -f /tmp/base-schema.err /tmp/photo_db_pass.txt
+                exit 1
+              fi
+            done
+
+            for table in users payments app_logs; do
+              if ! eval \"\$MYSQL_CMD -N -e \\\"SHOW TABLES LIKE '\$table'\\\"\" | grep -qx \"\$table\"; then
+                echo \"::error::Missing required table: \$table\"
+                rm -f /tmp/photo_db_pass.txt
+                exit 1
+              fi
+            done
+
+            rm -f /tmp/base-schema.err /tmp/photo_db_pass.txt
+          "
 
       - name: Run DB migrations
         env:
