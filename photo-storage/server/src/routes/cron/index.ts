@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db } from '../../utils/db.js'
 import { images, payments, users, albums, appLogs } from '../../database/schema.js'
-import { and, lt, lte, ne, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, lt, lte, ne, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { storageFor, getStorageBackendSync } from '../../utils/storage/index.js'
 import { getSetting } from '../../utils/settings-cache.js'
 import { logger } from '../../utils/logger.js'
@@ -107,39 +107,41 @@ router.get('/remind-payments', asyncHandler(async (req, res) => {
 
   try {
     const pendingOrders = await db
-      .select({ p: payments, u: users })
+      .select({
+        paymentId: payments.id,
+        referenceCode: payments.referenceCode,
+        amountVnd: payments.amountVnd,
+        userId: users.id,
+        email: users.email,
+      })
       .from(payments)
       .innerJoin(users, eq(payments.userId, users.id))
       .where(and(
         eq(payments.status, 'pending'),
         lt(payments.createdAt, new Date(Date.now() - 12 * 3600_000)),
-        isNotNull(payments.expiresAt),
-        gt(payments.expiresAt, new Date()),
       ))
 
     let reminded = 0
     const failed: string[] = []
 
-    for (const { p, u } of pendingOrders) {
-      const expiresAt = p.expiresAt instanceof Date ? p.expiresAt : new Date(p.expiresAt!)
-      const hoursLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 3600_000))
+    for (const order of pendingOrders) {
       try {
         await mailService.send({
-          to: u.email, template: 'order_reminder',
+          to: order.email, template: 'order_reminder',
           data: {
-            orderId: p.referenceCode, paymentId: p.id,
-            amountVnd: p.amountVnd, referenceCode: p.referenceCode, hoursLeft,
+            orderId: order.referenceCode, paymentId: order.paymentId,
+            amountVnd: order.amountVnd, referenceCode: order.referenceCode, hoursLeft: 12,
           },
         })
         reminded++
       } catch (err) {
-        failed.push(p.id)
+        failed.push(order.paymentId)
         logger.warn('[Cron:RemindPayments] Failed to send reminder email', {
           source: 'cron',
-          paymentId: p.id,
-          referenceCode: p.referenceCode,
-          userId: u.id,
-          email: u.email,
+          paymentId: order.paymentId,
+          referenceCode: order.referenceCode,
+          userId: order.userId,
+          email: order.email,
           error: (err as Error).message,
         })
       }
@@ -147,12 +149,13 @@ router.get('/remind-payments', asyncHandler(async (req, res) => {
 
     res.json({ ok: true, checked: pendingOrders.length, reminded, failed: failed.length, failedPaymentIds: failed })
   } catch (err) {
-    const error = err as Error
+    const error = err as Error & { cause?: Error }
     logger.error('[Cron:RemindPayments] Cron failed', {
       source: 'cron',
       requestId: (req as any).requestId,
       errorName: error.name,
       error: error.message,
+      cause: error.cause?.message,
       stack: error.stack,
     })
     res.json({
@@ -161,6 +164,7 @@ router.get('/remind-payments', asyncHandler(async (req, res) => {
       reminded: 0,
       failed: 0,
       error: error.message,
+      cause: error.cause?.message,
       requestId: (req as any).requestId,
     })
   }
