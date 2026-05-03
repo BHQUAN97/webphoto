@@ -105,45 +105,65 @@ router.get('/reconcile-quota', asyncHandler(async (req, res) => {
 router.get('/remind-payments', asyncHandler(async (req, res) => {
   if (!verifyCron(req, res)) return
 
-  const pendingOrders = await db
-    .select({ p: payments, u: users })
-    .from(payments)
-    .innerJoin(users, eq(payments.userId, users.id))
-    .where(and(
-      eq(payments.status, 'pending'),
-      lt(payments.createdAt, new Date(Date.now() - 12 * 3600_000)),
-      isNotNull(payments.expiresAt),
-      gt(payments.expiresAt, new Date()),
-    ))
+  try {
+    const pendingOrders = await db
+      .select({ p: payments, u: users })
+      .from(payments)
+      .innerJoin(users, eq(payments.userId, users.id))
+      .where(and(
+        eq(payments.status, 'pending'),
+        lt(payments.createdAt, new Date(Date.now() - 12 * 3600_000)),
+        isNotNull(payments.expiresAt),
+        gt(payments.expiresAt, new Date()),
+      ))
 
-  let reminded = 0
-  const failed: string[] = []
+    let reminded = 0
+    const failed: string[] = []
 
-  for (const { p, u } of pendingOrders) {
-    const hoursLeft = Math.max(0, Math.floor((p.expiresAt!.getTime() - Date.now()) / 3600_000))
-    try {
-      await mailService.send({
-        to: u.email, template: 'order_reminder',
-        data: {
-          orderId: p.referenceCode, paymentId: p.id,
-          amountVnd: p.amountVnd, referenceCode: p.referenceCode, hoursLeft,
-        },
-      })
-      reminded++
-    } catch (err) {
-      failed.push(p.id)
-      logger.warn('[Cron:RemindPayments] Failed to send reminder email', {
-        source: 'cron',
-        paymentId: p.id,
-        referenceCode: p.referenceCode,
-        userId: u.id,
-        email: u.email,
-        error: (err as Error).message,
-      })
+    for (const { p, u } of pendingOrders) {
+      const expiresAt = p.expiresAt instanceof Date ? p.expiresAt : new Date(p.expiresAt!)
+      const hoursLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 3600_000))
+      try {
+        await mailService.send({
+          to: u.email, template: 'order_reminder',
+          data: {
+            orderId: p.referenceCode, paymentId: p.id,
+            amountVnd: p.amountVnd, referenceCode: p.referenceCode, hoursLeft,
+          },
+        })
+        reminded++
+      } catch (err) {
+        failed.push(p.id)
+        logger.warn('[Cron:RemindPayments] Failed to send reminder email', {
+          source: 'cron',
+          paymentId: p.id,
+          referenceCode: p.referenceCode,
+          userId: u.id,
+          email: u.email,
+          error: (err as Error).message,
+        })
+      }
     }
-  }
 
-  res.json({ checked: pendingOrders.length, reminded, failed: failed.length, failedPaymentIds: failed })
+    res.json({ ok: true, checked: pendingOrders.length, reminded, failed: failed.length, failedPaymentIds: failed })
+  } catch (err) {
+    const error = err as Error
+    logger.error('[Cron:RemindPayments] Cron failed', {
+      source: 'cron',
+      requestId: (req as any).requestId,
+      errorName: error.name,
+      error: error.message,
+      stack: error.stack,
+    })
+    res.json({
+      ok: false,
+      checked: 0,
+      reminded: 0,
+      failed: 0,
+      error: error.message,
+      requestId: (req as any).requestId,
+    })
+  }
 }))
 
 // GET /cleanup-logs — delete old logs from DB + files
