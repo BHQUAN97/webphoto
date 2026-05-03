@@ -122,8 +122,15 @@ jobs:
               exit 0
             fi
 
-            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env | cut -d= -f2-)
+            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env 2>/dev/null | cut -d= -f2-)
+            if [ -z \"\$MYSQL_ROOT_PWD\" ]; then
+              MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${APP_DIR}/.env 2>/dev/null | cut -d= -f2-)
+            fi
             MYSQL_PWD=\$(grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env | cut -d= -f2-)
+            if [ -z \"\$MYSQL_ROOT_PWD\" ] || [ -z \"\$MYSQL_PWD\" ]; then
+              echo 'ERROR: Missing MYSQL_ROOT_PASSWORD or MYSQL_PASSWORD in deploy env files'
+              exit 1
+            fi
 
             echo 'Restoring photo_storage database...'
 

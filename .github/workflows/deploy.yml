@@ -110,8 +110,10 @@ jobs:
           sshpass -e ssh -p $PORT $VPS "mkdir -p ${APP_DIR} ${INFRA_DIR}/nginx/conf.d"
           sshpass -e scp -P $PORT /tmp/webphoto-build.tar.gz $VPS:/tmp/
           sshpass -e scp -P $PORT /tmp/prod.env $VPS:${APP_DIR}/.env
+          sshpass -e scp -P $PORT /tmp/prod.env $VPS:${INFRA_DIR}/.env
           sshpass -e ssh -p $PORT $VPS "
             chmod 600 ${APP_DIR}/.env
+            chmod 600 ${INFRA_DIR}/.env
             cd ${APP_DIR}
             tar xzf /tmp/webphoto-build.tar.gz
             rm -f /tmp/webphoto-build.tar.gz
@@ -151,7 +153,7 @@ jobs:
               docker pull nginx:1.27-alpine 2>&1 | tail -1
               echo '--- Pre-start: placeholder cert for bhquan.site (nginx needs cert to start) ---'
               docker run --rm \
-                -v shared_certbot_data:/etc/letsencrypt \
+                -v webphoto_certbot_data:/etc/letsencrypt \
                 certbot/certbot sh -c '
                   CERT=/etc/letsencrypt/live/bhquan.site/fullchain.pem
                   if openssl x509 -in \$CERT -noout -checkend 3600 2>/dev/null; then
@@ -338,7 +340,7 @@ jobs:
               docker run --rm \
                 -v ${INFRA_DIR}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
                 -v ${INFRA_DIR}/nginx/conf.d:/etc/nginx/conf.d:ro \
-                -v shared_certbot_data:/etc/letsencrypt:ro \
+                -v webphoto_certbot_data:/etc/letsencrypt:ro \
                 nginx:1.27-alpine nginx -t 2>&1 || true
               exit 1
             fi

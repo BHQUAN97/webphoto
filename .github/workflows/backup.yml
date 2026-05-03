@@ -40,7 +40,14 @@ jobs:
             rm -rf \$BACKUP_DIR
             mkdir -p \$BACKUP_DIR/webphoto \$BACKUP_DIR/vietnet
 
-            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env | cut -d= -f2-)
+            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env 2>/dev/null | cut -d= -f2-)
+            if [ -z \"\$MYSQL_ROOT_PWD\" ]; then
+              MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' /opt/webphoto/.env 2>/dev/null | cut -d= -f2-)
+            fi
+            if [ -z \"\$MYSQL_ROOT_PWD\" ]; then
+              echo 'ERROR: MYSQL_ROOT_PASSWORD not found in /opt/infra/.env or /opt/webphoto/.env'
+              exit 1
+            fi
 
             # ── DB dumps ──
             echo '=== Database dumps ==='

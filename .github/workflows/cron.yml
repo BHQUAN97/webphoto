@@ -71,6 +71,7 @@ jobs:
           BODY=$(cat /tmp/resp 2>/dev/null)
           echo "HTTP: $HTTP | Body: $BODY"
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::remind-payments HTTP $HTTP: $BODY"; exit 1; }
+          echo "$BODY" | grep -q '"ok":false' && { echo "::error::remind-payments reported failure: $BODY"; exit 1; } || true
 
   # ─── SSL Renewal ─────────────────────────────────────
   # certbot container tu renew nhung KHONG reload nginx sau khi renew
@@ -106,6 +107,7 @@ jobs:
               docker exec shared-nginx nginx -s reload && echo 'Nginx reloaded OK'
             else
               echo '::error::shared-nginx not running'
+              exit 1
             fi
 
             echo '=== Cert status ==='
