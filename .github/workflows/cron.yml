@@ -73,6 +73,43 @@ jobs:
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::remind-payments HTTP $HTTP: $BODY"; exit 1; }
           echo "$BODY" | grep -q '"ok":false' && { echo "::error::remind-payments reported failure: $BODY"; exit 1; } || true
 
+  # ─── Diagnose (runs when any cron job fails) ─────────
+  diagnose:
+    name: "Diagnose (on failure)"
+    runs-on: ubuntu-latest
+    needs: [expire-images, reconcile-quota, remind-payments]
+    if: always() && contains(needs.*.result, 'failure')
+    steps:
+      - name: Setup SSH
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: VPS diagnostics
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "
+            echo '=== Container status ==='
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RestartCount}}' | grep -E 'photo-|shared-'
+
+            echo ''
+            echo '=== photo-api logs (last 40) ==='
+            docker logs photo-api --tail 40 2>&1 || echo 'photo-api: container not found'
+
+            echo ''
+            echo '=== MySQL ping ==='
+            docker exec shared-mysql mysqladmin ping -h localhost --silent 2>&1 \
+              && echo 'MySQL: OK' || echo 'MySQL: NOT RESPONDING'
+
+            echo ''
+            echo '=== Disk / Memory ==='
+            df -h / 2>/dev/null | tail -1
+            free -h 2>/dev/null | head -2
+          " 2>/dev/null || echo '::error::Cannot SSH to VPS — check VPS_HOST/VPS_PORT/VPS_PASSWORD secrets'
+
   # ─── SSL Renewal ─────────────────────────────────────
   # certbot container tu renew nhung KHONG reload nginx sau khi renew
   # Job nay: request/renew LE certs + reload nginx

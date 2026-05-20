@@ -49,20 +49,39 @@ jobs:
               exit 1
             fi
 
+            # ── Verify MySQL is accessible ──
+            echo '=== MySQL check ==='
+            if ! docker exec shared-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+              echo 'ERROR: shared-mysql not responding'
+              docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RestartCount}}' | grep -E 'mysql|redis|nginx' || true
+              docker logs shared-mysql --tail 20 2>&1 || true
+              exit 1
+            fi
+            echo 'MySQL: OK'
+            echo ''
+
             # ── DB dumps ──
             echo '=== Database dumps ==='
 
             echo 'Dumping photo_storage...'
             docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
               --single-transaction --routines --triggers --events \
-              photo_storage 2>/dev/null | gzip > \$BACKUP_DIR/webphoto/photo_storage.sql.gz
+              photo_storage > /tmp/dump_photo_storage.sql 2>/tmp/dump_err.txt \
+              || { echo 'MYSQLDUMP FAILED:'; cat /tmp/dump_err.txt; rm -f /tmp/dump_err.txt /tmp/dump_photo_storage.sql; exit 1; }
+            rm -f /tmp/dump_err.txt
+            gzip -c /tmp/dump_photo_storage.sql > \$BACKUP_DIR/webphoto/photo_storage.sql.gz
+            rm -f /tmp/dump_photo_storage.sql
             echo \"  \$(du -h \$BACKUP_DIR/webphoto/photo_storage.sql.gz | cut -f1)\"
 
             if docker exec shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'USE vietnet' 2>/dev/null; then
               echo 'Dumping vietnet...'
               docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
                 --single-transaction --routines --triggers --events \
-                vietnet 2>/dev/null | gzip > \$BACKUP_DIR/vietnet/vietnet.sql.gz
+                vietnet > /tmp/dump_vietnet.sql 2>/tmp/dump_err.txt \
+                || { echo 'MYSQLDUMP FAILED (vietnet):'; cat /tmp/dump_err.txt; rm -f /tmp/dump_err.txt /tmp/dump_vietnet.sql; exit 1; }
+              rm -f /tmp/dump_err.txt
+              gzip -c /tmp/dump_vietnet.sql > \$BACKUP_DIR/vietnet/vietnet.sql.gz
+              rm -f /tmp/dump_vietnet.sql
               echo \"  \$(du -h \$BACKUP_DIR/vietnet/vietnet.sql.gz | cut -f1)\"
             else
               echo 'vietnet DB not found — skip'
@@ -225,12 +244,35 @@ jobs:
             echo "Pushed to branch: backups"
           fi
 
+      - name: Diagnose on failure
+        if: failure()
+        run: |
+          VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          PORT="${{ secrets.VPS_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "
+            echo '=== Container status ==='
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RestartCount}}' | grep -E 'photo-|shared-' || true
+
+            echo ''
+            echo '=== MySQL logs (last 20) ==='
+            docker logs shared-mysql --tail 20 2>&1 || echo 'shared-mysql: container not found'
+
+            echo ''
+            echo '=== photo-api logs (last 20) ==='
+            docker logs photo-api --tail 20 2>&1 || echo 'photo-api: container not found'
+
+            echo ''
+            echo '=== Disk / Memory ==='
+            df -h / 2>/dev/null | tail -1
+            free -h 2>/dev/null | head -2
+          " 2>/dev/null || echo '::warning::Cannot SSH to VPS for diagnostics'
+
       - name: Cleanup VPS temp
         if: always()
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
-          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-*" 2>/dev/null || true
+          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-* /tmp/dump_*.sql /tmp/dump_err.txt" 2>/dev/null || true
 
       - name: Summary
         run: |
