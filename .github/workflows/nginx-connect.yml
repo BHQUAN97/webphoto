@@ -50,7 +50,7 @@ jobs:
           sleep 3
 
           sshpass -e ssh -p $PORT $VPS "
-            echo -n 'bhquan.site:             '; curl -sk -o /dev/null -w '%{http_code}\n' https://bhquan.site/
+            echo -n 'photo.bhquan.site:             '; curl -sk -o /dev/null -w '%{http_code}\n' https://photo.bhquan.site/
             echo -n 'lqd.bhquan.store:        '; curl -sk -o /dev/null -w '%{http_code}\n' https://lqd.bhquan.store/
             echo -n 'shop.bhquan.store:       '; curl -sk -o /dev/null -w '%{http_code}\n' https://shop.bhquan.store/
             echo -n 'template.bhquan.store:   '; curl -sk -o /dev/null -w '%{http_code}\n' https://template.bhquan.store/
