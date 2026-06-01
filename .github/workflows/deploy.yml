@@ -121,7 +121,7 @@ jobs:
           "
           # Upload infra nginx config + WebPhoto's own conf to infra conf.d
           sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
-          sshpass -e scp -P $PORT nginx/conf.d/photo.bhquan.site.conf $VPS:${INFRA_DIR}/nginx/conf.d/photo.bhquan.site.conf
+          sshpass -e scp -P $PORT nginx/conf.d/photo.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/photo.bhquan.store.conf
           sshpass -e ssh -p $PORT $VPS "rm -f ${INFRA_DIR}/nginx/conf.d/bhquan.site.conf"
 
       - name: Start shared infra (MySQL + Redis + Nginx + Certbot)
@@ -152,18 +152,18 @@ jobs:
             else
               echo 'Starting shared infra...'
               docker pull nginx:1.27-alpine 2>&1 | tail -1
-              echo '--- Pre-start: placeholder cert for photo.bhquan.site (nginx needs cert to start) ---'
+              echo '--- Pre-start: placeholder cert for photo.bhquan.store (nginx needs cert to start) ---'
               docker run --rm \
                 -v shared_certbot_data:/etc/letsencrypt \
                 certbot/certbot sh -c '
-                  CERT=/etc/letsencrypt/live/photo.bhquan.site/fullchain.pem
+                  CERT=/etc/letsencrypt/live/photo.bhquan.store/fullchain.pem
                   if openssl x509 -in \$CERT -noout -checkend 3600 2>/dev/null; then
-                    echo Cert already valid for photo.bhquan.site
+                    echo Cert already valid for photo.bhquan.store
                   else
-                    mkdir -p /etc/letsencrypt/live/photo.bhquan.site
+                    mkdir -p /etc/letsencrypt/live/photo.bhquan.store
                     openssl req -x509 -nodes -days 90 -newkey rsa:2048 \
-                      -keyout /etc/letsencrypt/live/photo.bhquan.site/privkey.pem \
-                      -out \$CERT -subj /CN=photo.bhquan.site 2>/dev/null && echo Placeholder OK
+                      -keyout /etc/letsencrypt/live/photo.bhquan.store/privkey.pem \
+                      -out \$CERT -subj /CN=photo.bhquan.store 2>/dev/null && echo Placeholder OK
                   fi
                 ' 2>&1 || echo '::warning::Placeholder cert failed — nginx may not start'
               MYSQL_ROOT_PASSWORD=\$(cat /tmp/mysql_root_pass.txt) docker compose -f ${INFRA_DIR}/docker-compose.yml up -d 2>&1
@@ -286,7 +286,7 @@ jobs:
           PORT="${{ secrets.VPS_PORT }}"
           sshpass -e ssh -p $PORT $VPS "
             DC='docker compose -f ${INFRA_DIR}/docker-compose.yml'
-            for DOMAIN in photo.bhquan.site; do
+            for DOMAIN in photo.bhquan.store; do
               CERT_VALID=\$(\$DC run --rm --entrypoint '' certbot sh -c \
                 'openssl x509 -in /etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem -noout -checkend 3600 2>/dev/null && echo yes || echo no' \
                 2>/dev/null || echo no)
@@ -356,7 +356,7 @@ jobs:
           sleep 8
           sshpass -e ssh -p $PORT $VPS "
             DC='docker compose -f ${INFRA_DIR}/docker-compose.yml'
-            for DOMAIN in photo.bhquan.site; do
+            for DOMAIN in photo.bhquan.store; do
               IS_REAL=\$(\$DC run --rm --entrypoint '' certbot sh -c '
                 CERT=/etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem
                 [ ! -f \"\$CERT\" ] && echo no && exit 0
@@ -471,14 +471,14 @@ jobs:
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
           echo "=========================================="
-          echo "  WebPhoto — photo.bhquan.site"
+          echo "  WebPhoto — photo.bhquan.store"
           echo "=========================================="
           sshpass -e ssh -p $PORT $VPS "
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'photo-|shared-' 2>/dev/null || true
             echo ''
             echo '--- SSL cert status ---'
             DC='docker compose -f ${INFRA_DIR}/docker-compose.yml'
-            for DOMAIN in photo.bhquan.site; do
+            for DOMAIN in photo.bhquan.store; do
               INFO=\$(\$DC run --rm --entrypoint '' certbot sh -c '
                 CERT=/etc/letsencrypt/live/'\$DOMAIN'/fullchain.pem
                 [ ! -f \"\$CERT\" ] && echo MISSING && exit 0

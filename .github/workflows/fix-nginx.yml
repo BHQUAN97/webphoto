@@ -40,7 +40,7 @@ jobs:
           echo "=== Upload nginx.conf + WebPhoto own conf only ==="
           echo "(Other projects' confs stay as-is on VPS — each project owns its own conf)"
           sshpass -e scp -P $PORT infra/nginx/nginx.conf $VPS:${INFRA_DIR}/nginx/nginx.conf
-          sshpass -e scp -P $PORT nginx/conf.d/photo.bhquan.site.conf $VPS:${INFRA_DIR}/nginx/conf.d/photo.bhquan.site.conf
+          sshpass -e scp -P $PORT nginx/conf.d/photo.bhquan.store.conf $VPS:${INFRA_DIR}/nginx/conf.d/photo.bhquan.store.conf
 
           echo ""
           echo "=== Verify conf.d on VPS ==="
@@ -176,7 +176,7 @@ jobs:
           sleep 5
 
           sshpass -e ssh -p $PORT $VPS "
-            echo -n 'photo.bhquan.site:             '; curl -sk -o /dev/null -w '%{http_code}\n' https://photo.bhquan.site/
+            echo -n 'photo.bhquan.store:             '; curl -sk -o /dev/null -w '%{http_code}\n' https://photo.bhquan.store/
             echo -n 'lqd.bhquan.store:        '; curl -sk -o /dev/null -w '%{http_code}\n' https://lqd.bhquan.store/
             echo -n 'shop.bhquan.store:       '; curl -sk -o /dev/null -w '%{http_code}\n' https://shop.bhquan.store/
             echo -n 'template.bhquan.store:   '; curl -sk -o /dev/null -w '%{http_code}\n' https://template.bhquan.store/

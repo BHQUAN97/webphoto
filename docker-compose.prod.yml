@@ -1,6 +1,6 @@
 # ============================================
 # PRODUCTION — docker-compose -f docker-compose.prod.yml up -d
-# Domain: photo.bhquan.site
+# Domain: photo.bhquan.store
 # Nginx + Certbot are managed by /opt/infra/docker-compose.yml (shared infrastructure)
 # ============================================
 
@@ -29,14 +29,14 @@ services:
       R2_LIMIT_GB: 10
       CDN_URL: ${CDN_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
-      FROM_EMAIL: noreply@photo.bhquan.site
+      FROM_EMAIL: noreply@photo.bhquan.store
       APP_NAME: PhotoStorage
-      APP_URL: https://photo.bhquan.site
+      APP_URL: https://photo.bhquan.store
       APP_ADDRESS: Vietnam
       SUPPORT_PHONE: ${SUPPORT_PHONE:-0123456789}
-      SUPPORT_EMAIL: support@photo.bhquan.site
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@photo.bhquan.site}
-      CORS_ORIGIN: https://photo.bhquan.site
+      SUPPORT_EMAIL: support@photo.bhquan.store
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@photo.bhquan.store}
+      CORS_ORIGIN: https://photo.bhquan.store
       SOCKET_PORT: 4001
       CRON_SECRET: ${CRON_SECRET}
     healthcheck:
@@ -74,12 +74,12 @@ services:
       R2_LIMIT_GB: 10
       CDN_URL: ${CDN_URL}
       RESEND_API_KEY: ${RESEND_API_KEY}
-      FROM_EMAIL: noreply@photo.bhquan.site
+      FROM_EMAIL: noreply@photo.bhquan.store
       APP_NAME: PhotoStorage
-      APP_URL: https://photo.bhquan.site
+      APP_URL: https://photo.bhquan.store
       SUPPORT_PHONE: ${SUPPORT_PHONE:-0123456789}
-      SUPPORT_EMAIL: support@photo.bhquan.site
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@photo.bhquan.site}
+      SUPPORT_EMAIL: support@photo.bhquan.store
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@photo.bhquan.store}
     healthcheck:
       test: ['CMD-SHELL', 'pgrep -f "node dist/workers" || exit 1']
       interval: 30s

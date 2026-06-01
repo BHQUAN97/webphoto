@@ -33,7 +33,7 @@ jobs:
         run: |
           HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://photo.bhquan.site/api/cron/expire-images")
+            "https://photo.bhquan.store/api/cron/expire-images")
           BODY=$(cat /tmp/resp 2>/dev/null)
           echo "HTTP: $HTTP | Body: $BODY"
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::expire-images HTTP $HTTP: $BODY"; exit 1; }
@@ -50,7 +50,7 @@ jobs:
         run: |
           HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://photo.bhquan.site/api/cron/reconcile-quota")
+            "https://photo.bhquan.store/api/cron/reconcile-quota")
           BODY=$(cat /tmp/resp 2>/dev/null)
           echo "HTTP: $HTTP | Body: $BODY"
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::reconcile-quota HTTP $HTTP: $BODY"; exit 1; }
@@ -67,7 +67,7 @@ jobs:
         run: |
           HTTP=$(curl -s -o /tmp/resp -w '%{http_code}' --max-time 30 \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            "https://photo.bhquan.site/api/cron/remind-payments")
+            "https://photo.bhquan.store/api/cron/remind-payments")
           BODY=$(cat /tmp/resp 2>/dev/null)
           echo "HTTP: $HTTP | Body: $BODY"
           [ "$HTTP" = "200" ] || [ "$HTTP" = "201" ] || { echo "::error::remind-payments HTTP $HTTP: $BODY"; exit 1; }

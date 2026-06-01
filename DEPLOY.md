@@ -1,19 +1,19 @@
 # PHOTO STORAGE — DEPLOYMENT GUIDE
 
-> Domain: photo.bhquan.site | VPS: 134.122.21.251 | Stack: Express.js + React + MySQL + Redis + Cloudflare R2
+> Domain: photo.bhquan.store | VPS: 134.122.21.251 | Stack: Express.js + React + MySQL + Redis + Cloudflare R2
 
 ---
 
 ## Kiến trúc Production
 
 ```
-  Browser (https://photo.bhquan.site)
+  Browser (https://photo.bhquan.store)
        │
        ▼
   VPS Ubuntu (134.122.21.251)
   ┌──────────────────────────────────────────────┐
   │  shared-nginx (Docker) :80/:443               │
-  │  ├─ photo.bhquan.site  → photo-api + static        │
+  │  ├─ photo.bhquan.store  → photo-api + static        │
   │  └─ bhquan.store → VietNet (project khác)    │
   │                                               │
   │  WebPhoto (/opt/webphoto)                     │
@@ -39,12 +39,12 @@
 
 ### Nginx routing
 
-Config: `/opt/infra/nginx/conf.d/photo.bhquan.site.conf`
+Config: `/opt/infra/nginx/conf.d/photo.bhquan.store.conf`
 - `/api/*` → `http://api:4000` (REST API)
 - `/socket.io/*` → `http://api:4001` (WebSocket/Socket.IO)
 - `/assets/*` → static files (Vue SPA, cached 1 year)
 - `/*` → Vue SPA (`try_files`, SPA fallback)
-- `api.photo.bhquan.site/*` → `http://api:4000` (API subdomain)
+- `api.photo.bhquan.store/*` → `http://api:4000` (API subdomain)
 
 ---
 
@@ -130,7 +130,7 @@ docker logs photo-worker --tail 50 -f
 docker compose -f docker-compose.prod.yml restart api worker
 
 # Nginx config
-cat /opt/infra/nginx/conf.d/photo.bhquan.site.conf
+cat /opt/infra/nginx/conf.d/photo.bhquan.store.conf
 docker exec shared-nginx nginx -t && docker exec shared-nginx nginx -s reload
 
 # Xem disk usage
