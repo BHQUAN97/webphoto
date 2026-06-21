@@ -1,21 +1,24 @@
-name: Daily Backup
+name: Daily Backup WebPhoto
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 4:00 AM UTC+7
-  workflow_dispatch:        # Cho phep chay thu cong
+    - cron: '0 19 * * *'
+  workflow_dispatch:
 
 env:
-  INFRA_DIR: /opt/infra
+  APP_DIR: /opt/webphoto
   KEEP_DAYS: 7
+  DB_NAME: photo_storage
+  DB_USER: photo_user
+  BACKUP_BRANCH: backups
+  GDRIVE_ENABLED: ${{ secrets.GDRIVE_FOLDER_ID != '' && 'true' || 'false' }}
 
-# Can quyen push len branch backups
 permissions:
   contents: write
 
 jobs:
   backup:
-    name: Backup DB + Uploads → Git
+    name: Backup DB + Uploads
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,127 +27,100 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq sshpass > /dev/null
           mkdir -p ~/.ssh
-          ssh-keyscan -p ${{ secrets.VPS_PORT }} -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          VPS_PORT="${{ secrets.VPS_PORT }}"
+          VPS_PORT="${VPS_PORT:-22}"
+          ssh-keyscan -p $VPS_PORT -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "SSHPASS=${{ secrets.VPS_PASSWORD }}" >> $GITHUB_ENV
           echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
+          echo "SSH_PORT=${VPS_PORT}" >> $GITHUB_ENV
 
       - name: Create backups on VPS
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
-          PORT="${{ secrets.VPS_PORT }}"
+          PORT="${{ env.SSH_PORT }}"
           DATE="${{ env.DATE }}"
 
           sshpass -e ssh -p $PORT $VPS "
             set -e
-            BACKUP_DIR=/tmp/backup-${DATE}
+            BACKUP_DIR=/tmp/backup-webphoto-${DATE}
             rm -rf \$BACKUP_DIR
-            mkdir -p \$BACKUP_DIR/webphoto \$BACKUP_DIR/vietnet
+            mkdir -p \$BACKUP_DIR
 
-            MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' ${INFRA_DIR}/.env 2>/dev/null | cut -d= -f2-)
-            if [ -z \"\$MYSQL_ROOT_PWD\" ]; then
-              MYSQL_ROOT_PWD=\$(grep '^MYSQL_ROOT_PASSWORD=' /opt/webphoto/.env 2>/dev/null | cut -d= -f2-)
-            fi
-            if [ -z \"\$MYSQL_ROOT_PWD\" ]; then
-              echo 'ERROR: MYSQL_ROOT_PASSWORD not found in /opt/infra/.env or /opt/webphoto/.env'
+            DB_PWD=\$(grep '^MYSQL_PASSWORD=' ${APP_DIR}/.env 2>/dev/null | cut -d= -f2-)
+            if [ -z \"\$DB_PWD\" ]; then
+              echo 'ERROR: MYSQL_PASSWORD not found in ${APP_DIR}/.env'
               exit 1
             fi
 
-            # ── Verify MySQL is accessible ──
             echo '=== MySQL check ==='
             if ! docker exec shared-mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
               echo 'ERROR: shared-mysql not responding'
-              docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RestartCount}}' | grep -E 'mysql|redis|nginx' || true
               docker logs shared-mysql --tail 20 2>&1 || true
               exit 1
             fi
-            echo 'MySQL: OK'
-            echo ''
-
-            # ── DB dumps ──
-            echo '=== Database dumps ==='
-
-            echo 'Dumping photo_storage...'
-            docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
-              --single-transaction --routines --triggers --events \
-              photo_storage > /tmp/dump_photo_storage.sql 2>/tmp/dump_err.txt \
-              || { echo 'MYSQLDUMP FAILED:'; cat /tmp/dump_err.txt; rm -f /tmp/dump_err.txt /tmp/dump_photo_storage.sql; exit 1; }
-            rm -f /tmp/dump_err.txt
-            gzip -c /tmp/dump_photo_storage.sql > \$BACKUP_DIR/webphoto/photo_storage.sql.gz
-            rm -f /tmp/dump_photo_storage.sql
-            echo \"  \$(du -h \$BACKUP_DIR/webphoto/photo_storage.sql.gz | cut -f1)\"
-
-            if docker exec shared-mysql mysql -u root -p\${MYSQL_ROOT_PWD} -e 'USE vietnet' 2>/dev/null; then
-              echo 'Dumping vietnet...'
-              docker exec shared-mysql mysqldump -u root -p\${MYSQL_ROOT_PWD} \
-                --single-transaction --routines --triggers --events \
-                vietnet > /tmp/dump_vietnet.sql 2>/tmp/dump_err.txt \
-                || { echo 'MYSQLDUMP FAILED (vietnet):'; cat /tmp/dump_err.txt; rm -f /tmp/dump_err.txt /tmp/dump_vietnet.sql; exit 1; }
-              rm -f /tmp/dump_err.txt
-              gzip -c /tmp/dump_vietnet.sql > \$BACKUP_DIR/vietnet/vietnet.sql.gz
-              rm -f /tmp/dump_vietnet.sql
-              echo \"  \$(du -h \$BACKUP_DIR/vietnet/vietnet.sql.gz | cut -f1)\"
-            else
-              echo 'vietnet DB not found — skip'
-              rm -rf \$BACKUP_DIR/vietnet
+            if ! docker exec -e MYSQL_PWD=\"\$DB_PWD\" shared-mysql mysql -u ${DB_USER} ${DB_NAME} -e 'SELECT 1' >/dev/null 2>&1; then
+              echo 'ERROR: Cannot connect as ${DB_USER}@${DB_NAME}'
+              exit 1
             fi
+            echo 'MySQL: OK (user=${DB_USER})'
 
-            # ── Uploads ──
+            echo ''
+            echo '=== Database dump: ${DB_NAME} ==='
+            docker exec -e MYSQL_PWD=\"\$DB_PWD\" shared-mysql mysqldump \
+              -u ${DB_USER} \
+              --single-transaction --routines --triggers \
+              ${DB_NAME} > /tmp/dump_webphoto.sql 2>/tmp/dump_webphoto_err.txt \
+              || { echo 'MYSQLDUMP FAILED:'; cat /tmp/dump_webphoto_err.txt; rm -f /tmp/dump_webphoto_err.txt /tmp/dump_webphoto.sql; exit 1; }
+            rm -f /tmp/dump_webphoto_err.txt
+            gzip -c /tmp/dump_webphoto.sql > \$BACKUP_DIR/${DB_NAME}.sql.gz
+            rm -f /tmp/dump_webphoto.sql
+            echo \"  DB: \$(du -h \$BACKUP_DIR/${DB_NAME}.sql.gz | cut -f1)\"
+
             echo ''
             echo '=== Upload archives ==='
-
-            # WebPhoto local uploads
-            WP_UPLOADS=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/uploads\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
-            if [ -n \"\$WP_UPLOADS\" ] && [ -d \"\$WP_UPLOADS\" ] && [ \"\$(ls -A \$WP_UPLOADS 2>/dev/null)\" ]; then
-              echo \"WebPhoto uploads: \$WP_UPLOADS\"
-              cd \$WP_UPLOADS && zip -rq \$BACKUP_DIR/webphoto/uploads.zip . && cd /
-              echo \"  \$(du -h \$BACKUP_DIR/webphoto/uploads.zip | cut -f1)\"
+            UPLOADS_PATH=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/uploads\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
+            if [ -n \"\$UPLOADS_PATH\" ] && [ -d \"\$UPLOADS_PATH\" ] && [ \"\$(ls -A \$UPLOADS_PATH 2>/dev/null)\" ]; then
+              echo \"Uploads path: \$UPLOADS_PATH\"
+              FILE_COUNT=\$(find \$UPLOADS_PATH -type f | wc -l)
+              echo \"  Files: \$FILE_COUNT\"
+              if [ \"\$FILE_COUNT\" -gt 0 ]; then
+                if command -v zip >/dev/null 2>&1; then
+                  cd \$UPLOADS_PATH && zip -rq \$BACKUP_DIR/uploads.zip . && cd /
+                else
+                  tar czf \$BACKUP_DIR/uploads.tar.gz -C \$UPLOADS_PATH .
+                fi
+                ARCHIVE=\$(find \$BACKUP_DIR -name 'uploads.*' -type f | head -1)
+                echo \"  Uploads: \$(du -h \$ARCHIVE | cut -f1)\"
+              fi
             else
-              echo 'WebPhoto: no local uploads (skip)'
+              echo 'No uploads found (skip)'
             fi
 
-            # VietNet uploads
-            VN_UPLOADS=\$(docker volume inspect vietnet_uploads --format '{{.Mountpoint}}' 2>/dev/null || echo '')
-            if [ -n \"\$VN_UPLOADS\" ] && [ -d \"\$VN_UPLOADS\" ] && [ \"\$(ls -A \$VN_UPLOADS 2>/dev/null)\" ]; then
-              echo \"VietNet uploads: \$VN_UPLOADS\"
-              cd \$VN_UPLOADS && zip -rq \$BACKUP_DIR/vietnet/uploads.zip . && cd /
-              echo \"  \$(du -h \$BACKUP_DIR/vietnet/uploads.zip | cut -f1)\"
-            else
-              echo 'VietNet: no uploads (skip)'
-            fi
-
-            # ── Verify backup integrity ──
             echo ''
             echo '=== Verify backups ==='
             VERIFY_FAIL=0
-
-            for gz in \$(find \$BACKUP_DIR -name '*.sql.gz' -type f); do
+            for gz in \$(find \$BACKUP_DIR -name '*.sql.gz'); do
               if gunzip -t \"\$gz\" 2>/dev/null; then
                 SIZE=\$(stat -c%s \"\$gz\")
                 if [ \"\$SIZE\" -lt 100 ]; then
-                  echo \"FAIL: \$(basename \$gz) too small (\${SIZE} bytes)\"
+                  echo \"FAIL: \$(basename \$gz) too small\"
                   VERIFY_FAIL=1
                 else
                   echo \"OK: \$(basename \$gz) (\$(du -h \$gz | cut -f1))\"
                 fi
               else
-                echo \"FAIL: \$(basename \$gz) corrupt (gunzip -t failed)\"
+                echo \"FAIL: \$(basename \$gz) corrupt\"
                 VERIFY_FAIL=1
               fi
             done
-
-            for z in \$(find \$BACKUP_DIR -name '*.zip' -type f); do
-              if unzip -tq \"\$z\" > /dev/null 2>&1; then
-                echo \"OK: \$(basename \$z) (\$(du -h \$z | cut -f1))\"
-              else
-                echo \"FAIL: \$(basename \$z) corrupt (unzip -t failed)\"
-                VERIFY_FAIL=1
+            for z in \$(find \$BACKUP_DIR -name '*.zip' -o -name '*.tar.gz' | grep -v '.sql.gz'); do
+              if echo \"\$z\" | grep -q '.zip\$'; then
+                unzip -tq \"\$z\" > /dev/null 2>&1 && echo \"OK: \$(basename \$z) (\$(du -h \$z | cut -f1))\" || { echo \"FAIL: \$(basename \$z) corrupt\"; VERIFY_FAIL=1; }
+              elif echo \"\$z\" | grep -q '.tar.gz\$'; then
+                tar tzf \"\$z\" > /dev/null 2>&1 && echo \"OK: \$(basename \$z) (\$(du -h \$z | cut -f1))\" || { echo \"FAIL: \$(basename \$z) corrupt\"; VERIFY_FAIL=1; }
               fi
             done
-
-            if [ \$VERIFY_FAIL -eq 1 ]; then
-              echo 'ERROR: Backup verification failed!'
-              exit 1
-            fi
+            [ \$VERIFY_FAIL -eq 0 ] || { echo 'ERROR: Verification failed!'; exit 1; }
 
             echo ''
             echo '=== All backup files ==='
@@ -154,131 +130,185 @@ jobs:
       - name: Download backups from VPS
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
-          PORT="${{ secrets.VPS_PORT }}"
+          PORT="${{ env.SSH_PORT }}"
           DATE="${{ env.DATE }}"
-
           mkdir -p /tmp/backups
-          sshpass -e scp -P $PORT -r $VPS:/tmp/backup-${DATE}/* /tmp/backups/
+          sshpass -e scp -P $PORT -r $VPS:/tmp/backup-webphoto-${DATE}/* /tmp/backups/
+          echo "Downloaded:"; find /tmp/backups -type f -exec ls -lh {} \;
 
-          echo "Downloaded:"
-          find /tmp/backups -type f -exec ls -lh {} \;
+      - name: Upload to Google Drive
+        if: env.GDRIVE_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          DATE="${{ env.DATE }}"
+          FOLDER_ID="${{ secrets.GDRIVE_FOLDER_ID }}"
+          CREDS='${{ secrets.GDRIVE_CREDENTIALS_JSON }}'
+          KEEP=${{ env.KEEP_DAYS }}
+
+          echo "$CREDS" > /tmp/gdrive-creds.json
+
+          cd /tmp && npm init -y --silent > /dev/null 2>&1
+          npm install googleapis@144 --silent > /dev/null 2>&1
+
+          node -e "
+          const { google } = require('googleapis');
+          const fs = require('fs');
+          const path = require('path');
+
+          async function main() {
+            const creds = JSON.parse(fs.readFileSync('/tmp/gdrive-creds.json', 'utf8'));
+            const auth = new google.auth.JWT({
+              email: creds.client_email,
+              key: creds.private_key,
+              scopes: ['https://www.googleapis.com/auth/drive.file'],
+            });
+            await auth.authorize();
+            const drive = google.drive({ version: 'v3', auth });
+            console.log('GDrive auth OK:', creds.client_email);
+
+            const parentId = '${FOLDER_ID}';
+            const subName = 'webphoto-backup';
+            let subId;
+            const list = await drive.files.list({
+              q: \"'\" + parentId + \"' in parents and name = '\" + subName + \"' and mimeType = 'application/vnd.google-apps.folder' and trashed = false\",
+              fields: 'files(id)',
+            });
+            if (list.data.files && list.data.files.length > 0) {
+              subId = list.data.files[0].id;
+            } else {
+              const created = await drive.files.create({
+                requestBody: { name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+                fields: 'id',
+              });
+              subId = created.data.id;
+              console.log('Created folder:', subName);
+            }
+
+            const backupDir = '/tmp/backups';
+            const files = fs.readdirSync(backupDir);
+            for (const fname of files) {
+              const fpath = path.join(backupDir, fname);
+              const stat = fs.statSync(fpath);
+              const uploadName = '${DATE}_' + fname;
+              const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+              console.log('Uploading:', uploadName, '(' + sizeMB + ' MB)');
+              await drive.files.create({
+                requestBody: { name: uploadName, parents: [subId] },
+                media: { body: fs.createReadStream(fpath) },
+                fields: 'id, name',
+              });
+              console.log('  OK:', uploadName);
+            }
+
+            const allFiles = await drive.files.list({
+              q: \"'\" + subId + \"' in parents and trashed = false\",
+              fields: 'files(id, name, createdTime)',
+              orderBy: 'createdTime desc',
+              pageSize: 200,
+            });
+            const maxFiles = ${KEEP} * 3;
+            const toDelete = (allFiles.data.files || []).slice(maxFiles);
+            if (toDelete.length > 0) {
+              console.log('Rotating:', toDelete.length, 'old files');
+              for (const f of toDelete) {
+                await drive.files.delete({ fileId: f.id });
+              }
+            }
+
+            console.log('GDrive backup complete');
+          }
+          main().catch(e => { console.error('GDrive error:', e.message); process.exit(1); });
+          "
+
+          rm -f /tmp/gdrive-creds.json
+          echo "Google Drive: OK"
 
       - name: Encrypt backups
         run: |
           ENCRYPT_KEY="${{ secrets.BACKUP_ENCRYPT_KEY }}"
           if [ -z "$ENCRYPT_KEY" ]; then
-            echo "WARNING: BACKUP_ENCRYPT_KEY not set — skipping encryption"
+            echo "WARNING: BACKUP_ENCRYPT_KEY not set, skipping encryption"
             exit 0
           fi
-
-          # Encrypt tat ca backup files bang GPG symmetric (AES-256)
-          for f in $(find /tmp/backups -type f \( -name '*.sql.gz' -o -name '*.zip' \)); do
+          for f in $(find /tmp/backups -type f \( -name '*.sql.gz' -o -name '*.zip' -o -name '*.tar.gz' \)); do
             gpg --batch --yes --passphrase "${ENCRYPT_KEY}" \
               --symmetric --cipher-algo AES256 "$f"
             rm -f "$f"
             echo "Encrypted: $(basename "$f").gpg"
           done
-
-          echo "All backups encrypted"
           find /tmp/backups -type f -exec ls -lh {} \;
 
       - name: Push to backups branch
         run: |
           DATE="${{ env.DATE }}"
-
-          # Checkout orphan branch 'backups' (tach biet voi code)
-          git fetch origin backups 2>/dev/null || true
-          if git rev-parse origin/backups >/dev/null 2>&1; then
-            git checkout backups
+          git fetch origin ${{ env.BACKUP_BRANCH }} 2>/dev/null || true
+          if git rev-parse origin/${{ env.BACKUP_BRANCH }} >/dev/null 2>&1; then
+            git checkout ${{ env.BACKUP_BRANCH }}
           else
-            git checkout --orphan backups
+            git checkout --orphan ${{ env.BACKUP_BRANCH }}
             git rm -rf . > /dev/null 2>&1 || true
-            echo "# Backups (encrypted)" > README.md
-            echo "" >> README.md
-            echo "Auto-generated daily backups. All files encrypted with AES-256." >> README.md
-            echo "" >> README.md
-            echo "Decrypt: gpg --decrypt --output FILE FILE.gpg" >> README.md
-            echo "" >> README.md
-            echo '```' >> README.md
-            echo "webphoto/YYYY-MM-DD/photo_storage.sql.gz.gpg" >> README.md
-            echo "webphoto/YYYY-MM-DD/uploads.zip.gpg" >> README.md
-            echo "vietnet/YYYY-MM-DD/vietnet.sql.gz.gpg" >> README.md
-            echo "vietnet/YYYY-MM-DD/uploads.zip.gpg" >> README.md
-            echo '```' >> README.md
+            cat > README.md << 'READMEEOF'
+          # WebPhoto Backups
+
+          Daily backups. Encrypted with AES-256 if BACKUP_ENCRYPT_KEY is set.
+
+          Decrypt: gpg --decrypt --output FILE FILE.gpg
+
+          Structure: webphoto/YYYY-MM-DD/{photo_storage.sql.gz, uploads.zip}
+          READMEEOF
             git add README.md
           fi
 
-          # Copy encrypted backup files vao dung cau truc
-          for project in webphoto vietnet; do
-            if [ -d "/tmp/backups/${project}" ]; then
-              mkdir -p "${project}/${DATE}"
-              cp /tmp/backups/${project}/* "${project}/${DATE}/"
+          mkdir -p "webphoto/${DATE}"
+          cp /tmp/backups/* "webphoto/${DATE}/" 2>/dev/null || true
+
+          CUTOFF=$(date -d "${{ env.KEEP_DAYS }} days ago" +%Y-%m-%d)
+          for dir in webphoto/*/; do
+            DIRNAME=$(basename "$dir")
+            if [[ "$DIRNAME" < "$CUTOFF" ]]; then
+              echo "Removing old: $dir"
+              rm -rf "$dir"
             fi
           done
 
-          # Xoa backup cu hon KEEP_DAYS ngay
-          CUTOFF=$(date -d "${KEEP_DAYS} days ago" +%Y-%m-%d)
-          for project in webphoto vietnet; do
-            if [ -d "${project}" ]; then
-              for dir in ${project}/*/; do
-                DIRNAME=$(basename "$dir")
-                if [[ "$DIRNAME" < "$CUTOFF" ]]; then
-                  echo "Removing old: ${project}/${DIRNAME}"
-                  rm -rf "$dir"
-                fi
-              done
-            fi
-          done
-
-          # Commit + push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git status
-
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "backup: ${DATE}"
-            git push origin backups
-            echo "Pushed to branch: backups"
+            git commit -m "backup: webphoto ${DATE}"
+            git push origin ${{ env.BACKUP_BRANCH }}
           fi
 
       - name: Diagnose on failure
         if: failure()
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
-          PORT="${{ secrets.VPS_PORT }}"
+          PORT="${{ env.SSH_PORT }}"
           sshpass -e ssh -p $PORT $VPS "
             echo '=== Container status ==='
             docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RestartCount}}' | grep -E 'photo-|shared-' || true
-
             echo ''
             echo '=== MySQL logs (last 20) ==='
-            docker logs shared-mysql --tail 20 2>&1 || echo 'shared-mysql: container not found'
-
-            echo ''
-            echo '=== photo-api logs (last 20) ==='
-            docker logs photo-api --tail 20 2>&1 || echo 'photo-api: container not found'
-
+            docker logs shared-mysql --tail 20 2>&1 || echo 'shared-mysql: not found'
             echo ''
             echo '=== Disk / Memory ==='
-            df -h / 2>/dev/null | tail -1
-            free -h 2>/dev/null | head -2
+            df -h / | tail -1; free -h | head -2
           " 2>/dev/null || echo '::warning::Cannot SSH to VPS for diagnostics'
 
       - name: Cleanup VPS temp
         if: always()
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
-          PORT="${{ secrets.VPS_PORT }}"
-          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-* /tmp/dump_*.sql /tmp/dump_err.txt" 2>/dev/null || true
+          PORT="${{ env.SSH_PORT }}"
+          sshpass -e ssh -p $PORT $VPS "rm -rf /tmp/backup-webphoto-* /tmp/dump_webphoto*.sql /tmp/dump_webphoto_err.txt" 2>/dev/null || true
 
       - name: Summary
         run: |
           echo "==============================="
-          echo "Backup OK — ${{ env.DATE }}"
-          echo "Branch: backups"
-          echo "Structure: {webphoto,vietnet}/${{ env.DATE }}/"
-          echo "Retention: ${{ env.KEEP_DAYS }} days"
+          echo "Backup OK: ${{ env.DATE }}"
+          echo "Repo: WebPhoto | DB: ${{ env.DB_NAME }}"
+          echo "Storage 1: GitHub branch '${{ env.BACKUP_BRANCH }}' (${KEEP_DAYS}d retention)"
+          echo "Storage 2: Google Drive (${{ env.GDRIVE_ENABLED == 'true' && 'enabled' || 'not configured' }})"
           echo "==============================="
