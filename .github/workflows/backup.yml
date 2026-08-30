@@ -77,8 +77,8 @@ jobs:
             echo \"  DB: \$(du -h \$BACKUP_DIR/${DB_NAME}.sql.gz | cut -f1)\"
 
             echo ''
-            echo '=== Upload archives ==='
-            UPLOADS_PATH=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/uploads\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
+            echo '=== Upload archives (local storage /app/data) ==='
+            UPLOADS_PATH=\$(docker inspect photo-api --format '{{range .Mounts}}{{if eq .Destination \"/app/data\"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || echo '')
             if [ -n \"\$UPLOADS_PATH\" ] && [ -d \"\$UPLOADS_PATH\" ] && [ \"\$(ls -A \$UPLOADS_PATH 2>/dev/null)\" ]; then
               echo \"Uploads path: \$UPLOADS_PATH\"
               FILE_COUNT=\$(find \$UPLOADS_PATH -type f | wc -l)
