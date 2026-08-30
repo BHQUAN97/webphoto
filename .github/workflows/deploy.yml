@@ -241,45 +241,16 @@ jobs:
             rm -f /tmp/base-schema.err /tmp/photo_db_pass.txt
           "
 
-      - name: Run DB migrations
-        env:
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      - name: Run DB changelog
+        id: changelog
         run: |
-          set +e
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
           PORT="${{ secrets.VPS_PORT }}"
-          [ ! -d "db/changelog" ] && exit 0
-          printf '%s' "$MYSQL_PASSWORD" > /tmp/photo_db_pass.txt
-          sshpass -e scp -P $PORT /tmp/photo_db_pass.txt $VPS:/tmp/photo_db_pass.txt
-          rm -f /tmp/photo_db_pass.txt
-          MYSQL_CMD="MYSQL_PWD=\$(cat /tmp/photo_db_pass.txt) docker exec -i -e MYSQL_PWD shared-mysql mysql -u photo_user photo_storage"
-
-          for f in $(find db/changelog/_init -name '*.sql' -type f 2>/dev/null | sort); do
-            sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1 || true
-          done
-
-          APPLIED=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -N -e \"SELECT CONCAT(version, '/', filename) FROM schema_changelog\"" 2>/dev/null || echo "")
-          PASS=0; SKIP=0; FAIL=0
-          for ver_dir in $(find db/changelog -mindepth 1 -maxdepth 1 -type d ! -name '_init' | sort); do
-            VER=$(basename "$ver_dir")
-            for f in $(find "$ver_dir" -name '*.sql' -type f | sort); do
-              FNAME=$(basename "$f"); KEY="${VER}/${FNAME}"
-              echo "$APPLIED" | grep -qF "$KEY" && { ((SKIP++)); continue; }
-              echo -n "  $FNAME ... "
-              OUTPUT=$(sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD" < "$f" 2>&1)
-              if [ $? -eq 0 ]; then
-                DESC=$(echo "$FNAME" | sed 's/^[0-9]*__//;s/\.sql$//;s/_/ /g')
-                CHECKSUM=$(sha256sum "$f" | cut -d' ' -f1)
-                sshpass -e ssh -p $PORT $VPS "$MYSQL_CMD -e \"REPLACE INTO schema_changelog (version,filename,description,applied_by,checksum) VALUES ('$VER','$FNAME','$DESC','ci','$CHECKSUM')\"" 2>/dev/null
-                echo "OK"; ((PASS++))
-              else
-                echo "FAILED"; echo "$OUTPUT" | tail -3 | sed 's/^/    /'; ((FAIL++))
-              fi
-            done
-          done
-          sshpass -e ssh -p $PORT $VPS "rm -f /tmp/photo_db_pass.txt"
-          echo "Changelog: $PASS applied, $SKIP skipped, $FAIL failed"
-
+          [ ! -d db/changelog ] && echo "No db/changelog — skip" && exit 0
+          # Upload script + chạy idempotent baseline + version migrations
+          sshpass -e scp -P $PORT -r db/changelog $VPS:/opt/webphoto/db/
+          sshpass -e scp -P $PORT scripts/db-changelog.sh $VPS:/opt/webphoto/scripts/db-changelog.sh
+          sshpass -e ssh -p $PORT $VPS "cd /opt/webphoto && bash scripts/db-changelog.sh 2>&1 || { echo '::error::db-changelog failed'; exit 1; }"
       - name: SSL placeholder cert (for nginx to start)
         run: |
           VPS="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
